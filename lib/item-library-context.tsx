@@ -17,9 +17,8 @@ interface ItemLibraryContextType {
 
 const ItemLibraryContext = createContext<ItemLibraryContextType | undefined>(undefined)
 
-// Default items seeded from the furniture catalog and existing models
+// Default items seeded from actual models in the project
 const DEFAULT_ITEMS: Item[] = [
-  // Real models that exist in the project
   {
     id: 'item-omhu-sofa',
     name: 'Omhu Sofa',
@@ -52,115 +51,34 @@ const DEFAULT_ITEMS: Item[] = [
     updatedAt: new Date().toISOString(),
     isCustom: false
   },
-  // Placeholder items from catalog (models may not exist yet)
   {
-    id: 'item-generic-chair',
-    name: 'Chair',
-    description: 'Generic chair placeholder',
-    modelPath: '/models/chair.glb',
-    dimensions: {
-      width: 1.5,
-      height: 3,
-      depth: 1.5
-    },
-    category: 'seating',
-    tags: ['chair', 'generic'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isCustom: false
-  },
-  {
-    id: 'item-generic-table',
-    name: 'Table',
-    description: 'Generic table placeholder',
-    modelPath: '/models/table.glb',
-    dimensions: {
-      width: 4,
-      height: 2.5,
-      depth: 3
-    },
-    category: 'table',
-    tags: ['table', 'generic'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isCustom: false
-  },
-  {
-    id: 'item-generic-bed',
-    name: 'Bed',
-    description: 'Generic bed placeholder',
-    modelPath: '/models/bed.glb',
+    id: 'item-extending-table',
+    name: 'Extending Table',
+    description: 'Modern extending dining table',
+    modelPath: '/models/extending_table/extended_table.glb',
     dimensions: {
       width: 6,
-      height: 2,
+      height: 2.5,
+      depth: 3.5
+    },
+    category: 'table',
+    tags: ['table', 'dining', 'modern', 'extending'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isCustom: false
+  },
+  {
+    id: 'item-sundays-dream-bed',
+    name: "Sunday's Dream Bed",
+    description: 'Comfortable modern bed frame',
+    modelPath: '/models/beds/sundays_dream_bed.glb',
+    dimensions: {
+      width: 6,
+      height: 2.5,
       depth: 7
     },
     category: 'bed',
-    tags: ['bed', 'generic'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isCustom: false
-  },
-  {
-    id: 'item-generic-desk',
-    name: 'Desk',
-    description: 'Generic desk placeholder',
-    modelPath: '/models/desk.glb',
-    dimensions: {
-      width: 4,
-      height: 2.5,
-      depth: 2
-    },
-    category: 'table',
-    tags: ['desk', 'generic', 'office'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isCustom: false
-  },
-  {
-    id: 'item-generic-bookshelf',
-    name: 'Bookshelf',
-    description: 'Generic bookshelf placeholder',
-    modelPath: '/models/bookshelf.glb',
-    dimensions: {
-      width: 3,
-      height: 6,
-      depth: 1
-    },
-    category: 'storage',
-    tags: ['bookshelf', 'storage', 'generic'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isCustom: false
-  },
-  {
-    id: 'item-generic-lamp',
-    name: 'Lamp',
-    description: 'Generic lamp placeholder',
-    modelPath: '/models/lamp.glb',
-    dimensions: {
-      width: 1,
-      height: 2,
-      depth: 1
-    },
-    category: 'lighting',
-    tags: ['lamp', 'lighting', 'generic'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isCustom: false
-  },
-  {
-    id: 'item-generic-plant',
-    name: 'Plant',
-    description: 'Generic plant decoration',
-    modelPath: '/models/plant.glb',
-    dimensions: {
-      width: 1.5,
-      height: 2,
-      depth: 1.5
-    },
-    category: 'decoration',
-    tags: ['plant', 'decoration', 'generic'],
+    tags: ['bed', 'modern', 'bedroom', 'furniture'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isCustom: false

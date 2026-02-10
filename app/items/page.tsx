@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { ItemCategory } from '@/types/room'
+import { ItemThumbnail } from '@/components/items/ItemThumbnail'
 import Link from 'next/link'
 
 export default function ItemsPage() {
@@ -189,26 +190,8 @@ export default function ItemsPage() {
                 className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all hover:shadow-lg hover:shadow-blue-500/20 group"
               >
                 {/* Thumbnail/Preview */}
-                <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
-                  {item.thumbnailPath ? (
-                    <img
-                      src={item.thumbnailPath}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="text-6xl text-white/20">
-                        {item.category === 'seating' && '🪑'}
-                        {item.category === 'table' && '🪑'}
-                        {item.category === 'storage' && '📚'}
-                        {item.category === 'bed' && '🛏️'}
-                        {item.category === 'decoration' && '🪴'}
-                        {item.category === 'lighting' && '💡'}
-                        {item.category === 'other' && '📦'}
-                      </div>
-                    </div>
-                  )}
+                <div className="aspect-square relative overflow-hidden">
+                  <ItemThumbnail category={item.category} name={item.name} />
 
                   {/* Hover Overlay */}
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">

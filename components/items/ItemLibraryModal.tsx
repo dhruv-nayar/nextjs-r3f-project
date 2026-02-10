@@ -5,6 +5,7 @@ import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { useRoom } from '@/lib/room-context'
 import { ItemCategory } from '@/types/room'
+import { ItemThumbnail } from './ItemThumbnail'
 
 interface ItemLibraryModalProps {
   isOpen: boolean
@@ -123,24 +124,8 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
                   className="bg-black/40 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500 hover:bg-black/60 transition-all group text-left"
                 >
                   {/* Thumbnail */}
-                  <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden flex items-center justify-center">
-                    {item.thumbnailPath ? (
-                      <img
-                        src={item.thumbnailPath}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="text-5xl text-white/20">
-                        {item.category === 'seating' && '🪑'}
-                        {item.category === 'table' && '🪑'}
-                        {item.category === 'storage' && '📚'}
-                        {item.category === 'bed' && '🛏️'}
-                        {item.category === 'decoration' && '🪴'}
-                        {item.category === 'lighting' && '💡'}
-                        {item.category === 'other' && '📦'}
-                      </div>
-                    )}
+                  <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
+                    <ItemThumbnail category={item.category} name={item.name} />
 
                     {/* Hover Overlay */}
                     <div className="absolute inset-0 bg-blue-600/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
