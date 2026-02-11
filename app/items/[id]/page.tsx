@@ -318,9 +318,8 @@ export default function ItemDetailPage() {
             </div>
           </aside>
         </div>
-      </div>
 
-      {/* Delete Confirmation Modal */}
+        {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-porcelain rounded-3xl p-8 max-w-md w-full shadow-2xl border border-scarlet/20">
