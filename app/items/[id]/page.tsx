@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useItemLibrary } from '@/lib/item-library-context'
@@ -9,8 +9,10 @@ import { ItemPreview } from '@/components/items/ItemPreview'
 import Toast from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import { Dropdown } from '@/components/ui/Dropdown'
 import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
+import { PlacementType } from '@/types/room'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -33,6 +35,35 @@ export default function ItemDetailPage() {
   const [editName, setEditName] = useState(item?.name || '')
   const [editDescription, setEditDescription] = useState(item?.description || '')
   const [editTags, setEditTags] = useState(item?.tags.join(', ') || '')
+  const [editProductUrl, setEditProductUrl] = useState(item?.productUrl || '')
+  const [editPlacementType, setEditPlacementType] = useState<PlacementType | undefined>(item?.placementType)
+
+  // Dimension state (feet and inches)
+  const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
+  const [widthInches, setWidthInches] = useState(((item?.dimensions?.width || 0) % 1) * 12)
+  const [heightFeet, setHeightFeet] = useState(Math.floor(item?.dimensions?.height || 0))
+  const [heightInches, setHeightInches] = useState(((item?.dimensions?.height || 0) % 1) * 12)
+  const [depthFeet, setDepthFeet] = useState(Math.floor(item?.dimensions?.depth || 0))
+  const [depthInches, setDepthInches] = useState(((item?.dimensions?.depth || 0) % 1) * 12)
+
+  // Sync edit state with item when it changes
+  useEffect(() => {
+    if (item) {
+      setEditName(item.name)
+      setEditDescription(item.description || '')
+      setEditTags(item.tags.join(', '))
+      setEditProductUrl(item.productUrl || '')
+      setEditPlacementType(item.placementType)
+
+      // Update dimension state
+      setWidthFeet(Math.floor(item.dimensions?.width || 0))
+      setWidthInches(((item.dimensions?.width || 0) % 1) * 12)
+      setHeightFeet(Math.floor(item.dimensions?.height || 0))
+      setHeightInches(((item.dimensions?.height || 0) % 1) * 12)
+      setDepthFeet(Math.floor(item.dimensions?.depth || 0))
+      setDepthInches(((item.dimensions?.depth || 0) % 1) * 12)
+    }
+  }, [item])
 
   if (!item) {
     return (
@@ -48,15 +79,46 @@ export default function ItemDetailPage() {
   }
 
   const handleSave = () => {
+    // Calculate total feet from feet + inches
+    const totalWidth = widthFeet + widthInches / 12
+    const totalHeight = heightFeet + heightInches / 12
+    const totalDepth = depthFeet + depthInches / 12
+
     updateItem(itemId, {
       name: editName,
       description: editDescription,
-      tags: editTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+      tags: editTags.split(',').map(t => t.trim()).filter(t => t.length > 0),
+      productUrl: editProductUrl,
+      placementType: editPlacementType,
+      dimensions: {
+        width: totalWidth,
+        height: totalHeight,
+        depth: totalDepth
+      }
     })
     setIsEditing(false)
     setToastMessage('Item updated successfully!')
     setToastType('success')
     setShowToast(true)
+  }
+
+  const handleCancel = () => {
+    // Reset to current item values
+    if (item) {
+      setEditName(item.name)
+      setEditDescription(item.description || '')
+      setEditTags(item.tags.join(', '))
+      setEditProductUrl(item.productUrl || '')
+      setEditPlacementType(item.placementType)
+
+      setWidthFeet(Math.floor(item.dimensions?.width || 0))
+      setWidthInches(((item.dimensions?.width || 0) % 1) * 12)
+      setHeightFeet(Math.floor(item.dimensions?.height || 0))
+      setHeightInches(((item.dimensions?.height || 0) % 1) * 12)
+      setDepthFeet(Math.floor(item.dimensions?.depth || 0))
+      setDepthInches(((item.dimensions?.depth || 0) % 1) * 12)
+    }
+    setIsEditing(false)
   }
 
   const handleDelete = () => {
@@ -155,7 +217,7 @@ export default function ItemDetailPage() {
                         </Button>
                         <Button
                           variant="secondary"
-                          onClick={() => setIsEditing(false)}
+                          onClick={handleCancel}
                           size="lg"
                         >
                           Cancel
@@ -202,31 +264,170 @@ export default function ItemDetailPage() {
                   )}
                 </div>
 
+                {/* Metadata Section */}
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Metadata
+                  </h3>
+                  <div className="space-y-3">
+                    {/* Placement Type */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-taupe/70 font-body">Placement:</span>
+                      {isEditing ? (
+                        <Dropdown
+                          label="Select Placement"
+                          value={editPlacementType || 'floor'}
+                          onChange={(value) => setEditPlacementType(value as PlacementType)}
+                          options={[
+                            { label: '🔽 Floor', value: 'floor' },
+                            { label: '◼️ Wall', value: 'wall' },
+                            { label: '🔼 Ceiling', value: 'ceiling' }
+                          ]}
+                        />
+                      ) : (
+                        <span className="px-3 py-1 bg-white text-graphite text-xs font-body rounded-full border border-taupe/10">
+                          {item.placementType === 'floor' && '🔽 Floor'}
+                          {item.placementType === 'wall' && '◼️ Wall'}
+                          {item.placementType === 'ceiling' && '🔼 Ceiling'}
+                          {!item.placementType && '🔽 Floor (default)'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Product URL */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-taupe/70 font-body">Product:</span>
+                      {isEditing ? (
+                        <Input
+                          type="url"
+                          value={editProductUrl}
+                          onChange={(e) => setEditProductUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="flex-1 ml-3"
+                        />
+                      ) : item.productUrl ? (
+                        <a
+                          href={item.productUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-sage hover:text-sage/80 font-body flex items-center gap-1 transition-colors"
+                        >
+                          View Product
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      ) : (
+                        <span className="text-sm text-taupe/40 font-body">No URL</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Dimensions Section */}
                 <div>
                   <h3 className="font-display font-semibold text-graphite mb-3">
                     Dimensions
                   </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                      <p className="text-xs text-taupe/50 font-body mb-1">Width</p>
-                      <p className="text-sm font-body font-medium text-graphite">
-                        {item.dimensions?.width || '-'}"
-                      </p>
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      {/* Width */}
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-2">Width</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={widthFeet}
+                            onChange={(e) => setWidthFeet(parseInt(e.target.value) || 0)}
+                            min="0"
+                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                          />
+                          <span className="text-taupe/50 text-xs font-body">ft</span>
+                          <input
+                            type="number"
+                            value={widthInches.toFixed(1)}
+                            onChange={(e) => setWidthInches(parseFloat(e.target.value) || 0)}
+                            step="0.1"
+                            min="0"
+                            max="11.9"
+                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                          />
+                          <span className="text-taupe/50 text-xs font-body">in</span>
+                        </div>
+                      </div>
+
+                      {/* Height */}
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-2">Height</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={heightFeet}
+                            onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
+                            min="0"
+                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                          />
+                          <span className="text-taupe/50 text-xs font-body">ft</span>
+                          <input
+                            type="number"
+                            value={heightInches.toFixed(1)}
+                            onChange={(e) => setHeightInches(parseFloat(e.target.value) || 0)}
+                            step="0.1"
+                            min="0"
+                            max="11.9"
+                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                          />
+                          <span className="text-taupe/50 text-xs font-body">in</span>
+                        </div>
+                      </div>
+
+                      {/* Depth */}
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-2">Depth</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={depthFeet}
+                            onChange={(e) => setDepthFeet(parseInt(e.target.value) || 0)}
+                            min="0"
+                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                          />
+                          <span className="text-taupe/50 text-xs font-body">ft</span>
+                          <input
+                            type="number"
+                            value={depthInches.toFixed(1)}
+                            onChange={(e) => setDepthInches(parseFloat(e.target.value) || 0)}
+                            step="0.1"
+                            min="0"
+                            max="11.9"
+                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                          />
+                          <span className="text-taupe/50 text-xs font-body">in</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                      <p className="text-xs text-taupe/50 font-body mb-1">Height</p>
-                      <p className="text-sm font-body font-medium text-graphite">
-                        {item.dimensions?.height || '-'}"
-                      </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-1">Width</p>
+                        <p className="text-sm font-body font-medium text-graphite">
+                          {Math.floor(item.dimensions?.width || 0)}' {(((item.dimensions?.width || 0) % 1) * 12).toFixed(1)}"
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-1">Height</p>
+                        <p className="text-sm font-body font-medium text-graphite">
+                          {Math.floor(item.dimensions?.height || 0)}' {(((item.dimensions?.height || 0) % 1) * 12).toFixed(1)}"
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-1">Depth</p>
+                        <p className="text-sm font-body font-medium text-graphite">
+                          {Math.floor(item.dimensions?.depth || 0)}' {(((item.dimensions?.depth || 0) % 1) * 12).toFixed(1)}"
+                        </p>
+                      </div>
                     </div>
-                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                      <p className="text-xs text-taupe/50 font-body mb-1">Depth</p>
-                      <p className="text-sm font-body font-medium text-graphite">
-                        {item.dimensions?.depth || '-'}"
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Tags Section */}

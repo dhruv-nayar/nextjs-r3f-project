@@ -10,6 +10,8 @@ export interface Vector3 {
 
 export type ItemCategory = 'seating' | 'table' | 'storage' | 'bed' | 'decoration' | 'lighting' | 'other'
 
+export type PlacementType = 'floor' | 'wall' | 'ceiling'
+
 /**
  * Item: A reusable 3D model template in the user's library
  * Think of this as a "stamp" that can be placed multiple times
@@ -31,6 +33,10 @@ export interface Item {
   // Organization
   category: ItemCategory
   tags: string[]                // ["office", "modern", "mesh"]
+
+  // Placement & Links
+  placementType?: PlacementType // Where item should be placed (floor, wall, ceiling)
+  productUrl?: string           // Link to product page
 
   // Metadata
   createdAt: string
