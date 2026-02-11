@@ -248,63 +248,65 @@ export default function ItemDetailPage() {
 
           {/* Sidebar - Right Side */}
           <aside className="lg:w-80 flex-shrink-0">
-            <div className="lg:sticky lg:top-28 space-y-4">
-              {/* Usage Stats Card */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-taupe/10">
-                <h3 className="font-display font-semibold text-graphite mb-4">
-                  Instance Usage
-                </h3>
+            <div className="lg:fixed lg:right-0 lg:top-0 lg:bottom-0 lg:w-80 lg:pt-20 lg:pb-6 lg:pr-6 flex flex-col">
+              <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
+                {/* Instance Usage Section */}
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-4">
+                    Instance Usage
+                  </h3>
 
-                {instances.length === 0 ? (
-                  <p className="text-sm text-taupe/70 font-body">
-                    Not placed in any homes yet
-                  </p>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-3xl font-display font-semibold text-graphite">
-                          {instances.length}
-                        </p>
-                        <p className="text-sm text-taupe/70 font-body">
-                          Total placements
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Instance List */}
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {instances.map(({ instance, room, home }) => (
-                        <Link
-                          key={instance.id}
-                          href="/"
-                          className="block bg-floral-white rounded-xl p-3 hover:bg-sage/10 transition-colors border border-taupe/10"
-                        >
-                          <p className="font-body font-medium text-graphite text-sm mb-1">
-                            {instance.customName || item.name}
-                          </p>
-                          <p className="text-xs text-taupe/70 font-body">
-                            {home.name} → {room.name}
-                          </p>
-                        </Link>
-                      ))}
-                    </div>
-
-                    <p className="text-xs text-taupe/60 font-body mt-4">
-                      {instances.length} placement{instances.length !== 1 ? 's' : ''} across {new Set(instances.map(i => i.home.id)).size} home{new Set(instances.map(i => i.home.id)).size !== 1 ? 's' : ''}
+                  {instances.length === 0 ? (
+                    <p className="text-sm text-taupe/70 font-body">
+                      Not placed in any homes yet
                     </p>
-                  </>
-                )}
-              </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <p className="text-3xl font-display font-semibold text-graphite">
+                            {instances.length}
+                          </p>
+                          <p className="text-sm text-taupe/70 font-body">
+                            Total placements
+                          </p>
+                        </div>
+                      </div>
 
-              {/* Recent Activity Feed */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-taupe/10">
-                <h3 className="font-display font-semibold text-graphite mb-3">
-                  Recent Activity
-                </h3>
-                <div className="space-y-2 text-xs text-taupe/70 font-body">
-                  <p>• Created {new Date(item.createdAt).toLocaleDateString()}</p>
-                  <p>• Updated {new Date(item.updatedAt).toLocaleDateString()}</p>
+                      {/* Instance List */}
+                      <div className="space-y-2">
+                        {instances.map(({ instance, room, home }) => (
+                          <Link
+                            key={instance.id}
+                            href="/"
+                            className="block bg-white rounded-xl p-3 hover:bg-sage/10 transition-colors border border-taupe/10"
+                          >
+                            <p className="font-body font-medium text-graphite text-sm mb-1">
+                              {instance.customName || item.name}
+                            </p>
+                            <p className="text-xs text-taupe/70 font-body">
+                              {home.name} → {room.name}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-taupe/60 font-body mt-4">
+                        {instances.length} placement{instances.length !== 1 ? 's' : ''} across {new Set(instances.map(i => i.home.id)).size} home{new Set(instances.map(i => i.home.id)).size !== 1 ? 's' : ''}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Recent Activity Section */}
+                <div className="pt-6 border-t border-taupe/10">
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Recent Activity
+                  </h3>
+                  <div className="space-y-2 text-xs text-taupe/70 font-body">
+                    <p>• Created {new Date(item.createdAt).toLocaleDateString()}</p>
+                    <p>• Updated {new Date(item.updatedAt).toLocaleDateString()}</p>
+                  </div>
                 </div>
               </div>
             </div>

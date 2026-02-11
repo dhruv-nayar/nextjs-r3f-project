@@ -1,5 +1,11 @@
-# Core dependencies for background removal
-# Let package manager resolve compatible versions for Python 3.12
+# Minimal dependencies for rembg without pymatting (which requires numba/llvmlite)
+# These are Python 3.12 compatible
+pillow>=10.0.0
+onnxruntime>=1.18.0
+numpy>=1.26.0
+pooch>=1.8.0
+tqdm>=4.66.0
+jsonschema>=4.20.0
+
+# Rembg without optional dependencies
 rembg
-pillow
-onnxruntime

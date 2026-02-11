@@ -24,7 +24,7 @@ interface NavbarProps {
 export function Navbar({ activeTab, className = '' }: NavbarProps) {
   return (
     <nav className={cn('sticky top-0 z-50 bg-porcelain border-b border-taupe/5', className)}>
-      <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Logo/Brand */}
           <div className="flex items-center gap-2">
