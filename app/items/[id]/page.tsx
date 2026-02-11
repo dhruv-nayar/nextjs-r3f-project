@@ -97,10 +97,9 @@ export default function ItemDetailPage() {
                 </div>
               </div>
             </div>
-          </div>
         </main>
 
-          {/* Sidebar - Right Side */}
+        {/* Sidebar - Right Side */}
           <aside className="lg:w-80 flex-shrink-0">
             <div className="lg:fixed lg:right-0 lg:top-0 lg:bottom-0 lg:w-80 lg:pt-20 lg:pb-6 lg:pr-6 flex flex-col">
               <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
