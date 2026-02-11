@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/remove_bg_python.py": {
+      "maxDuration": 60,
+      "memory": 3008
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# Core dependencies for background removal
+rembg==2.0.72
+pillow==10.4.0
+
+# AI/ML dependencies (compatible with Python 3.9)
+onnxruntime==1.19.2
+numpy==1.26.4
+scipy==1.13.1
+scikit-image==0.24.0
+
+# Image processing
+pooch==1.8.2
+pymatting==1.1.14
