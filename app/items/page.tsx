@@ -230,17 +230,20 @@ export default function ItemsPage() {
                 </button>
               </div>
 
-              <Dropdown
-                label="Recently Added"
-                value={sortBy}
-                onChange={setSortBy}
-                options={[
-                  { label: 'Recently Added', value: 'recently-added' },
-                  { label: 'Name A-Z', value: 'name-asc' },
-                  { label: 'Name Z-A', value: 'name-desc' },
-                  { label: 'Category', value: 'category' },
-                ]}
-              />
+              <div className="flex items-baseline gap-6">
+                <span className="text-xs font-body uppercase tracking-wide text-taupe/50">Sort by</span>
+                <Dropdown
+                  label="Recently Added"
+                  value={sortBy}
+                  onChange={setSortBy}
+                  options={[
+                    { label: 'Recently Added', value: 'recently-added' },
+                    { label: 'Name A-Z', value: 'name-asc' },
+                    { label: 'Name Z-A', value: 'name-desc' },
+                    { label: 'Category', value: 'category' },
+                  ]}
+                />
+              </div>
             </div>
 
             {/* Mobile Category Filter */}
@@ -323,7 +326,7 @@ export default function ItemsPage() {
 
           {/* Right Sidebar - Quick Filters */}
           <aside className="hidden lg:block w-64 flex-shrink-0">
-            <div className="sticky top-28 bg-floral-white rounded-2xl p-6 space-y-6">
+            <div className="sticky top-28 bg-floral-white rounded-2xl p-6 space-y-6 border border-taupe/[0.03] shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)]">
               {/* Quick Filters */}
               <div>
                 <h3 className="text-xs font-body uppercase tracking-wide text-taupe/50 mb-4">
@@ -362,9 +365,11 @@ export default function ItemsPage() {
               </div>
 
               {/* Add New Item Button */}
-              <button className="w-full px-4 py-3 bg-taupe hover:bg-taupe/90 text-white font-body text-sm rounded-lg transition-colors shadow-lg">
-                Add New Item
-              </button>
+              <div className="pt-6 border-t border-taupe/5">
+                <button className="w-full px-4 py-3 bg-taupe hover:bg-taupe/90 text-white font-body text-sm rounded-lg transition-colors shadow-lg">
+                  Add New Item
+                </button>
+              </div>
             </div>
           </aside>
         </div>
