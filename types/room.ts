@@ -13,6 +13,17 @@ export type ItemCategory = 'seating' | 'table' | 'storage' | 'bed' | 'decoration
 export type PlacementType = 'floor' | 'wall' | 'ceiling'
 
 /**
+ * MaterialOverride: Customization for a specific material in a 3D model
+ */
+export interface MaterialOverride {
+  materialName: string      // THREE.js material.name
+  materialIndex?: number    // Fallback for unnamed materials
+  baseColor?: string        // Hex color (e.g., "#FF5733")
+  metalness?: number        // 0-1 (optional, for future)
+  roughness?: number        // 0-1 (optional, for future)
+}
+
+/**
  * Item: A reusable 3D model template in the user's library
  * Think of this as a "stamp" that can be placed multiple times
  */
@@ -37,6 +48,9 @@ export interface Item {
   // Placement & Links
   placementType?: PlacementType // Where item should be placed (floor, wall, ceiling)
   productUrl?: string           // Link to product page
+
+  // Customization
+  materialOverrides?: MaterialOverride[] // Custom colors/materials
 
   // Metadata
   createdAt: string

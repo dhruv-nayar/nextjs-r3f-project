@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useGLTF } from '@react-three/drei'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { ItemPreview } from '@/components/items/ItemPreview'
@@ -12,7 +13,8 @@ import Input from '@/components/ui/Input'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
-import { PlacementType } from '@/types/room'
+import { PlacementType, MaterialOverride } from '@/types/room'
+import { extractMaterials, materialInfoToOverride, MaterialInfo } from '@/lib/material-utils'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -46,6 +48,26 @@ export default function ItemDetailPage() {
   const [depthFeet, setDepthFeet] = useState(Math.floor(item?.dimensions?.depth || 0))
   const [depthInches, setDepthInches] = useState(((item?.dimensions?.depth || 0) % 1) * 12)
 
+  // Materials state
+  const [extractedMaterials, setExtractedMaterials] = useState<MaterialInfo[]>([])
+  const [editMaterialOverrides, setEditMaterialOverrides] = useState<MaterialOverride[]>(item?.materialOverrides || [])
+  const [showMaterialsSection, setShowMaterialsSection] = useState(false)
+
+  // Extract materials from GLB model when available
+  useEffect(() => {
+    if (item?.modelPath) {
+      try {
+        const { scene } = useGLTF(item.modelPath)
+        if (scene) {
+          const materials = extractMaterials(scene)
+          setExtractedMaterials(materials)
+        }
+      } catch (error) {
+        console.error('Error extracting materials:', error)
+      }
+    }
+  }, [item?.modelPath])
+
   // Sync edit state with item when it changes
   useEffect(() => {
     if (item) {
@@ -54,6 +76,7 @@ export default function ItemDetailPage() {
       setEditTags(item.tags.join(', '))
       setEditProductUrl(item.productUrl || '')
       setEditPlacementType(item.placementType)
+      setEditMaterialOverrides(item.materialOverrides || [])
 
       // Update dimension state
       setWidthFeet(Math.floor(item.dimensions?.width || 0))
@@ -90,6 +113,7 @@ export default function ItemDetailPage() {
       tags: editTags.split(',').map(t => t.trim()).filter(t => t.length > 0),
       productUrl: editProductUrl,
       placementType: editPlacementType,
+      materialOverrides: editMaterialOverrides.length > 0 ? editMaterialOverrides : undefined,
       dimensions: {
         width: totalWidth,
         height: totalHeight,
@@ -110,6 +134,7 @@ export default function ItemDetailPage() {
       setEditTags(item.tags.join(', '))
       setEditProductUrl(item.productUrl || '')
       setEditPlacementType(item.placementType)
+      setEditMaterialOverrides(item.materialOverrides || [])
 
       setWidthFeet(Math.floor(item.dimensions?.width || 0))
       setWidthInches(((item.dimensions?.width || 0) % 1) * 12)
@@ -130,6 +155,54 @@ export default function ItemDetailPage() {
     router.push('/items')
   }
 
+  const handleMaterialColorChange = (materialName: string, materialIndex: number, color: string) => {
+    setEditMaterialOverrides((prev) => {
+      // Find existing override
+      const existing = prev.find(
+        (o) => o.materialName === materialName || o.materialIndex === materialIndex
+      )
+
+      if (existing) {
+        // Update existing override
+        return prev.map((o) =>
+          o.materialName === materialName || o.materialIndex === materialIndex
+            ? { ...o, baseColor: color }
+            : o
+        )
+      } else {
+        // Add new override
+        return [
+          ...prev,
+          {
+            materialName,
+            materialIndex,
+            baseColor: color
+          }
+        ]
+      }
+    })
+  }
+
+  const handleResetMaterial = (materialName: string, materialIndex: number) => {
+    setEditMaterialOverrides((prev) =>
+      prev.filter(
+        (o) => o.materialName !== materialName && o.materialIndex !== materialIndex
+      )
+    )
+  }
+
+  const handleResetAllMaterials = () => {
+    setEditMaterialOverrides([])
+  }
+
+  // Get current color for a material (from override or original)
+  const getMaterialColor = (materialName: string, materialIndex: number, originalColor: string): string => {
+    const override = editMaterialOverrides.find(
+      (o) => o.materialName === materialName || o.materialIndex === materialIndex
+    )
+    return override?.baseColor || originalColor
+  }
+
   return (
     <div className="min-h-screen bg-porcelain">
       {/* Navigation Bar */}
@@ -144,6 +217,7 @@ export default function ItemDetailPage() {
               <ItemPreview
                 modelPath={item.modelPath}
                 category={item.category}
+                materialOverrides={isEditing ? editMaterialOverrides : item.materialOverrides}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -429,6 +503,112 @@ export default function ItemDetailPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Materials & Colors Section */}
+                {extractedMaterials.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setShowMaterialsSection(!showMaterialsSection)}
+                      className="w-full flex items-center justify-between font-display font-semibold text-graphite mb-3 hover:text-sage transition-colors"
+                    >
+                      <span>Materials & Colors</span>
+                      <svg
+                        className={`w-5 h-5 transition-transform ${showMaterialsSection ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showMaterialsSection && (
+                      <div className="space-y-3">
+                        {extractedMaterials.map((material, index) => {
+                          const currentColor = getMaterialColor(material.name, material.index, material.originalColor)
+                          const isOverridden = editMaterialOverrides.some(
+                            (o) => o.materialName === material.name || o.materialIndex === material.index
+                          )
+
+                          return (
+                            <div
+                              key={`${material.name}-${material.index}`}
+                              className="bg-white rounded-xl p-3 border border-taupe/10"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-body font-medium text-graphite">
+                                    {material.name}
+                                  </span>
+                                  {isOverridden && (
+                                    <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded-full">
+                                      Modified
+                                    </span>
+                                  )}
+                                </div>
+                                {isOverridden && (
+                                  <button
+                                    onClick={() => handleResetMaterial(material.name, material.index)}
+                                    className="text-xs text-taupe/50 hover:text-scarlet transition-colors"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <div
+                                    className="w-8 h-8 rounded-lg border border-taupe/20 flex-shrink-0"
+                                    style={{ backgroundColor: currentColor }}
+                                  />
+                                  <input
+                                    type="color"
+                                    value={currentColor}
+                                    onChange={(e) =>
+                                      handleMaterialColorChange(material.name, material.index, e.target.value)
+                                    }
+                                    disabled={!isEditing}
+                                    className="w-16 h-8 rounded-lg border border-taupe/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={currentColor.toUpperCase()}
+                                    onChange={(e) => {
+                                      const value = e.target.value
+                                      if (/^#[0-9A-F]{6}$/i.test(value)) {
+                                        handleMaterialColorChange(material.name, material.index, value)
+                                      }
+                                    }}
+                                    disabled={!isEditing}
+                                    className="flex-1 px-2 py-1.5 bg-porcelain text-graphite font-mono text-xs rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors disabled:opacity-50"
+                                    placeholder="#FFFFFF"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {editMaterialOverrides.length > 0 && isEditing && (
+                          <button
+                            onClick={handleResetAllMaterials}
+                            className="w-full px-4 py-2 bg-scarlet/10 text-scarlet text-sm font-body font-medium rounded-lg border border-scarlet/20 hover:bg-scarlet/20 transition-colors"
+                          >
+                            Reset All Materials
+                          </button>
+                        )}
+
+                        {!isEditing && extractedMaterials.length > 0 && (
+                          <p className="text-xs text-taupe/50 font-body text-center">
+                            Click "Edit Item" to customize materials
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Tags Section */}
                 <div>

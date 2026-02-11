@@ -4,13 +4,16 @@ import { Suspense, useRef, useEffect, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, PerspectiveCamera, Environment } from '@react-three/drei'
 import * as THREE from 'three'
+import { MaterialOverride } from '@/types/room'
+import { applyMaterialOverrides } from '@/lib/material-utils'
 
 interface ItemPreviewProps {
   modelPath: string
   category: string
+  materialOverrides?: MaterialOverride[]
 }
 
-function ModelPreview({ modelPath }: { modelPath: string }) {
+function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; materialOverrides?: MaterialOverride[] }) {
   const { scene } = useGLTF(modelPath)
   const clonedScene = useMemo(() => scene.clone(true), [scene])
   const groupRef = useRef<THREE.Group>(null)
@@ -35,6 +38,14 @@ function ModelPreview({ modelPath }: { modelPath: string }) {
     // Trigger render in demand mode
     invalidate()
   }, [clonedScene, invalidate])
+
+  // Apply material overrides
+  useEffect(() => {
+    if (materialOverrides && materialOverrides.length > 0) {
+      applyMaterialOverrides(clonedScene, materialOverrides)
+      invalidate()
+    }
+  }, [clonedScene, materialOverrides, invalidate])
 
   // Rotate the model slowly
   useFrame((state) => {
@@ -67,7 +78,7 @@ function Placeholder({ category }: { category: string }) {
   )
 }
 
-export function ItemPreview({ modelPath, category }: ItemPreviewProps) {
+export function ItemPreview({ modelPath, category, materialOverrides }: ItemPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -119,7 +130,7 @@ export function ItemPreview({ modelPath, category }: ItemPreviewProps) {
           <directionalLight position={[-5, 3, -5]} intensity={0.5} />
 
           {/* Model switches dynamically without Canvas remount */}
-          <ModelPreview key={modelPath} modelPath={modelPath} />
+          <ModelPreview key={modelPath} modelPath={modelPath} materialOverrides={materialOverrides} />
 
           {/* Environment */}
           <Environment preset="city" />
