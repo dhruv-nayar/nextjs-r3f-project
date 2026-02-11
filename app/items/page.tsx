@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { ItemCategory, GLBUploadResult, ImageUploadResult } from '@/types/room'
-import { ItemThumbnail } from '@/components/items/ItemThumbnail'
 import { GLBUpload } from '@/components/items/GLBUpload'
 import { ImageUpload } from '@/components/items/ImageUpload'
 import { DimensionInput } from '@/components/items/DimensionInput'
 import { Dropdown } from '@/components/ui/Dropdown'
-import Link from 'next/link'
+import { SearchInput } from '@/components/ui/Input'
+import { SectionHeader } from '@/components/ui/Typography'
+import { Navbar } from '@/components/layout/Navbar'
+import { CategoryFilterSidebar } from '@/components/items/CategoryFilterSidebar'
+import { ItemCard, AddItemCard } from '@/components/items/ItemCard'
 import Image from 'next/image'
 
 export default function ItemsPage() {
@@ -65,6 +68,14 @@ export default function ItemsPage() {
     { value: 'lighting', label: 'Lighting' },
     { value: 'other', label: 'Other' }
   ]
+
+  // Calculate item counts per category
+  const itemCounts = categories.reduce((acc, cat) => {
+    acc[cat.value] = items.filter(item =>
+      cat.value === 'all' || item.category === cat.value
+    ).length
+    return acc
+  }, {} as Record<string, number>)
 
   const handleUploadMethodSelect = (method: 'glb' | 'images') => {
     setUploadMethod(method)
@@ -150,60 +161,7 @@ export default function ItemsPage() {
   return (
     <div className="min-h-screen bg-porcelain">
       {/* Navigation Bar */}
-      <nav className="sticky top-0 z-50 bg-porcelain border-b border-taupe/5">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo/Brand */}
-            <div className="flex items-center gap-2">
-              <span className="text-taupe text-xl">△</span>
-              <h1 className="text-lg font-display font-medium text-graphite">Studio OMHU</h1>
-            </div>
-
-            {/* Right Side Navigation */}
-            <div className="flex items-center gap-6">
-              <div className="flex items-baseline gap-6">
-                <Link
-                  href="/items"
-                  className="text-graphite font-body font-medium relative pb-1 border-b-2 border-graphite text-sm"
-                >
-                  Inventory
-                </Link>
-                <Dropdown
-                  label="Projects"
-                  header="Recent Projects"
-                  options={[
-                    { label: 'Living Room Design', value: 'living-room' },
-                    { label: 'Kitchen Remodel', value: 'kitchen' },
-                    { label: 'Bedroom Setup', value: 'bedroom' },
-                    { label: 'Office Space', value: 'office' },
-                    { label: 'Patio Design', value: 'patio' },
-                  ]}
-                  showSeparator
-                  footerOption={{ label: 'See All', value: 'see-all' }}
-                />
-              </div>
-
-              {/* Vertical Divider */}
-              <div className="w-px h-5 bg-taupe/10"></div>
-
-              <div className="flex items-center gap-3">
-                <button className="p-2 hover:bg-taupe/5 rounded-lg flex items-center justify-center transition-colors">
-                  <svg className="w-5 h-5 text-taupe/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                </button>
-                <button className="p-2 hover:bg-taupe/5 rounded-lg flex items-center justify-center transition-colors">
-                  <svg className="w-5 h-5 text-taupe/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar activeTab="inventory" />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -213,16 +171,12 @@ export default function ItemsPage() {
             {/* Search Bar & Filters Row */}
             <div className="flex items-center justify-between gap-3 mb-6">
               <div className="flex items-center gap-3">
-                <div className="relative w-80">
-                  <input
-                    type="text"
-                    placeholder="Search inventory..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-4 py-2 pl-9 bg-floral-white text-graphite placeholder:text-taupe/40 font-body text-sm focus:outline-none focus:bg-white transition-colors rounded-lg"
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-taupe/30 text-xs">🔍</span>
-                </div>
+                <SearchInput
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search inventory..."
+                  width="w-80"
+                />
 
                 <button className="px-4 py-2 bg-floral-white text-taupe/60 font-body text-sm hover:text-graphite transition-colors flex items-center gap-2 rounded-lg">
                   <span className="text-xs">▼</span>
@@ -231,7 +185,7 @@ export default function ItemsPage() {
               </div>
 
               <div className="flex items-baseline gap-6">
-                <span className="text-xs font-body uppercase tracking-wide text-taupe/50">Sort by</span>
+                <SectionHeader>Sort by</SectionHeader>
                 <Dropdown
                   label="Recently Added"
                   value={sortBy}
@@ -286,92 +240,30 @@ export default function ItemsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {/* Item Cards */}
                 {filteredItems.map(item => (
-                  <Link
+                  <ItemCard
                     key={item.id}
-                    href={`/items/${item.id}`}
-                    className="group overflow-hidden cursor-pointer"
-                  >
-                    {/* Thumbnail */}
-                    <div className="aspect-square relative shadow-sm group-hover:shadow-md transition-shadow duration-200">
-                      <ItemThumbnail category={item.category} name={item.name} thumbnailPath={item.thumbnailPath} />
-                    </div>
-
-                    {/* Info Section */}
-                    <div className="pt-2">
-                      <p className="text-taupe/40 text-[10px] font-body font-light uppercase tracking-wider mb-1">
-                        {item.category}
-                      </p>
-                      <h3 className="font-display text-base text-graphite truncate leading-tight">
-                        {item.name}
-                      </h3>
-                    </div>
-                  </Link>
+                    id={item.id}
+                    name={item.name}
+                    category={item.category}
+                    thumbnailPath={item.thumbnailPath}
+                  />
                 ))}
 
                 {/* Add New Item Card */}
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="border-2 border-dashed border-taupe/15 rounded-lg aspect-square flex flex-col items-center justify-center gap-3 hover:border-taupe/30 transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-full border-2 border-taupe/30 flex items-center justify-center text-2xl text-taupe/40 group-hover:border-taupe/50 group-hover:text-taupe/60 transition-colors">
-                    +
-                  </div>
-                  <span className="font-body text-sm text-taupe/60 group-hover:text-taupe/80 transition-colors uppercase tracking-wide">
-                    Add New Item
-                  </span>
-                </button>
+                <AddItemCard onClick={() => setShowCreateModal(true)} />
               </div>
             )}
           </main>
 
           {/* Right Sidebar - Quick Filters */}
-          <aside className="hidden lg:block w-64 flex-shrink-0">
-            <div className="sticky top-28 bg-floral-white rounded-2xl p-6 space-y-6 border border-taupe/[0.03] shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)]">
-              {/* Quick Filters */}
-              <div>
-                <h3 className="text-xs font-body uppercase tracking-wide text-taupe/50 mb-4">
-                  Quick Filters
-                </h3>
-                <div className="space-y-1">
-                  {categories.map(cat => {
-                    const categoryCount = items.filter(item =>
-                      cat.value === 'all' || item.category === cat.value
-                    ).length
-                    return (
-                      <button
-                        key={cat.value}
-                        onClick={() => setSelectedCategory(cat.value)}
-                        className={`w-full text-left px-3 py-2 transition-colors font-body text-sm ${
-                          selectedCategory === cat.value
-                            ? 'text-graphite'
-                            : 'text-taupe/70 hover:text-graphite'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className="w-4 flex-shrink-0">
-                              {selectedCategory === cat.value ? '•' : ''}
-                            </span>
-                            <span className="truncate">{cat.label}</span>
-                          </div>
-                          <span className="text-xs text-taupe/40 flex-shrink-0">
-                            {categoryCount}
-                          </span>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Add New Item Button */}
-              <div className="pt-6 border-t border-taupe/5">
-                <button className="w-full px-4 py-3 bg-taupe hover:bg-taupe/90 text-white font-body text-sm rounded-lg transition-colors shadow-lg">
-                  Add New Item
-                </button>
-              </div>
-            </div>
-          </aside>
+          <CategoryFilterSidebar
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            itemCounts={itemCounts}
+            onAddNewClick={() => setShowCreateModal(true)}
+            className="hidden lg:block"
+          />
         </div>
       </div>
 
