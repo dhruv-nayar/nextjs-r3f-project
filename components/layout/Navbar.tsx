@@ -19,9 +19,11 @@ interface NavbarProps {
   activeTab?: 'inventory' | 'projects'
   /** Additional CSS classes */
   className?: string
+  /** Breadcrumb text to show after the active tab */
+  breadcrumb?: string
 }
 
-export function Navbar({ activeTab, className = '' }: NavbarProps) {
+export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
   return (
     <nav className={cn('sticky top-0 z-50 bg-porcelain border-b border-taupe/5', className)}>
       <div className="px-6 py-4">
@@ -35,17 +37,27 @@ export function Navbar({ activeTab, className = '' }: NavbarProps) {
           {/* Right Side Navigation */}
           <div className="flex items-center gap-6">
             <div className="flex items-baseline gap-6">
-              <Link
-                href="/items"
-                className={cn(
-                  'font-body font-medium text-sm pb-1 transition-colors',
-                  activeTab === 'inventory'
-                    ? 'text-graphite border-b-2 border-graphite'
-                    : 'text-taupe/70 hover:text-graphite'
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/items"
+                  className={cn(
+                    'font-body font-medium text-sm pb-1 transition-colors',
+                    activeTab === 'inventory'
+                      ? 'text-graphite border-b-2 border-graphite'
+                      : 'text-taupe/70 hover:text-graphite'
+                  )}
+                >
+                  Inventory
+                </Link>
+                {breadcrumb && activeTab === 'inventory' && (
+                  <>
+                    <svg className="w-4 h-4 text-taupe/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="font-body text-sm text-taupe/70">{breadcrumb}</span>
+                  </>
                 )}
-              >
-                Inventory
-              </Link>
+              </div>
               <Dropdown
                 label="Projects"
                 header="Recent Projects"
