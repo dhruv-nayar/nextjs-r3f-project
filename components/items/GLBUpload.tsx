@@ -108,7 +108,6 @@ export function GLBUpload({ onUploadComplete, onError }: GLBUploadProps) {
         setUploadStage('complete')
         setProgress(prev => prev ? { ...prev, progress: 100, status: 'completed' } : null)
         onUploadComplete({
-          success: true,
           modelPath,
           thumbnailPath: result.thumbnailPath
         })
