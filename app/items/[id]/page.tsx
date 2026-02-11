@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
-import { ItemPreview } from '@/components/items/ItemPreview'
+import { ItemThumbnail } from '@/components/items/ItemThumbnail'
 import Toast from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -73,40 +73,9 @@ export default function ItemDetailPage() {
       {/* Navigation Bar */}
       <Navbar activeTab="inventory" />
 
-      {/* Main Content */}
-      <div className="flex">
-        {/* Main Content - Left Side (3D Viewer) */}
-        <main className="flex-1 p-6">
-          {/* 3D Model Viewer */}
-          <div className="w-full h-[calc(100vh-88px)] bg-porcelain relative">
-            {item.modelPath ? (
-              <ItemPreview
-                modelPath={item.modelPath}
-                category={item.category}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-8xl text-taupe/20 mb-4">
-                    {item.category === 'seating' && '🪑'}
-                    {item.category === 'table' && '🪑'}
-                    {item.category === 'storage' && '📚'}
-                    {item.category === 'bed' && '🛏️'}
-                    {item.category === 'decoration' && '🪴'}
-                    {item.category === 'lighting' && '💡'}
-                    {item.category === 'other' && '📦'}
-                  </div>
-                  <p className="text-taupe/40 font-body">No 3D model available</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </main>
-
-        {/* Sidebar - Right Side */}
-        <aside className="w-[400px] flex-shrink-0">
-          <div className="fixed right-0 top-[68px] bottom-0 w-[400px] p-6 flex flex-col">
-            <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
+      {/* Sidebar Content */}
+      <div className="p-6">
+        <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] space-y-6">
                 {/* Item Header Section */}
                 <div>
                   {/* Top Actions */}
@@ -333,12 +302,10 @@ export default function ItemDetailPage() {
                     <p>• Updated {new Date(item.updatedAt).toLocaleDateString()}</p>
                   </div>
                 </div>
-              </div>
-            </div>
-          </aside>
         </div>
+      </div>
 
-        {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-porcelain rounded-3xl p-8 max-w-md w-full shadow-2xl border border-scarlet/20">

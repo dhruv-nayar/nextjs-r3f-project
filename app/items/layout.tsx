@@ -31,8 +31,8 @@ function CanvasContent() {
 
 function Placeholder() {
   return (
-    <div className="w-full h-full flex items-center justify-center bg-white">
-      <div className="text-6xl text-gray-300">📦</div>
+    <div className="w-full h-full flex items-center justify-center bg-porcelain">
+      <div className="text-6xl text-taupe/20">📦</div>
     </div>
   )
 }
@@ -42,10 +42,10 @@ export default function ItemsLayout({ children }: { children: React.ReactNode })
   const isDetailPage = !!params?.id
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex">
+    <div className="min-h-screen bg-porcelain flex">
       {/* Left: Persistent Canvas - always mounted but hidden on list page */}
       <div
-        className={`${isDetailPage ? 'w-1/2' : 'w-0'} h-screen sticky top-0 bg-white transition-all duration-300 overflow-hidden`}
+        className={`${isDetailPage ? 'flex-1' : 'w-0'} h-screen sticky top-0 bg-porcelain transition-all duration-300 overflow-hidden`}
       >
         <Suspense fallback={<Placeholder />}>
           <Canvas
@@ -53,15 +53,16 @@ export default function ItemsLayout({ children }: { children: React.ReactNode })
             gl={{
               preserveDrawingBuffer: true,
               antialias: true,
-              alpha: false,
+              alpha: true,
               powerPreference: 'high-performance'
             }}
             dpr={[1, 2]}
-            style={{ background: 'white' }}
+            style={{ background: '#FAF9F6' }}
             onCreated={({ gl }) => {
-              gl.setClearColor(0xffffff, 1)
+              gl.setClearColor(0xFAF9F6, 1)
             }}
           >
+            <color attach="background" args={['#FAF9F6']} />
             <PerspectiveCamera makeDefault position={[0, 1, 4]} fov={50} />
             <ambientLight intensity={0.8} />
             <directionalLight position={[5, 5, 5]} intensity={1.2} />
@@ -74,7 +75,7 @@ export default function ItemsLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* Right: Page content (metadata, buttons, etc.) */}
-      <div className={`${isDetailPage ? 'w-1/2' : 'w-full'} h-screen overflow-y-auto transition-all duration-300`}>
+      <div className={`${isDetailPage ? 'w-auto' : 'w-full'} h-screen overflow-y-auto transition-all duration-300 bg-porcelain`}>
         {children}
       </div>
     </div>
