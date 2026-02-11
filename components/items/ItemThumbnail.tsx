@@ -31,12 +31,12 @@ export function ItemThumbnail({ category, name, thumbnailPath }: ItemThumbnailPr
   // Show actual 3D thumbnail if available
   if (thumbnailPath) {
     return (
-      <div className="w-full h-full relative bg-gray-50">
+      <div className="w-full h-full relative">
         <Image
           src={thumbnailPath}
           alt={name}
           fill
-          className="object-contain p-4"
+          className="object-contain p-2"
           unoptimized
         />
       </div>
@@ -45,9 +45,8 @@ export function ItemThumbnail({ category, name, thumbnailPath }: ItemThumbnailPr
 
   // Fallback to emoji
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+    <div className="w-full h-full flex flex-col items-center justify-center">
       <div className="text-6xl mb-2">{getCategoryIcon()}</div>
-      <p className="text-gray-400 text-xs text-center px-2">{name}</p>
     </div>
   )
 }

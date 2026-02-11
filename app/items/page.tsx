@@ -7,6 +7,7 @@ import { ItemThumbnail } from '@/components/items/ItemThumbnail'
 import { GLBUpload } from '@/components/items/GLBUpload'
 import { ImageUpload } from '@/components/items/ImageUpload'
 import { DimensionInput } from '@/components/items/DimensionInput'
+import { Dropdown } from '@/components/ui/Dropdown'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -15,6 +16,7 @@ export default function ItemsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [sortBy, setSortBy] = useState('recently-added')
 
   // Upload flow state
   const [uploadStep, setUploadStep] = useState<'choose' | 'upload' | 'metadata'>('choose')
@@ -146,26 +148,57 @@ export default function ItemsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-porcelain">
       {/* Navigation Bar */}
-      <nav className="border-b border-gray-200 bg-white shadow-sm">
+      <nav className="sticky top-0 z-50 bg-porcelain border-b border-taupe/5">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-8">
-              <h1 className="text-2xl font-bold text-gray-900">3D Home Editor</h1>
-              <div className="flex gap-4">
+            {/* Logo/Brand */}
+            <div className="flex items-center gap-2">
+              <span className="text-taupe text-xl">△</span>
+              <h1 className="text-lg font-display font-medium text-graphite">Studio OMHU</h1>
+            </div>
+
+            {/* Right Side Navigation */}
+            <div className="flex items-center gap-6">
+              <div className="flex items-baseline gap-6">
                 <Link
                   href="/items"
-                  className="px-4 py-2 text-white bg-blue-600 rounded-lg font-medium"
+                  className="text-graphite font-body font-medium relative pb-1 border-b-2 border-graphite text-sm"
                 >
-                  Items
+                  Inventory
                 </Link>
-                <Link
-                  href="/"
-                  className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Homes
-                </Link>
+                <Dropdown
+                  label="Projects"
+                  header="Recent Projects"
+                  options={[
+                    { label: 'Living Room Design', value: 'living-room' },
+                    { label: 'Kitchen Remodel', value: 'kitchen' },
+                    { label: 'Bedroom Setup', value: 'bedroom' },
+                    { label: 'Office Space', value: 'office' },
+                    { label: 'Patio Design', value: 'patio' },
+                  ]}
+                  showSeparator
+                  footerOption={{ label: 'See All', value: 'see-all' }}
+                />
+              </div>
+
+              {/* Vertical Divider */}
+              <div className="w-px h-5 bg-taupe/10"></div>
+
+              <div className="flex items-center gap-3">
+                <button className="p-2 hover:bg-taupe/5 rounded-lg flex items-center justify-center transition-colors">
+                  <svg className="w-5 h-5 text-taupe/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                </button>
+                <button className="p-2 hover:bg-taupe/5 rounded-lg flex items-center justify-center transition-colors">
+                  <svg className="w-5 h-5 text-taupe/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -174,154 +207,177 @@ export default function ItemsPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Items Library</h2>
-            <p className="text-gray-600">Manage your 3D model collection</p>
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-          >
-            <span className="text-xl">+</span>
-            Add Item
-          </button>
-        </div>
-
-        {/* Search and Filters */}
-        <div className="mb-8 space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search items by name, description, or tags..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 pl-12 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-              🔍
-            </span>
-          </div>
-
-          {/* Category Filters */}
-          <div className="flex gap-2 flex-wrap">
-            {categories.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => setSelectedCategory(cat.value)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  selectedCategory === cat.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-300'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Results Count */}
-          <div className="text-gray-600 text-sm">
-            Showing {filteredItems.length} of {items.length} items
-          </div>
-        </div>
-
-        {/* Items Grid */}
-        {filteredItems.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-gray-600 text-lg mb-4">
-              {searchQuery || selectedCategory !== 'all'
-                ? 'No items match your search criteria'
-                : 'No items in your library yet'
-              }
-            </p>
-            {!searchQuery && selectedCategory === 'all' && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-              >
-                Add Your First Item
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredItems.map(item => (
-              <div
-                key={item.id}
-                className="rounded-xl overflow-hidden transition-all hover:shadow-lg group"
-              >
-                {/* Thumbnail/Preview */}
-                <div className="aspect-square relative overflow-hidden">
-                  <ItemThumbnail category={item.category} name={item.name} thumbnailPath={item.thumbnailPath} />
-
-                  {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <Link
-                      href={`/items/${item.id}`}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      View Details
-                    </Link>
-                  </div>
-
-                  {/* Badge */}
-                  {!item.isCustom && (
-                    <div className="absolute top-2 right-2 px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded">
-                      Built-in
-                    </div>
-                  )}
+        <div className="flex gap-6 items-start">
+          {/* Main Content - Left Side */}
+          <main className="flex-1 min-w-0">
+            {/* Search Bar & Filters Row */}
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="relative w-80">
+                  <input
+                    type="text"
+                    placeholder="Search inventory..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 pl-9 bg-floral-white text-graphite placeholder:text-taupe/40 font-body text-sm focus:outline-none focus:bg-white transition-colors rounded-lg"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-taupe/30 text-xs">🔍</span>
                 </div>
 
-                {/* Item Info */}
-                <div className="pt-3">
-                  <h3 className="text-gray-900 font-semibold text-lg mb-1 truncate">
-                    {item.name}
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-2 capitalize">
-                    {item.category}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>
-                      {item.dimensions.width.toFixed(1)}' × {item.dimensions.height.toFixed(1)}' × {item.dimensions.depth.toFixed(1)}'
-                    </span>
-                  </div>
+                <button className="px-4 py-2 bg-floral-white text-taupe/60 font-body text-sm hover:text-graphite transition-colors flex items-center gap-2 rounded-lg">
+                  <span className="text-xs">▼</span>
+                  <span>Filters</span>
+                </button>
+              </div>
 
-                  {/* Tags */}
-                  {item.tags.length > 0 && (
-                    <div className="mt-3 flex gap-1 flex-wrap">
-                      {item.tags.slice(0, 3).map(tag => (
-                        <span
-                          key={tag}
-                          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {item.tags.length > 3 && (
-                        <span className="px-2 py-1 text-gray-600 text-xs">
-                          +{item.tags.length - 3}
-                        </span>
-                      )}
+              <Dropdown
+                label="Recently Added"
+                value={sortBy}
+                onChange={setSortBy}
+                options={[
+                  { label: 'Recently Added', value: 'recently-added' },
+                  { label: 'Name A-Z', value: 'name-asc' },
+                  { label: 'Name Z-A', value: 'name-desc' },
+                  { label: 'Category', value: 'category' },
+                ]}
+              />
+            </div>
+
+            {/* Mobile Category Filter */}
+            <div className="lg:hidden mb-6 flex gap-2 flex-wrap">
+              {categories.map(cat => (
+                <button
+                  key={cat.value}
+                  onClick={() => setSelectedCategory(cat.value)}
+                  className={`px-4 py-2 rounded-xl font-body font-medium transition-colors text-sm ${
+                    selectedCategory === cat.value
+                      ? 'bg-sage text-white'
+                      : 'bg-white text-taupe hover:bg-floral-white'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Items Grid */}
+            {filteredItems.length === 0 && searchQuery === '' && selectedCategory === 'all' ? (
+              <div className="text-center py-20">
+                <p className="text-taupe text-lg mb-4 font-body">
+                  No items in your library yet
+                </p>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-6 py-3 bg-taupe hover:bg-taupe/90 text-white font-body font-medium rounded-lg transition-colors"
+                >
+                  Add Your First Item
+                </button>
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="text-center py-20">
+                <p className="text-taupe text-lg font-body">
+                  No items match your search criteria
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {/* Item Cards */}
+                {filteredItems.map(item => (
+                  <Link
+                    key={item.id}
+                    href={`/items/${item.id}`}
+                    className="group overflow-hidden cursor-pointer"
+                  >
+                    {/* Thumbnail */}
+                    <div className="aspect-square relative shadow-sm group-hover:shadow-md transition-shadow duration-200">
+                      <ItemThumbnail category={item.category} name={item.name} thumbnailPath={item.thumbnailPath} />
                     </div>
-                  )}
+
+                    {/* Info Section */}
+                    <div className="pt-2">
+                      <p className="text-taupe/40 text-[10px] font-body font-light uppercase tracking-wider mb-1">
+                        {item.category}
+                      </p>
+                      <h3 className="font-display text-base text-graphite truncate leading-tight">
+                        {item.name}
+                      </h3>
+                    </div>
+                  </Link>
+                ))}
+
+                {/* Add New Item Card */}
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="border-2 border-dashed border-taupe/15 rounded-lg aspect-square flex flex-col items-center justify-center gap-3 hover:border-taupe/30 transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-full border-2 border-taupe/30 flex items-center justify-center text-2xl text-taupe/40 group-hover:border-taupe/50 group-hover:text-taupe/60 transition-colors">
+                    +
+                  </div>
+                  <span className="font-body text-sm text-taupe/60 group-hover:text-taupe/80 transition-colors uppercase tracking-wide">
+                    Add New Item
+                  </span>
+                </button>
+              </div>
+            )}
+          </main>
+
+          {/* Right Sidebar - Quick Filters */}
+          <aside className="hidden lg:block w-64 flex-shrink-0">
+            <div className="sticky top-28 bg-floral-white rounded-2xl p-6 space-y-6">
+              {/* Quick Filters */}
+              <div>
+                <h3 className="text-xs font-body uppercase tracking-wide text-taupe/50 mb-4">
+                  Quick Filters
+                </h3>
+                <div className="space-y-1">
+                  {categories.map(cat => {
+                    const categoryCount = items.filter(item =>
+                      cat.value === 'all' || item.category === cat.value
+                    ).length
+                    return (
+                      <button
+                        key={cat.value}
+                        onClick={() => setSelectedCategory(cat.value)}
+                        className={`w-full text-left px-3 py-2 transition-colors font-body text-sm ${
+                          selectedCategory === cat.value
+                            ? 'text-graphite'
+                            : 'text-taupe/70 hover:text-graphite'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <span className="w-4 flex-shrink-0">
+                              {selectedCategory === cat.value ? '•' : ''}
+                            </span>
+                            <span className="truncate">{cat.label}</span>
+                          </div>
+                          <span className="text-xs text-taupe/40 flex-shrink-0">
+                            {categoryCount}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Add New Item Button */}
+              <button className="w-full px-4 py-3 bg-taupe hover:bg-taupe/90 text-white font-body text-sm rounded-lg transition-colors shadow-lg">
+                Add New Item
+              </button>
+            </div>
+          </aside>
+        </div>
       </div>
 
       {/* Create Item Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-gray-900 border border-white/20 rounded-2xl p-6 max-w-2xl w-full my-8">
-            <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-porcelain rounded-3xl p-8 max-w-2xl w-full my-8 shadow-2xl border border-taupe/10">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <h3 className="text-white text-2xl font-bold">Add New Item</h3>
-                <p className="text-white/60 text-sm mt-1">
+                <h3 className="text-2xl font-display font-semibold text-graphite">Add New Item</h3>
+                <p className="text-taupe/70 font-body text-sm mt-1">
                   {uploadStep === 'choose' && 'Choose how to add your 3D model'}
                   {uploadStep === 'upload' && 'Upload your file'}
                   {uploadStep === 'metadata' && 'Fill in item details'}
@@ -329,7 +385,7 @@ export default function ItemsPage() {
               </div>
               <button
                 onClick={handleCloseModal}
-                className="text-white/60 hover:text-white text-2xl"
+                className="text-taupe/50 hover:text-taupe text-3xl leading-none transition-colors"
               >
                 ×
               </button>
@@ -341,15 +397,15 @@ export default function ItemsPage() {
                 {/* GLB Upload Option */}
                 <button
                   onClick={() => handleUploadMethodSelect('glb')}
-                  className="w-full p-6 bg-black/40 border-2 border-white/20 hover:border-blue-500 rounded-xl text-left transition-colors group"
+                  className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
                 >
                   <div className="flex items-start gap-4">
                     <div className="text-4xl">📦</div>
                     <div className="flex-1">
-                      <h4 className="text-white text-lg font-semibold mb-1 group-hover:text-blue-400">
+                      <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
                         Upload GLB File
                       </h4>
-                      <p className="text-white/60 text-sm">
+                      <p className="text-taupe/70 text-sm font-body">
                         Upload a ready-to-use .glb 3D model file directly
                       </p>
                     </div>
@@ -359,15 +415,15 @@ export default function ItemsPage() {
                 {/* Image Upload Option */}
                 <button
                   onClick={() => handleUploadMethodSelect('images')}
-                  className="w-full p-6 bg-black/40 border-2 border-white/20 hover:border-blue-500 rounded-xl text-left transition-colors group"
+                  className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
                 >
                   <div className="flex items-start gap-4">
                     <div className="text-4xl">🖼️</div>
                     <div className="flex-1">
-                      <h4 className="text-white text-lg font-semibold mb-1 group-hover:text-blue-400">
+                      <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
                         Upload Images
                       </h4>
-                      <p className="text-white/60 text-sm">
+                      <p className="text-taupe/70 text-sm font-body">
                         Upload photos with AI background removal
                       </p>
                     </div>
@@ -380,7 +436,7 @@ export default function ItemsPage() {
             {uploadStep === 'upload' && (
               <div className="space-y-4">
                 {uploadError && (
-                  <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+                  <div className="p-4 bg-scarlet/10 border border-scarlet/30 rounded-2xl text-scarlet text-sm font-body">
                     {uploadError}
                   </div>
                 )}
@@ -401,7 +457,7 @@ export default function ItemsPage() {
 
                 <button
                   onClick={() => setUploadStep('choose')}
-                  className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="w-full px-4 py-3 bg-white border border-taupe/20 hover:bg-floral-white text-taupe rounded-xl font-body font-medium transition-colors"
                 >
                   ← Back to Upload Options
                 </button>
@@ -412,14 +468,14 @@ export default function ItemsPage() {
             {uploadStep === 'metadata' && (
               <div className="space-y-4">
                 {/* Success Message */}
-                <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-200 text-sm">
+                <div className="p-4 bg-sage/10 border border-sage/30 rounded-2xl text-sage text-sm font-body">
                   ✓ {uploadMethod === 'glb' ? 'Model uploaded successfully!' : 'Images processed successfully!'} Now add some details.
                 </div>
 
                 {/* Image Gallery with Thumbnail Selection */}
                 {uploadedImages.length > 0 && (
                   <div className="space-y-3">
-                    <label className="block text-white/80 text-sm font-medium">
+                    <label className="block text-graphite text-sm font-body font-medium">
                       Select Thumbnail Image
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -431,28 +487,28 @@ export default function ItemsPage() {
                             setSelectedThumbnailIndex(index)
                             setUploadedThumbnailPath(imagePath)
                           }}
-                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                          className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                             selectedThumbnailIndex === index
-                              ? 'border-blue-500 ring-2 ring-blue-500/50'
-                              : 'border-white/20 hover:border-white/40'
+                              ? 'border-sage ring-2 ring-sage/30'
+                              : 'border-taupe/20 hover:border-taupe/40'
                           }`}
                         >
                           <Image
                             src={imagePath}
                             alt={`Image ${index + 1}`}
                             fill
-                            className="object-contain bg-gray-800"
+                            className="object-contain bg-floral-white"
                             unoptimized
                           />
                           {selectedThumbnailIndex === index && (
-                            <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                            <div className="absolute top-2 right-2 w-6 h-6 bg-sage rounded-full flex items-center justify-center">
                               <span className="text-white text-xs">✓</span>
                             </div>
                           )}
                         </button>
                       ))}
                     </div>
-                    <p className="text-white/40 text-xs">
+                    <p className="text-taupe/60 text-xs font-body">
                       The selected image will be used as the thumbnail for this item
                     </p>
                   </div>
@@ -461,10 +517,10 @@ export default function ItemsPage() {
                 {/* GLB Thumbnail Preview */}
                 {uploadedThumbnailPath && uploadedImages.length === 0 && (
                   <div className="space-y-2">
-                    <label className="block text-white/80 text-sm font-medium">
+                    <label className="block text-graphite text-sm font-body font-medium">
                       Generated Thumbnail
                     </label>
-                    <div className="relative w-48 h-48 mx-auto bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg overflow-hidden border border-white/20">
+                    <div className="relative w-48 h-48 mx-auto bg-floral-white rounded-xl overflow-hidden border border-taupe/20">
                       <Image
                         src={uploadedThumbnailPath}
                         alt="Generated thumbnail"
@@ -478,7 +534,7 @@ export default function ItemsPage() {
 
                 {/* Name */}
                 <div>
-                  <label className="block text-white/80 text-sm font-medium mb-2">
+                  <label className="block text-graphite text-sm font-body font-medium mb-2">
                     Item Name *
                   </label>
                   <input
@@ -486,13 +542,13 @@ export default function ItemsPage() {
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
                     placeholder="Modern Office Chair"
-                    className="w-full px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500"
+                    className="w-full px-4 py-3 bg-white border border-taupe/20 rounded-xl text-graphite placeholder:text-taupe/50 font-body focus:outline-none focus:ring-2 focus:ring-sage/50 focus:border-sage/50 transition-all"
                   />
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="block text-white/80 text-sm font-medium mb-2">
+                  <label className="block text-graphite text-sm font-body font-medium mb-2">
                     Description
                   </label>
                   <textarea
@@ -500,19 +556,19 @@ export default function ItemsPage() {
                     onChange={(e) => setNewItemDescription(e.target.value)}
                     placeholder="Ergonomic mesh back chair with adjustable height"
                     rows={3}
-                    className="w-full px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500 resize-none"
+                    className="w-full px-4 py-3 bg-white border border-taupe/20 rounded-xl text-graphite placeholder:text-taupe/50 font-body focus:outline-none focus:ring-2 focus:ring-sage/50 focus:border-sage/50 resize-none transition-all"
                   />
                 </div>
 
                 {/* Category */}
                 <div>
-                  <label className="block text-white/80 text-sm font-medium mb-2">
+                  <label className="block text-graphite text-sm font-body font-medium mb-2">
                     Category
                   </label>
                   <select
                     value={newItemCategory}
                     onChange={(e) => setNewItemCategory(e.target.value as ItemCategory)}
-                    className="w-full px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-4 py-3 bg-white border border-taupe/20 rounded-xl text-graphite font-body focus:outline-none focus:ring-2 focus:ring-sage/50 focus:border-sage/50 transition-all"
                   >
                     <option value="seating">Seating</option>
                     <option value="table">Table</option>
@@ -534,7 +590,7 @@ export default function ItemsPage() {
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-white/80 text-sm font-medium mb-2">
+                  <label className="block text-graphite text-sm font-body font-medium mb-2">
                     Tags
                   </label>
                   <input
@@ -542,9 +598,9 @@ export default function ItemsPage() {
                     value={newItemTags}
                     onChange={(e) => setNewItemTags(e.target.value)}
                     placeholder="modern, office, ergonomic"
-                    className="w-full px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500"
+                    className="w-full px-4 py-3 bg-white border border-taupe/20 rounded-xl text-graphite placeholder:text-taupe/50 font-body focus:outline-none focus:ring-2 focus:ring-sage/50 focus:border-sage/50 transition-all"
                   />
-                  <p className="text-white/40 text-xs mt-1">
+                  <p className="text-taupe/60 text-xs mt-1 font-body">
                     Comma-separated tags for easier searching
                   </p>
                 </div>
@@ -556,11 +612,11 @@ export default function ItemsPage() {
                     <>
                       <button
                         disabled
-                        className="w-full px-4 py-3 bg-gray-600 text-gray-400 rounded-lg font-medium cursor-not-allowed opacity-60"
+                        className="w-full px-4 py-3 bg-taupe/20 text-taupe/50 rounded-xl font-body font-medium cursor-not-allowed"
                       >
                         Generate 3D Model (Coming Soon)
                       </button>
-                      <p className="text-white/60 text-xs text-center">
+                      <p className="text-taupe/70 text-xs text-center font-body">
                         3D model generation is required before saving the item
                       </p>
                     </>
@@ -569,17 +625,17 @@ export default function ItemsPage() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => setUploadStep('upload')}
-                      className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                      className="flex-1 px-4 py-3 bg-white border border-taupe/20 hover:bg-floral-white text-taupe rounded-xl font-body font-medium transition-colors"
                     >
                       ← Back
                     </button>
                     <button
                       onClick={handleCreateItem}
                       disabled={uploadMethod === 'images'}
-                      className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                      className={`flex-1 px-4 py-3 rounded-xl font-body font-medium transition-colors ${
                         uploadMethod === 'images'
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-60'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          ? 'bg-taupe/20 text-taupe/50 cursor-not-allowed'
+                          : 'bg-sage hover:bg-sage/90 text-white'
                       }`}
                     >
                       {uploadMethod === 'glb' ? 'Create Item' : 'Save Item (Generate Model First)'}

@@ -3,6 +3,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Minimalist Interior Designer Palette */
+  --color-porcelain: #FAF9F6;
+  --color-floral-white: #F9F6EE;
+  --color-taupe: #48392A;
+  --color-graphite: #2F2F2F;
+  --color-sage: #69995D;
+  --color-scarlet: #FF331F;
+
+  /* Semantic Color Tokens */
+  --color-bg-primary: var(--color-porcelain);
+  --color-bg-secondary: var(--color-floral-white);
+  --color-text-primary: var(--color-graphite);
+  --color-text-secondary: var(--color-taupe);
+  --color-accent-primary: var(--color-sage);
+  --color-accent-danger: var(--color-scarlet);
 }
 
 @theme inline {
@@ -10,6 +26,18 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* New Color Palette - Tailwind Utilities */
+  --color-porcelain: #FAF9F6;
+  --color-floral-white: #F9F6EE;
+  --color-taupe: #48392A;
+  --color-graphite: #2F2F2F;
+  --color-sage: #69995D;
+  --color-scarlet: #FF331F;
+
+  /* Font Family Tokens */
+  --font-display: var(--font-playfair);
+  --font-body: var(--font-inter);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,7 +48,23 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-porcelain);
+  color: var(--color-graphite);
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+}
+
+/* Animations */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
 }
