@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useGLTF } from '@react-three/drei'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { ItemPreview } from '@/components/items/ItemPreview'
@@ -14,7 +13,8 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
 import { PlacementType, MaterialOverride } from '@/types/room'
-import { extractMaterials, materialInfoToOverride, MaterialInfo } from '@/lib/material-utils'
+import { MaterialInfo } from '@/lib/material-utils'
+import { MaterialExtractor } from '@/hooks/useMaterialExtraction'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -53,20 +53,10 @@ export default function ItemDetailPage() {
   const [editMaterialOverrides, setEditMaterialOverrides] = useState<MaterialOverride[]>(item?.materialOverrides || [])
   const [showMaterialsSection, setShowMaterialsSection] = useState(false)
 
-  // Extract materials from GLB model when available
-  useEffect(() => {
-    if (item?.modelPath) {
-      try {
-        const { scene } = useGLTF(item.modelPath)
-        if (scene) {
-          const materials = extractMaterials(scene)
-          setExtractedMaterials(materials)
-        }
-      } catch (error) {
-        console.error('Error extracting materials:', error)
-      }
-    }
-  }, [item?.modelPath])
+  // Callback for when materials are extracted
+  const handleMaterialsExtracted = useCallback((materials: MaterialInfo[]) => {
+    setExtractedMaterials(materials)
+  }, [])
 
   // Sync edit state with item when it changes
   useEffect(() => {
@@ -205,6 +195,14 @@ export default function ItemDetailPage() {
 
   return (
     <div className="min-h-screen bg-porcelain">
+      {/* Material Extractor (invisible component that extracts materials from GLB) */}
+      {item.modelPath && (
+        <MaterialExtractor
+          modelPath={item.modelPath}
+          onExtracted={handleMaterialsExtracted}
+        />
+      )}
+
       {/* Navigation Bar */}
       <Navbar activeTab="inventory" breadcrumb={item.name} />
 
