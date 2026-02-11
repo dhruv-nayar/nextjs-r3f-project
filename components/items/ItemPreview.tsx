@@ -15,7 +15,22 @@ interface ItemPreviewProps {
 
 function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; materialOverrides?: MaterialOverride[] }) {
   const { scene } = useGLTF(modelPath)
-  const clonedScene = useMemo(() => scene.clone(true), [scene])
+
+  // Serialize materialOverrides for stable dependency tracking
+  const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
+
+  // Re-clone scene whenever materialOverrides changes to start fresh
+  const clonedScene = useMemo(() => {
+    const freshClone = scene.clone(true)
+
+    // Apply overrides immediately after cloning
+    if (materialOverrides && materialOverrides.length > 0) {
+      applyMaterialOverrides(freshClone, materialOverrides)
+    }
+
+    return freshClone
+  }, [scene, overridesKey])
+
   const groupRef = useRef<THREE.Group>(null)
   const { invalidate } = useThree()
 
@@ -38,14 +53,6 @@ function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; mat
     // Trigger render in demand mode
     invalidate()
   }, [clonedScene, invalidate])
-
-  // Apply material overrides
-  useEffect(() => {
-    if (materialOverrides && materialOverrides.length > 0) {
-      applyMaterialOverrides(clonedScene, materialOverrides)
-      invalidate()
-    }
-  }, [clonedScene, materialOverrides, invalidate])
 
   // Rotate the model slowly
   useFrame((state) => {
