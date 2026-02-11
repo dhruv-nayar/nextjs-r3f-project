@@ -15,6 +15,21 @@ interface ItemPreviewProps {
 
 function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; materialOverrides?: MaterialOverride[] }) {
   const { scene } = useGLTF(modelPath)
+  const groupRef = useRef<THREE.Group>(null)
+  const { invalidate } = useThree()
+
+  // Calculate centering and scaling ONCE based on original scene
+  const sceneTransform = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(scene)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+
+    return {
+      position: new THREE.Vector3(-center.x, -box.min.y, -center.z),
+      scale: 2 / maxDim
+    }
+  }, [scene])
 
   // Serialize materialOverrides for stable dependency tracking
   const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
@@ -23,36 +38,24 @@ function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; mat
   const clonedScene = useMemo(() => {
     const freshClone = scene.clone(true)
 
+    // Apply the fixed centering to the clone
+    freshClone.position.copy(sceneTransform.position)
+
     // Apply overrides immediately after cloning
     if (materialOverrides && materialOverrides.length > 0) {
       applyMaterialOverrides(freshClone, materialOverrides)
     }
 
     return freshClone
-  }, [scene, overridesKey])
+  }, [scene, sceneTransform, overridesKey])
 
-  const groupRef = useRef<THREE.Group>(null)
-  const { invalidate } = useThree()
-
-  // Center and scale the model to fit in view
+  // Apply scale to group (only once)
   useEffect(() => {
-    if (!groupRef.current) return
-
-    const box = new THREE.Box3().setFromObject(clonedScene)
-    const center = box.getCenter(new THREE.Vector3())
-    const size = box.getSize(new THREE.Vector3())
-
-    // Center the model
-    clonedScene.position.set(-center.x, -box.min.y, -center.z)
-
-    // Scale to fit in view (make largest dimension = 2 units)
-    const maxDim = Math.max(size.x, size.y, size.z)
-    const scale = 2 / maxDim
-    groupRef.current.scale.setScalar(scale)
-
-    // Trigger render in demand mode
-    invalidate()
-  }, [clonedScene, invalidate])
+    if (groupRef.current) {
+      groupRef.current.scale.setScalar(sceneTransform.scale)
+      invalidate()
+    }
+  }, [sceneTransform.scale, invalidate])
 
   // Rotate the model slowly
   useFrame((state) => {
