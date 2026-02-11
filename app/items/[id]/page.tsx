@@ -7,6 +7,10 @@ import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { ItemThumbnail } from '@/components/items/ItemThumbnail'
 import Toast from '@/components/ui/Toast'
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
+import { Navbar } from '@/components/layout/Navbar'
+import { cn } from '@/lib/design-system'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -35,12 +39,9 @@ export default function ItemDetailPage() {
       <div className="min-h-screen bg-porcelain flex items-center justify-center p-8">
         <div className="text-center">
           <h2 className="text-2xl font-display font-semibold text-graphite mb-4">Item Not Found</h2>
-          <Link
-            href="/items"
-            className="px-6 py-3 bg-sage hover:bg-sage/90 text-white rounded-xl inline-block transition-colors font-body font-medium"
-          >
+          <Button variant="primary" onClick={() => router.push('/items')}>
             Back to Items
-          </Link>
+          </Button>
         </div>
       </div>
     )
@@ -70,47 +71,7 @@ export default function ItemDetailPage() {
   return (
     <div className="min-h-screen bg-porcelain">
       {/* Navigation Bar */}
-      <nav className="sticky top-0 z-50 bg-porcelain border-b border-taupe/5">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo/Brand */}
-            <div className="flex items-center gap-2">
-              <span className="text-taupe text-xl">△</span>
-              <h1 className="text-lg font-display font-medium text-graphite">Studio OMHU</h1>
-            </div>
-
-            {/* Right Side Navigation */}
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-6">
-                <Link
-                  href="/items"
-                  className="text-graphite font-body font-medium relative pb-1 border-b-2 border-graphite"
-                >
-                  Inventory
-                </Link>
-                <Link
-                  href="/"
-                  className="text-taupe/70 font-body font-medium hover:text-graphite transition-colors"
-                >
-                  Projects
-                </Link>
-              </div>
-
-              {/* Vertical Divider */}
-              <div className="w-px h-5 bg-taupe/10"></div>
-
-              <div className="flex items-center gap-3">
-                <button className="w-9 h-9 rounded-full bg-white hover:bg-taupe/5 flex items-center justify-center transition-colors border border-taupe/10">
-                  <span className="text-taupe text-sm">🔍</span>
-                </button>
-                <button className="w-9 h-9 rounded-full bg-white hover:bg-taupe/5 flex items-center justify-center transition-colors border border-taupe/10">
-                  <span className="text-taupe text-sm">👤</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar activeTab="inventory" />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -144,11 +105,12 @@ export default function ItemDetailPage() {
               <div className="flex items-start justify-between mb-6">
                 <div className="flex-1">
                   {isEditing ? (
-                    <input
-                      type="text"
+                    <Input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-full text-3xl font-display font-semibold text-graphite bg-floral-white border border-taupe/20 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-sage/50"
+                      inputSize="lg"
+                      fullWidth
+                      className="text-3xl font-display font-semibold"
                     />
                   ) : (
                     <h2 className="text-3xl font-display font-semibold text-graphite mb-2">{item.name}</h2>
@@ -158,18 +120,12 @@ export default function ItemDetailPage() {
 
                 {!isEditing && (
                   <div className="flex gap-3">
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 bg-sage text-white rounded-xl font-body font-medium hover:bg-sage/90 transition-colors"
-                    >
+                    <Button variant="primary" onClick={() => setIsEditing(true)}>
                       Edit
-                    </button>
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="px-4 py-2 bg-scarlet text-white rounded-xl font-body font-medium hover:bg-scarlet/90 transition-colors"
-                    >
+                    </Button>
+                    <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -221,12 +177,12 @@ export default function ItemDetailPage() {
               <div className="mb-6 pb-6 border-b border-taupe/10">
                 <h3 className="font-display font-semibold text-graphite mb-3">Tags</h3>
                 {isEditing ? (
-                  <input
-                    type="text"
+                  <Input
                     value={editTags}
                     onChange={(e) => setEditTags(e.target.value)}
                     placeholder="tag1, tag2, tag3"
-                    className="w-full text-graphite bg-floral-white border border-taupe/20 rounded-xl px-4 py-3 font-body focus:outline-none focus:ring-2 focus:ring-sage/50"
+                    fullWidth
+                    inputSize="md"
                   />
                 ) : (
                   <div className="flex gap-2 flex-wrap">
@@ -264,23 +220,27 @@ export default function ItemDetailPage() {
               {/* Edit Actions */}
               {isEditing && (
                 <div className="flex gap-3 mt-6 pt-6 border-t border-taupe/10">
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handleSave}
-                    className="flex-1 px-4 py-3 bg-sage hover:bg-sage/90 text-white rounded-xl transition-colors font-body font-medium"
+                    size="lg"
+                    fullWidth
                   >
                     Save Changes
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       setIsEditing(false)
                       setEditName(item.name)
                       setEditDescription(item.description || '')
                       setEditTags(item.tags.join(', '))
                     }}
-                    className="flex-1 px-4 py-3 bg-white border border-taupe/20 hover:bg-floral-white text-taupe rounded-xl transition-colors font-body font-medium"
+                    size="lg"
+                    fullWidth
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -381,18 +341,22 @@ export default function ItemDetailPage() {
             )}
 
             <div className="flex gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-3 bg-white border border-taupe/20 text-taupe rounded-xl font-body font-medium hover:bg-floral-white transition-colors"
+                size="lg"
+                fullWidth
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
                 onClick={handleDelete}
-                className="flex-1 px-4 py-3 bg-scarlet text-white rounded-xl font-body font-medium hover:bg-scarlet/90 transition-colors"
+                size="lg"
+                fullWidth
               >
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
         </div>
