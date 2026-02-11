@@ -60,6 +60,48 @@ export interface ItemInstance {
 }
 
 // ============================================
+// Upload-related Types
+// ============================================
+
+/**
+ * Upload progress tracking
+ */
+export interface UploadProgress {
+  fileName: string
+  progress: number // 0-100
+  status: 'uploading' | 'processing' | 'completed' | 'error'
+  error?: string
+  stage?: 'model' | 'thumbnail' // Which file is being processed
+}
+
+/**
+ * Result from GLB file upload
+ */
+export interface GLBUploadResult {
+  modelPath: string
+  thumbnailPath?: string
+}
+
+/**
+ * Result from image upload
+ */
+export interface ImageUploadResult {
+  imagePaths: string[]
+  selectedThumbnailIndex?: number
+}
+
+/**
+ * Processing job status (for async operations like TRELLIS)
+ */
+export interface ProcessingJob {
+  jobId: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  message?: string
+  downloadUrl?: string
+  error?: string
+}
+
+// ============================================
 // LEGACY: Old FurnitureItem (for migration)
 // ============================================
 

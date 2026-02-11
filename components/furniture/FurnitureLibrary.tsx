@@ -534,6 +534,12 @@ export function ItemInstanceRenderer({ instance }: { instance: ItemInstance }) {
     return null
   }
 
+  // Skip rendering if model path is invalid/placeholder
+  if (!item.modelPath || item.modelPath === 'placeholder') {
+    console.warn(`Item ${item.id} has no valid model path, skipping render`)
+    return null
+  }
+
   return (
     <Suspense fallback={<PlaceholderItemInstance instance={instance} item={item} />}>
       <ItemInstanceModel instance={instance} item={item} />

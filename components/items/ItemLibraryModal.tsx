@@ -125,7 +125,7 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
                 >
                   {/* Thumbnail */}
                   <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
-                    <ItemThumbnail category={item.category} name={item.name} />
+                    <ItemThumbnail category={item.category} name={item.name} thumbnailPath={item.thumbnailPath} />
 
                     {/* Hover Overlay */}
                     <div className="absolute inset-0 bg-blue-600/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
