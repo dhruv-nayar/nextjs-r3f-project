@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
-import { ItemThumbnail } from '@/components/items/ItemThumbnail'
+import { ItemPreview } from '@/components/items/ItemPreview'
 import Toast from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -76,59 +76,80 @@ export default function ItemDetailPage() {
       {/* Main Content */}
       <div className="flex">
         {/* Main Content - Left Side (3D Viewer) */}
-        <main className="flex-1 p-8">
-          {/* Product Image with 3D Viewer */}
-          <div className="max-w-3xl mx-auto">
-            <div className="aspect-square bg-porcelain relative">
-                <ItemThumbnail
-                  category={item.category}
-                  name={item.name}
-                  thumbnailPath={item.thumbnailPath}
-                />
-
-                {/* 3D Controls Overlay (Placeholder) */}
-                <div className="absolute bottom-4 right-4 flex gap-2">
-                  <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl border border-taupe/20 flex items-center justify-center hover:bg-white transition-colors">
-                    <span className="text-sm">🔄</span>
-                  </button>
-                  <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl border border-taupe/20 flex items-center justify-center hover:bg-white transition-colors">
-                    <span className="text-sm">🔍</span>
-                  </button>
+        <main className="flex-1 p-6">
+          {/* 3D Model Viewer */}
+          <div className="w-full h-[calc(100vh-88px)] bg-porcelain relative">
+            {item.modelPath ? (
+              <ItemPreview
+                modelPath={item.modelPath}
+                category={item.category}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-8xl text-taupe/20 mb-4">
+                    {item.category === 'seating' && '🪑'}
+                    {item.category === 'table' && '🪑'}
+                    {item.category === 'storage' && '📚'}
+                    {item.category === 'bed' && '🛏️'}
+                    {item.category === 'decoration' && '🪴'}
+                    {item.category === 'lighting' && '💡'}
+                    {item.category === 'other' && '📦'}
+                  </div>
+                  <p className="text-taupe/40 font-body">No 3D model available</p>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
         </main>
 
         {/* Sidebar - Right Side */}
-          <aside className="lg:w-80 flex-shrink-0">
-            <div className="lg:fixed lg:right-0 lg:top-0 lg:bottom-0 lg:w-80 lg:pt-20 lg:pb-6 lg:pr-6 flex flex-col">
-              <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
+        <aside className="w-[400px] flex-shrink-0">
+          <div className="fixed right-0 top-[68px] bottom-0 w-[400px] p-6 flex flex-col">
+            <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
                 {/* Item Header Section */}
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-taupe/50 font-body mb-2">
-                    {item.category}
-                  </p>
+                  {/* Top Actions */}
+                  <div className="flex justify-between items-start mb-4">
+                    <p className="text-xs uppercase tracking-wide text-taupe/50 font-body">
+                      {item.category}
+                    </p>
+                    <div className="flex gap-2">
+                      <button className="p-2 hover:bg-taupe/5 rounded-lg transition-colors" aria-label="Add to favorites">
+                        <svg className="w-5 h-5 text-taupe/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                      </button>
+                      <button className="p-2 hover:bg-taupe/5 rounded-lg transition-colors" aria-label="Share">
+                        <svg className="w-5 h-5 text-taupe/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Item Name */}
                   {isEditing ? (
                     <Input
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="text-2xl font-display font-semibold text-graphite mb-4"
+                      className="text-3xl font-display font-semibold text-graphite mb-6"
                     />
                   ) : (
-                    <h1 className="text-2xl font-display font-semibold text-graphite mb-4">
+                    <h1 className="text-3xl font-display font-semibold text-graphite mb-6">
                       {item.name}
                     </h1>
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex gap-3 mb-6">
                     {isEditing ? (
                       <>
                         <Button
                           variant="primary"
                           onClick={handleSave}
-                          size="sm"
+                          size="lg"
                           fullWidth
                         >
                           Save Changes
@@ -136,8 +157,7 @@ export default function ItemDetailPage() {
                         <Button
                           variant="secondary"
                           onClick={() => setIsEditing(false)}
-                          size="sm"
-                          fullWidth
+                          size="lg"
                         >
                           Cancel
                         </Button>
@@ -145,18 +165,17 @@ export default function ItemDetailPage() {
                     ) : (
                       <>
                         <Button
-                          variant="secondary"
+                          variant="primary"
                           onClick={() => setIsEditing(true)}
-                          size="sm"
+                          size="lg"
                           fullWidth
                         >
-                          Edit
+                          Edit Item
                         </Button>
                         <Button
                           variant="danger"
                           onClick={() => setShowDeleteConfirm(true)}
-                          size="sm"
-                          fullWidth
+                          size="lg"
                         >
                           Delete
                         </Button>
