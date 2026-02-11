@@ -41,7 +41,7 @@ export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
                 <Link
                   href="/items"
                   className={cn(
-                    'font-body font-medium text-sm pb-1 transition-colors',
+                    'font-body font-medium text-sm transition-colors',
                     activeTab === 'inventory'
                       ? 'text-graphite border-b-2 border-graphite'
                       : 'text-taupe/70 hover:text-graphite'
@@ -51,7 +51,7 @@ export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
                 </Link>
                 {breadcrumb && activeTab === 'inventory' && (
                   <>
-                    <svg className="w-4 h-4 text-taupe/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4 text-taupe/40 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                     <span className="font-body text-sm text-taupe/70">{breadcrumb}</span>

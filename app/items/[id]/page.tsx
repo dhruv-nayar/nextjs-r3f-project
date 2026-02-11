@@ -109,7 +109,7 @@ export default function ItemDetailPage() {
                 {/* Item Header Section */}
                 <div>
                   {/* Top Actions */}
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-center mb-4">
                     <p className="text-xs uppercase tracking-wide text-taupe/50 font-body">
                       {item.category}
                     </p>
