@@ -164,7 +164,7 @@ export default function ItemsPage() {
       <Navbar activeTab="inventory" />
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="px-6 py-8">
         <div className="flex gap-6 items-start">
           {/* Main Content - Left Side */}
           <main className="flex-1 min-w-0">

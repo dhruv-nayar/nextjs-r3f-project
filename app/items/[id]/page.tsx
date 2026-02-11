@@ -74,13 +74,12 @@ export default function ItemDetailPage() {
       <Navbar activeTab="inventory" />
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex gap-6 flex-col lg:flex-row">
-          {/* Main Content - Left Side */}
-          <main className="flex-1 space-y-6">
-            {/* Product Image Card with 3D Viewer */}
-            <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-taupe/10">
-              <div className="aspect-square bg-floral-white relative">
+      <div className="flex">
+        {/* Main Content - Left Side (3D Viewer) */}
+        <main className="flex-1 p-8">
+          {/* Product Image with 3D Viewer */}
+          <div className="max-w-3xl mx-auto">
+            <div className="aspect-square bg-porcelain relative">
                 <ItemThumbnail
                   category={item.category}
                   name={item.name}
@@ -98,158 +97,166 @@ export default function ItemDetailPage() {
                 </div>
               </div>
             </div>
-
-            {/* Product Info Card */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-taupe/10">
-              {/* Header with Edit/Delete */}
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex-1">
-                  {isEditing ? (
-                    <Input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      inputSize="lg"
-                      fullWidth
-                      className="text-3xl font-display font-semibold"
-                    />
-                  ) : (
-                    <h2 className="text-3xl font-display font-semibold text-graphite mb-2">{item.name}</h2>
-                  )}
-                  <p className="text-taupe/70 font-body capitalize">{item.category}</p>
-                </div>
-
-                {!isEditing && (
-                  <div className="flex gap-3">
-                    <Button variant="primary" onClick={() => setIsEditing(true)}>
-                      Edit
-                    </Button>
-                    <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-                      Delete
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Description Section */}
-              <div className="mb-6 pb-6 border-b border-taupe/10">
-                <h3 className="font-display font-semibold text-graphite mb-3">Description</h3>
-                {isEditing ? (
-                  <textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    rows={3}
-                    className="w-full text-graphite bg-floral-white border border-taupe/20 rounded-xl px-4 py-3 font-body focus:outline-none focus:ring-2 focus:ring-sage/50 resize-none"
-                    placeholder="Add a description..."
-                  />
-                ) : (
-                  <p className="text-taupe/80 font-body leading-relaxed">
-                    {item.description || 'No description provided'}
-                  </p>
-                )}
-              </div>
-
-              {/* Dimensions Grid */}
-              <div className="mb-6 pb-6 border-b border-taupe/10">
-                <h3 className="font-display font-semibold text-graphite mb-4">Dimensions</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-floral-white rounded-2xl p-4 text-center">
-                    <p className="text-taupe/60 text-sm font-body mb-1">Width</p>
-                    <p className="text-graphite text-xl font-display font-semibold">
-                      {item.dimensions.width.toFixed(1)}'
-                    </p>
-                  </div>
-                  <div className="bg-floral-white rounded-2xl p-4 text-center">
-                    <p className="text-taupe/60 text-sm font-body mb-1">Height</p>
-                    <p className="text-graphite text-xl font-display font-semibold">
-                      {item.dimensions.height.toFixed(1)}'
-                    </p>
-                  </div>
-                  <div className="bg-floral-white rounded-2xl p-4 text-center">
-                    <p className="text-taupe/60 text-sm font-body mb-1">Depth</p>
-                    <p className="text-graphite text-xl font-display font-semibold">
-                      {item.dimensions.depth.toFixed(1)}'
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="mb-6 pb-6 border-b border-taupe/10">
-                <h3 className="font-display font-semibold text-graphite mb-3">Tags</h3>
-                {isEditing ? (
-                  <Input
-                    value={editTags}
-                    onChange={(e) => setEditTags(e.target.value)}
-                    placeholder="tag1, tag2, tag3"
-                    fullWidth
-                    inputSize="md"
-                  />
-                ) : (
-                  <div className="flex gap-2 flex-wrap">
-                    {item.tags.length > 0 ? (
-                      item.tags.map(tag => (
-                        <span
-                          key={tag}
-                          className="px-3 py-1.5 bg-floral-white text-taupe rounded-lg text-sm font-body border border-taupe/10"
-                        >
-                          {tag}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-taupe/50 text-sm font-body">No tags</span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Model Source */}
-              <div>
-                <h3 className="font-display font-semibold text-graphite mb-3">Model Source</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-taupe/70 font-body">Model Path:</span>
-                    <span className="text-graphite/70 font-mono text-xs break-all ml-4">{item.modelPath}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-taupe/70 font-body">Type:</span>
-                    <span className="text-graphite font-body font-medium">{item.isCustom ? 'Custom' : 'Built-in'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Edit Actions */}
-              {isEditing && (
-                <div className="flex gap-3 mt-6 pt-6 border-t border-taupe/10">
-                  <Button
-                    variant="primary"
-                    onClick={handleSave}
-                    size="lg"
-                    fullWidth
-                  >
-                    Save Changes
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setIsEditing(false)
-                      setEditName(item.name)
-                      setEditDescription(item.description || '')
-                      setEditTags(item.tags.join(', '))
-                    }}
-                    size="lg"
-                    fullWidth
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              )}
-            </div>
-          </main>
+          </div>
+        </main>
 
           {/* Sidebar - Right Side */}
           <aside className="lg:w-80 flex-shrink-0">
             <div className="lg:fixed lg:right-0 lg:top-0 lg:bottom-0 lg:w-80 lg:pt-20 lg:pb-6 lg:pr-6 flex flex-col">
               <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
+                {/* Item Header Section */}
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-taupe/50 font-body mb-2">
+                    {item.category}
+                  </p>
+                  {isEditing ? (
+                    <Input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="text-2xl font-display font-semibold text-graphite mb-4"
+                    />
+                  ) : (
+                    <h1 className="text-2xl font-display font-semibold text-graphite mb-4">
+                      {item.name}
+                    </h1>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 mb-4">
+                    {isEditing ? (
+                      <>
+                        <Button
+                          variant="primary"
+                          onClick={handleSave}
+                          size="sm"
+                          fullWidth
+                        >
+                          Save Changes
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setIsEditing(false)}
+                          size="sm"
+                          fullWidth
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setIsEditing(true)}
+                          size="sm"
+                          fullWidth
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => setShowDeleteConfirm(true)}
+                          size="sm"
+                          fullWidth
+                        >
+                          Delete
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Description Section */}
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Description
+                  </h3>
+                  {isEditing ? (
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="w-full px-4 py-3 bg-white text-graphite font-body text-sm rounded-xl border border-taupe/10 focus:outline-none focus:border-taupe/30 transition-colors resize-none"
+                      rows={4}
+                    />
+                  ) : (
+                    <p className="text-sm text-taupe/80 font-body leading-relaxed">
+                      {item.description || 'No description provided.'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Dimensions Section */}
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Dimensions
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                      <p className="text-xs text-taupe/50 font-body mb-1">Width</p>
+                      <p className="text-sm font-body font-medium text-graphite">
+                        {item.dimensions?.width || '-'}"
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                      <p className="text-xs text-taupe/50 font-body mb-1">Height</p>
+                      <p className="text-sm font-body font-medium text-graphite">
+                        {item.dimensions?.height || '-'}"
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                      <p className="text-xs text-taupe/50 font-body mb-1">Depth</p>
+                      <p className="text-sm font-body font-medium text-graphite">
+                        {item.dimensions?.depth || '-'}"
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tags Section */}
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Tags
+                  </h3>
+                  {isEditing ? (
+                    <Input
+                      type="text"
+                      value={editTags}
+                      onChange={(e) => setEditTags(e.target.value)}
+                      placeholder="Enter tags separated by commas"
+                    />
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {item.tags.length > 0 ? (
+                        item.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-sage/10 text-sage text-xs font-body rounded-full border border-sage/20"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-taupe/50 font-body">No tags</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Model Source Section */}
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Model Source
+                  </h3>
+                  <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                    <p className="text-sm font-body text-graphite">
+                      {item.modelPath || item.thumbnailPath || 'No model file'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-taupe/10"></div>
+
                 {/* Instance Usage Section */}
                 <div>
                   <h3 className="font-display font-semibold text-graphite mb-4">

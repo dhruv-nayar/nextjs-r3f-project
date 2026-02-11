@@ -82,6 +82,8 @@ export function RoomScene() {
 
   return (
     <Canvas shadows style={{ background: '#FAF9F6' }}>
+      <color attach="background" args={['#FAF9F6']} />
+
       <PerspectiveCamera
         makeDefault
         position={[

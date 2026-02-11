@@ -41,7 +41,7 @@ export default function Home() {
       </nav>
 
       {/* 3D Scene */}
-      <main className="w-full h-screen">
+      <main className="w-full h-screen bg-porcelain">
         <RoomScene />
       </main>
 
