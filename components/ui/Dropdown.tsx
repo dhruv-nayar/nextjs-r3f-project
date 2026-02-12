@@ -15,6 +15,7 @@ interface DropdownProps {
   value?: string
   onChange?: (value: string) => void
   className?: string
+  buttonClassName?: string
   header?: string
   showSeparator?: boolean
   footerOption?: DropdownOption
@@ -26,6 +27,7 @@ export function Dropdown({
   value,
   onChange,
   className = '',
+  buttonClassName,
   header,
   showSeparator = false,
   footerOption
@@ -64,7 +66,7 @@ export function Dropdown({
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="text-taupe/70 font-body font-medium hover:text-graphite transition-colors text-sm flex items-center gap-1"
+        className={buttonClassName || "text-taupe/70 font-body font-medium hover:text-graphite transition-colors text-sm flex items-center gap-1"}
       >
         <span>{displayLabel}</span>
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

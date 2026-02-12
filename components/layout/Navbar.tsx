@@ -1,8 +1,12 @@
+'use client'
+
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/design-system'
 import { PageTitle } from '@/components/ui/Typography'
 import { VerticalDivider } from '@/components/ui/Divider'
 import { Dropdown } from '@/components/ui/Dropdown'
+import { useHome } from '@/lib/home-context'
 
 /**
  * Navbar Component
@@ -24,6 +28,8 @@ interface NavbarProps {
 }
 
 export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
+  const { homes, currentHomeId, switchHome } = useHome()
+  const router = useRouter()
   return (
     <nav className={cn('sticky top-0 z-50 bg-porcelain border-b border-taupe/5', className)}>
       <div className="px-6 py-4">
@@ -36,7 +42,7 @@ export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
 
           {/* Right Side Navigation */}
           <div className="flex items-center gap-6">
-            <div className="flex items-baseline gap-6">
+            <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <Link
                   href="/items"
@@ -54,22 +60,34 @@ export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
                     <svg className="w-4 h-4 text-taupe/40 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                    <span className="font-body text-sm text-taupe/70">{breadcrumb}</span>
+                    <span className="font-body font-medium text-sm text-graphite">{breadcrumb}</span>
                   </>
                 )}
               </div>
               <Dropdown
                 label="Projects"
                 header="Recent Projects"
-                options={[
-                  { label: 'Living Room Design', value: 'living-room' },
-                  { label: 'Kitchen Remodel', value: 'kitchen' },
-                  { label: 'Bedroom Setup', value: 'bedroom' },
-                  { label: 'Office Space', value: 'office' },
-                  { label: 'Patio Design', value: 'patio' },
-                ]}
+                value={activeTab === 'inventory' ? undefined : (currentHomeId || undefined)}
+                buttonClassName={cn(
+                  'font-body text-sm transition-colors flex items-center gap-1',
+                  activeTab === 'inventory'
+                    ? 'text-taupe/70 font-light hover:text-graphite'
+                    : 'text-graphite font-medium'
+                )}
+                options={homes.map(home => ({
+                  label: home.name,
+                  value: home.id,
+                  onClick: () => {
+                    switchHome(home.id)
+                    router.push('/')
+                  }
+                }))}
                 showSeparator
-                footerOption={{ label: 'See All', value: 'see-all' }}
+                footerOption={{
+                  label: '+ Create Project',
+                  value: 'create-project',
+                  onClick: () => router.push('/homes')
+                }}
               />
             </div>
 

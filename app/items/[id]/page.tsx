@@ -274,47 +274,6 @@ export default function ItemDetailPage() {
                       {item.name}
                     </h1>
                   )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 mb-6">
-                    {isEditing ? (
-                      <>
-                        <Button
-                          variant="primary"
-                          onClick={handleSave}
-                          size="lg"
-                          fullWidth
-                        >
-                          Save Changes
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={handleCancel}
-                          size="lg"
-                        >
-                          Cancel
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="primary"
-                          onClick={() => setIsEditing(true)}
-                          size="lg"
-                          fullWidth
-                        >
-                          Edit Item
-                        </Button>
-                        <Button
-                          variant="danger"
-                          onClick={() => setShowDeleteConfirm(true)}
-                          size="lg"
-                        >
-                          Delete
-                        </Button>
-                      </>
-                    )}
-                  </div>
                 </div>
 
                 {/* Description Section */}
@@ -357,12 +316,15 @@ export default function ItemDetailPage() {
                           ]}
                         />
                       ) : (
-                        <span className="px-3 py-1 bg-white text-graphite text-xs font-body rounded-full border border-taupe/10">
-                          {item.placementType === 'floor' && '🔽 Floor'}
-                          {item.placementType === 'wall' && '◼️ Wall'}
-                          {item.placementType === 'ceiling' && '🔼 Ceiling'}
-                          {!item.placementType && '🔽 Floor (default)'}
-                        </span>
+                        item.placementType ? (
+                          <span className="px-3 py-1 bg-white text-graphite text-xs font-body rounded-full border border-taupe/10">
+                            {item.placementType === 'floor' && '🔽 Floor'}
+                            {item.placementType === 'wall' && '◼️ Wall'}
+                            {item.placementType === 'ceiling' && '🔼 Ceiling'}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-taupe/40 font-body">Floor</span>
+                        )
                       )}
                     </div>
 
@@ -635,6 +597,47 @@ export default function ItemDetailPage() {
                         <p className="text-sm text-taupe/50 font-body">No tags</p>
                       )}
                     </div>
+                  )}
+                </div>
+
+                {/* Action Buttons - Moved to bottom */}
+                <div className="flex gap-3 pt-4 border-t border-taupe/10">
+                  {isEditing ? (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={handleSave}
+                        size="lg"
+                        fullWidth
+                      >
+                        Save Changes
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={handleCancel}
+                        size="lg"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() => setIsEditing(true)}
+                        size="lg"
+                        fullWidth
+                      >
+                        Edit Item
+                      </Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => setShowDeleteConfirm(true)}
+                        size="lg"
+                      >
+                        Delete
+                      </Button>
+                    </>
                   )}
                 </div>
 
