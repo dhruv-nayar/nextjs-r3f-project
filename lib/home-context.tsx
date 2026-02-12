@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
 import { Home, Room, ItemInstance, Vector3 } from '@/types/room'
+import { FloorplanData } from '@/types/floorplan'
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from './storage'
+import { convertFloorplanTo3D } from './floorplan/floorplan-converter'
 
 interface HomeContextType {
   homes: Home[]
@@ -23,6 +25,11 @@ interface HomeContextType {
     room: Room
     home: Home
   }>
+
+  // NEW: Floorplan integration
+  setFloorplanData: (homeId: string, floorplan: FloorplanData) => void
+  getFloorplanData: (homeId: string) => FloorplanData | undefined
+  buildRoomsFromFloorplan: (homeId: string, floorplan: FloorplanData) => void
 }
 
 const HomeContext = createContext<HomeContextType | undefined>(undefined)
@@ -259,6 +266,54 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     )
   }
 
+  // NEW: Floorplan integration methods
+  const setFloorplanData = (homeId: string, floorplan: FloorplanData) => {
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? {
+              ...home,
+              floorplanData: floorplan,
+              updatedAt: new Date().toISOString()
+            }
+          : home
+      )
+    )
+  }
+
+  const getFloorplanData = (homeId: string): FloorplanData | undefined => {
+    const home = homes.find(h => h.id === homeId)
+    return home?.floorplanData
+  }
+
+  const buildRoomsFromFloorplan = (homeId: string, floorplan: FloorplanData) => {
+    console.log('[buildRoomsFromFloorplan] Starting conversion for home:', homeId)
+    console.log('[buildRoomsFromFloorplan] Floorplan data:', floorplan)
+
+    // Convert 2D floorplan to 3D rooms and shared walls
+    const { rooms: rooms3D, sharedWalls } = convertFloorplanTo3D(floorplan)
+
+    console.log('[buildRoomsFromFloorplan] Converted rooms:', rooms3D)
+    console.log('[buildRoomsFromFloorplan] Number of rooms:', rooms3D.length)
+    console.log('[buildRoomsFromFloorplan] Number of shared walls:', sharedWalls.length)
+
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? {
+              ...home,
+              rooms: rooms3D,
+              sharedWalls,  // NEW: Store shared walls
+              floorplanData: floorplan,
+              updatedAt: new Date().toISOString()
+            }
+          : home
+      )
+    )
+
+    console.log('[buildRoomsFromFloorplan] Homes updated successfully')
+  }
+
   return (
     <HomeContext.Provider
       value={{
@@ -273,7 +328,10 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         updateInstance,
         deleteInstance,
         deleteAllInstancesOfItem,
-        getInstancesForItem
+        getInstancesForItem,
+        setFloorplanData,
+        getFloorplanData,
+        buildRoomsFromFloorplan
       }}
     >
       {children}

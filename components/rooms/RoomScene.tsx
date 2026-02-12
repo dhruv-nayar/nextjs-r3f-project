@@ -5,16 +5,19 @@ import { Canvas } from '@react-three/fiber'
 import { CameraControls, PerspectiveCamera, Environment, Grid } from '@react-three/drei'
 import { useControls } from '@/lib/controls-context'
 import { useRoom } from '@/lib/room-context'
+import { useHome } from '@/lib/home-context'
 import type CameraControlsImpl from 'camera-controls'
 import { Floorplan } from '../floorplan/Floorplan'
 import { Furniture, ItemInstanceRenderer } from '../furniture/FurnitureLibrary'
 import { Room } from './Room'
+import { SharedWall } from './SharedWall'
 import { GRID, SCALE } from '@/lib/constants'
 
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
   const { setControls } = useControls()
   const { currentRoom, rooms } = useRoom()
+  const { currentHome } = useHome()
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -50,6 +53,7 @@ export function RoomScene() {
   }
 
   // Define room positions, dimensions, and doors based on Unit 4A floorplan
+  // (For backwards compatibility with example home)
   const roomConfigs = [
     {
       id: 'terrace',
@@ -120,12 +124,16 @@ export function RoomScene() {
 
       {/* Rooms and Furniture */}
       {rooms.map((room) => {
+        // NEW: Support floorplan-generated rooms
+        // Use room.dimensions and room.position if available (from floorplan)
+        // Otherwise fall back to hardcoded configs
         const roomConfig = roomConfigs.find(rc => rc.id === room.id)
-        const roomPosition = roomConfig?.position || [0, 0, 0]
-        const roomDoors = roomConfig?.doors || []
-        const roomWidth = roomConfig?.width || 20
-        const roomDepth = roomConfig?.depth || 20
-        const roomHeight = roomConfig?.height || 10
+
+        const roomPosition = room.position || roomConfig?.position || [0, 0, 0]
+        const roomDoors = room.doors || roomConfig?.doors || []
+        const roomWidth = room.dimensions?.width || roomConfig?.width || 20
+        const roomDepth = room.dimensions?.depth || roomConfig?.depth || 20
+        const roomHeight = room.dimensions?.height || roomConfig?.height || 10
 
         return (
           <group key={room.id}>
@@ -140,6 +148,7 @@ export function RoomScene() {
                 position={roomPosition}
                 doors={roomDoors}
                 roomId={room.id}
+                excludedWalls={room.excludedWalls}
               />
             )}
 
@@ -159,6 +168,11 @@ export function RoomScene() {
           </group>
         )
       })}
+
+      {/* Shared Walls - renders walls between adjacent rooms */}
+      {currentHome?.sharedWalls?.map(wall => (
+        <SharedWall key={wall.id} wall={wall} />
+      ))}
 
       {/* Environment */}
       <Environment preset="city" />

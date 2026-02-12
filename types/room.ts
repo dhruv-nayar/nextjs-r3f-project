@@ -170,6 +170,56 @@ export interface LightingConfig {
   }>
 }
 
+/**
+ * Door opening in a 3D room wall
+ * Formalized from Room.tsx component
+ */
+export interface Door {
+  wall: 'north' | 'south' | 'east' | 'west'  // Which wall (north=+Z, south=-Z, east=+X, west=-X)
+  position: number  // Position along the wall (-0.5 to 0.5, where 0 is center)
+  width: number     // Door width in feet
+  height: number    // Door height in feet
+}
+
+// ============================================
+// Shared Wall Architecture (Z-Fighting Solution)
+// ============================================
+
+/**
+ * Door on a shared wall, specified in wall-relative coordinates
+ */
+export interface SharedWallDoor {
+  id: string
+  fromRoomId: string       // Which room this door belongs to
+  position: number         // Position along wall (feet from wall's left edge)
+  width: number            // Door width (feet)
+  height: number           // Door height (feet)
+}
+
+/**
+ * SharedWall: A wall shared between two adjacent rooms
+ * Rendered as a single geometry with holes for doors from both rooms
+ * This eliminates z-fighting by having only one surface at the shared position
+ */
+export interface SharedWall {
+  id: string
+  room1Id: string          // First room
+  room2Id: string          // Second room
+
+  // Position in 3D world space
+  position: [number, number, number]  // Center of wall
+
+  // Wall dimensions
+  width: number            // Length along the wall (X or Z axis, in feet)
+  height: number           // Vertical height (Y axis, in feet)
+
+  // Wall orientation
+  orientation: 'east-west' | 'north-south'  // Which axis the wall runs along
+
+  // Doors on this wall
+  doors: SharedWallDoor[]
+}
+
 export interface Room {
   id: string
   name: string
@@ -179,6 +229,24 @@ export interface Room {
   // NEW: instances instead of furniture
   instances?: ItemInstance[]    // Use this going forward
   furniture?: FurnitureItem[]   // DEPRECATED: kept for migration
+
+  // NEW: Floorplan integration
+  floorplanRoomId?: string      // Reference to FloorplanRoom source
+  dimensions?: {                // Explicit dimensions from floorplan
+    width: number               // Width in feet (X-axis)
+    depth: number               // Depth in feet (Z-axis)
+    height: number              // Height in feet (Y-axis)
+  }
+  doors?: Door[]                // Door openings in walls
+  position?: [number, number, number]  // Position offset for the room
+
+  // NEW: SharedWall support - which walls to exclude from rendering
+  excludedWalls?: {
+    north?: boolean
+    south?: boolean
+    east?: boolean
+    west?: boolean
+  }
 
   cameraPosition: Vector3
   cameraTarget: Vector3
@@ -196,6 +264,8 @@ export interface Home {
   description?: string          // NEW: optional description
   rooms: Room[]
   thumbnailPath?: string        // NEW: auto-generated or manual
+  floorplanData?: import('./floorplan').FloorplanData  // NEW: 2D floorplan source
+  sharedWalls?: SharedWall[]    // NEW: Shared walls between adjacent rooms
   createdAt: string
   updatedAt: string
 }

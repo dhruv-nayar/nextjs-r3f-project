@@ -18,6 +18,12 @@ interface RoomProps {
   position?: [number, number, number]  // Position offset for the room
   doors?: Door[]   // Optional door openings
   roomId?: string  // Room ID for hover detection
+  excludedWalls?: {  // Which walls to exclude from rendering (SharedWall handles them)
+    north?: boolean
+    south?: boolean
+    east?: boolean
+    west?: boolean
+  }
 }
 
 function createGridTexture(gridSize: number = 64) {
@@ -48,7 +54,11 @@ function createGridTexture(gridSize: number = 64) {
   return texture
 }
 
-function createWallWithDoor(wallWidth: number, wallHeight: number, doorWidth: number, doorHeight: number, doorPosition: number) {
+function createWallWithDoors(
+  wallWidth: number,
+  wallHeight: number,
+  doors: Array<{ width: number; height: number; position: number }>
+) {
   const shape = new THREE.Shape()
 
   // Create outer rectangle (wall)
@@ -58,60 +68,66 @@ function createWallWithDoor(wallWidth: number, wallHeight: number, doorWidth: nu
   shape.lineTo(-wallWidth / 2, wallHeight)
   shape.lineTo(-wallWidth / 2, 0)
 
-  // Create hole for door (inner rectangle)
-  const hole = new THREE.Path()
-  const doorX = doorPosition * wallWidth
-  const doorY = 0
+  // Create hole for each door
+  doors.forEach(door => {
+    const hole = new THREE.Path()
+    const doorX = door.position * wallWidth
+    const doorY = 0
 
-  hole.moveTo(doorX - doorWidth / 2, doorY)
-  hole.lineTo(doorX + doorWidth / 2, doorY)
-  hole.lineTo(doorX + doorWidth / 2, doorY + doorHeight)
-  hole.lineTo(doorX - doorWidth / 2, doorY + doorHeight)
-  hole.lineTo(doorX - doorWidth / 2, doorY)
+    hole.moveTo(doorX - door.width / 2, doorY)
+    hole.lineTo(doorX + door.width / 2, doorY)
+    hole.lineTo(doorX + door.width / 2, doorY + door.height)
+    hole.lineTo(doorX - door.width / 2, doorY + door.height)
+    hole.lineTo(doorX - door.width / 2, doorY)
 
-  shape.holes.push(hole)
+    shape.holes.push(hole)
+  })
 
   return new THREE.ShapeGeometry(shape)
 }
 
-export function Room({ width, height, depth, position = [0, 0, 0], doors = [], roomId }: RoomProps) {
+export function Room({ width, height, depth, position = [0, 0, 0], doors = [], roomId, excludedWalls }: RoomProps) {
   const gridTexture = useMemo(() => createGridTexture(), [])
   const { hoveredRoomId, setHoveredRoomId } = useRoomHover()
   const isHovered = roomId && hoveredRoomId === roomId
 
-  // Check which walls have doors
-  const hasDoorOnWall = (wall: string) => doors.some(door => door.wall === wall)
-  const getDoorOnWall = (wall: string) => doors.find(door => door.wall === wall)
+  // Helper to check if wall should render
+  const shouldRenderWall = (wall: 'north' | 'south' | 'east' | 'west') => {
+    return !excludedWalls?.[wall]
+  }
+
+  // Get all doors on a specific wall
+  const getDoorsOnWall = (wall: string) => doors.filter(door => door.wall === wall)
 
   // Create wall geometries with doors
   const northWallGeometry = useMemo(() => {
-    const door = getDoorOnWall('north')
-    if (door) {
-      return createWallWithDoor(width, height, door.width, door.height, door.position)
+    const wallDoors = getDoorsOnWall('north')
+    if (wallDoors.length > 0) {
+      return createWallWithDoors(width, height, wallDoors)
     }
     return null
   }, [width, height, doors])
 
   const southWallGeometry = useMemo(() => {
-    const door = getDoorOnWall('south')
-    if (door) {
-      return createWallWithDoor(width, height, door.width, door.height, door.position)
+    const wallDoors = getDoorsOnWall('south')
+    if (wallDoors.length > 0) {
+      return createWallWithDoors(width, height, wallDoors)
     }
     return null
   }, [width, height, doors])
 
   const eastWallGeometry = useMemo(() => {
-    const door = getDoorOnWall('east')
-    if (door) {
-      return createWallWithDoor(depth, height, door.width, door.height, door.position)
+    const wallDoors = getDoorsOnWall('east')
+    if (wallDoors.length > 0) {
+      return createWallWithDoors(depth, height, wallDoors)
     }
     return null
   }, [depth, height, doors])
 
   const westWallGeometry = useMemo(() => {
-    const door = getDoorOnWall('west')
-    if (door) {
-      return createWallWithDoor(depth, height, door.width, door.height, door.position)
+    const wallDoors = getDoorsOnWall('west')
+    if (wallDoors.length > 0) {
+      return createWallWithDoors(depth, height, wallDoors)
     }
     return null
   }, [depth, height, doors])
@@ -154,140 +170,155 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
       {/* No ceiling - removed so we can see inside */}
 
       {/* South wall (negative Z) - Back wall */}
-      {southWallGeometry ? (
-        <mesh position={[0, 0, -depth / 2]} receiveShadow>
-          <primitive object={southWallGeometry} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[width, height]}
-            side={THREE.DoubleSide}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.3 : 0}
-          />
-        </mesh>
-      ) : (
-        <mesh position={[0, height / 2, -depth / 2]} receiveShadow>
-          <planeGeometry args={[width, height]} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[width, height]}
-            side={THREE.DoubleSide}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.3 : 0}
-          />
-        </mesh>
+      {shouldRenderWall('south') && (
+        <>
+          {southWallGeometry ? (
+            <mesh position={[0, 0, -depth / 2]} receiveShadow>
+              <primitive object={southWallGeometry} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[width, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          ) : (
+            <mesh position={[0, height / 2, -depth / 2]} receiveShadow>
+              <planeGeometry args={[width, height]} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[width, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          )}
+
+          {/* South wall outline when hovered */}
+          {isHovered && !southWallGeometry && (
+            <lineSegments position={[0, height / 2, -depth / 2]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(width, height)]} />
+              <lineBasicMaterial color="#00ffff" linewidth={2} />
+            </lineSegments>
+          )}
+        </>
       )}
 
-      {/* South wall outline when hovered */}
-      {isHovered && !southWallGeometry && (
-        <lineSegments position={[0, height / 2, -depth / 2]}>
-          <edgesGeometry args={[new THREE.PlaneGeometry(width, height)]} />
-          <lineBasicMaterial color="#00ffff" linewidth={2} />
-        </lineSegments>
-      )}
+      {/* North wall (positive Z) - Front wall */}
+      {shouldRenderWall('north') && (
+        <>
+          {northWallGeometry ? (
+            <mesh position={[0, 0, depth / 2]} receiveShadow>
+              <primitive object={northWallGeometry} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[width, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          ) : (
+            <mesh position={[0, height / 2, depth / 2]} receiveShadow>
+              <planeGeometry args={[width, height]} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[width, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          )}
 
-      {/* North wall (positive Z) - Front wall - partially transparent */}
-      {northWallGeometry ? (
-        <mesh position={[0, 0, depth / 2]} receiveShadow>
-          <primitive object={northWallGeometry} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[width, height]}
-            side={THREE.DoubleSide}
-            transparent
-            opacity={0.3}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.5 : 0}
-          />
-        </mesh>
-      ) : (
-        <mesh position={[0, height / 2, depth / 2]} receiveShadow>
-          <planeGeometry args={[width, height]} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[width, height]}
-            side={THREE.DoubleSide}
-            transparent
-            opacity={0.3}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.5 : 0}
-          />
-        </mesh>
-      )}
-
-      {/* North wall outline when hovered */}
-      {isHovered && !northWallGeometry && (
-        <lineSegments position={[0, height / 2, depth / 2]}>
-          <edgesGeometry args={[new THREE.PlaneGeometry(width, height)]} />
-          <lineBasicMaterial color="#00ffff" linewidth={2} />
-        </lineSegments>
+          {/* North wall outline when hovered */}
+          {isHovered && !northWallGeometry && (
+            <lineSegments position={[0, height / 2, depth / 2]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(width, height)]} />
+              <lineBasicMaterial color="#00ffff" linewidth={2} />
+            </lineSegments>
+          )}
+        </>
       )}
 
       {/* West wall (negative X) - Left wall */}
-      {westWallGeometry ? (
-        <mesh position={[-width / 2, 0, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-          <primitive object={westWallGeometry} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[depth, height]}
-            side={THREE.DoubleSide}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.3 : 0}
-          />
-        </mesh>
-      ) : (
-        <mesh position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-          <planeGeometry args={[depth, height]} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[depth, height]}
-            side={THREE.DoubleSide}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.3 : 0}
-          />
-        </mesh>
-      )}
+      {shouldRenderWall('west') && (
+        <>
+          {westWallGeometry ? (
+            <mesh position={[-width / 2, 0, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+              <primitive object={westWallGeometry} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[depth, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          ) : (
+            <mesh position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+              <planeGeometry args={[depth, height]} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[depth, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          )}
 
-      {/* West wall outline when hovered */}
-      {isHovered && !westWallGeometry && (
-        <lineSegments position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <edgesGeometry args={[new THREE.PlaneGeometry(depth, height)]} />
-          <lineBasicMaterial color="#00ffff" linewidth={2} />
-        </lineSegments>
+          {/* West wall outline when hovered */}
+          {isHovered && !westWallGeometry && (
+            <lineSegments position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(depth, height)]} />
+              <lineBasicMaterial color="#00ffff" linewidth={2} />
+            </lineSegments>
+          )}
+        </>
       )}
 
       {/* East wall (positive X) - Right wall */}
-      {eastWallGeometry ? (
-        <mesh position={[width / 2, 0, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-          <primitive object={eastWallGeometry} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[depth, height]}
-            side={THREE.DoubleSide}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.3 : 0}
-          />
-        </mesh>
-      ) : (
-        <mesh position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-          <planeGeometry args={[depth, height]} />
-          <meshStandardMaterial
-            map={gridTexture}
-            map-repeat={[depth, height]}
-            side={THREE.DoubleSide}
-            emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
-            emissiveIntensity={isHovered ? 0.3 : 0}
-          />
-        </mesh>
+      {shouldRenderWall('east') && (
+        <>
+          {eastWallGeometry ? (
+            <mesh position={[width / 2, 0, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+              <primitive object={eastWallGeometry} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[depth, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          ) : (
+            <mesh position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+              <planeGeometry args={[depth, height]} />
+              <meshStandardMaterial
+                map={gridTexture}
+                map-repeat={[depth, height]}
+                side={THREE.DoubleSide}
+                emissive={isHovered ? new THREE.Color(0x00ffff) : new THREE.Color(0x000000)}
+                emissiveIntensity={isHovered ? 0.3 : 0}
+              />
+            </mesh>
+          )}
+
+          {/* East wall outline when hovered */}
+          {isHovered && !eastWallGeometry && (
+            <lineSegments position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(depth, height)]} />
+              <lineBasicMaterial color="#00ffff" linewidth={2} />
+            </lineSegments>
+          )}
+        </>
       )}
 
-      {/* East wall outline when hovered */}
-      {isHovered && !eastWallGeometry && (
-        <lineSegments position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
-          <edgesGeometry args={[new THREE.PlaneGeometry(depth, height)]} />
-          <lineBasicMaterial color="#00ffff" linewidth={2} />
-        </lineSegments>
-      )}
+      {/* Doors are rendered as cutouts (holes) in wall geometry via createWallWithDoor() */}
+      {/* SharedWalls handle door cutouts for shared walls */}
     </group>
   )
 }
