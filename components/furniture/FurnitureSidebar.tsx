@@ -29,13 +29,13 @@ export function FurnitureSidebar() {
 
   return (
     <>
-      <div className="fixed right-6 top-24 bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 w-80 max-h-[calc(100vh-200px)] overflow-y-auto">
-        <div className="p-4">
+      <div className="fixed right-6 top-24 bg-floral-white rounded-2xl shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] w-80 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-white font-semibold text-lg">Furniture</h2>
+            <h2 className="text-graphite font-display font-semibold text-lg">Furniture</h2>
             <button
               onClick={() => setShowItemLibrary(true)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+              className="px-3 py-1.5 bg-sage hover:bg-sage/90 text-white text-sm font-body font-medium rounded-lg transition-colors flex items-center gap-1 shadow-sm"
             >
               <span className="text-lg leading-none">+</span>
               <span>Add Items</span>
@@ -59,12 +59,12 @@ export function FurnitureSidebar() {
                 onClick={() => toggleRoom(room.id)}
                 onMouseEnter={() => setHoveredRoomId(room.id)}
                 onMouseLeave={() => setHoveredRoomId(null)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors font-body ${
                   isRoomHovered
-                    ? 'bg-cyan-500/30 border-2 border-cyan-400 text-white'
+                    ? 'bg-sage/20 border border-sage text-graphite'
                     : isCurrentRoom
-                    ? 'bg-blue-600 text-white border-2 border-transparent'
-                    : 'bg-white/10 text-white hover:bg-white/20 border-2 border-transparent'
+                    ? 'bg-sage text-white border border-transparent'
+                    : 'bg-white text-taupe/80 hover:bg-taupe/5 border border-taupe/10'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -80,7 +80,7 @@ export function FurnitureSidebar() {
               {isExpanded && (
                 <div className="mt-2 ml-4 space-y-1">
                   {totalCount === 0 ? (
-                    <p className="text-white/50 text-sm py-2 px-3">No furniture</p>
+                    <p className="text-taupe/50 text-sm py-2 px-3 font-body">No furniture</p>
                   ) : (
                     <>
                       {/* Legacy furniture items */}
@@ -90,12 +90,12 @@ export function FurnitureSidebar() {
                         return (
                           <div
                             key={item.id}
-                            className={`rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer ${
+                            className={`rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer font-body ${
                               isItemSelected
-                                ? 'bg-orange-500/30 border-2 border-orange-400 text-white'
+                                ? 'bg-sage/20 border border-sage text-graphite'
                                 : isItemHovered
-                                ? 'bg-cyan-500/30 border-2 border-cyan-400 text-white'
-                                : 'bg-white/5 text-white/90 hover:bg-white/10 border-2 border-transparent'
+                                ? 'bg-taupe/10 border border-taupe/20 text-graphite'
+                                : 'bg-white text-taupe/80 hover:bg-taupe/5 border border-taupe/10'
                             }`}
                             onMouseEnter={() => setHoveredFurnitureId(item.id)}
                             onMouseLeave={() => setHoveredFurnitureId(null)}
@@ -104,11 +104,11 @@ export function FurnitureSidebar() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="font-medium">{item.name}</p>
-                                <p className="text-xs text-white/60">
+                                <p className="text-xs text-taupe/60">
                                   {item.category || 'uncategorized'}
                                 </p>
                               </div>
-                              <div className="text-xs text-white/50">
+                              <div className="text-xs text-taupe/50">
                                 <p>x: {item.position.x.toFixed(1)}</p>
                                 <p>z: {item.position.z.toFixed(1)}</p>
                               </div>

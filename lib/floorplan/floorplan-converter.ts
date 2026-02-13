@@ -427,10 +427,17 @@ function convertDoors(
       // Door is on a north/south wall (runs along X-axis)
       const doorOffsetFromRoomCenter = doorAbsoluteX3D - roomPosition3D[0]
       normalizedPosition = doorOffsetFromRoomCenter / room.width
+      // No negation needed - the 2D→3D coordinate flip already accounts for the mirror
     } else {
       // Door is on an east/west wall (runs along Z-axis)
       const doorOffsetFromRoomCenter = doorAbsoluteZ3D - roomPosition3D[2]
       normalizedPosition = doorOffsetFromRoomCenter / room.height
+
+      // CRITICAL: West wall is rotated +90°, which flips its local X-axis relative to global Z
+      // Only negate for west wall
+      if (wallOrientation === 'west') {
+        normalizedPosition = -normalizedPosition
+      }
     }
 
     const door3D = {
@@ -471,15 +478,15 @@ function getWallLength(wallSide: WallSide, room: FloorplanRoom): number {
  * Mapping (accounts for coordinate flip in position conversion):
  * - top    → north (+Z direction)
  * - bottom → south (-Z direction)
- * - left   → west  (-X direction)
- * - right  → east  (+X direction)
+ * - left   → east  (+X direction) - FLIPPED due to X-axis negation in 2D→3D
+ * - right  → west  (-X direction) - FLIPPED due to X-axis negation in 2D→3D
  */
 function wallSideToOrientation(side: WallSide): 'north' | 'south' | 'east' | 'west' {
   const map: Record<WallSide, 'north' | 'south' | 'east' | 'west'> = {
     top: 'north',
     bottom: 'south',
-    left: 'west',
-    right: 'east'
+    left: 'east',    // Flipped due to X-axis mirroring
+    right: 'west'    // Flipped due to X-axis mirroring
   }
   return map[side]
 }

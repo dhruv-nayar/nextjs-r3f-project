@@ -89,6 +89,20 @@ export function Navbar({ activeTab, className = '', breadcrumb }: NavbarProps) {
                   onClick: () => router.push('/homes')
                 }}
               />
+
+              {/* Edit Floorplan button (only show when on projects tab and home is selected) */}
+              {activeTab !== 'inventory' && currentHomeId && (
+                <button
+                  onClick={() => router.push(`/floorplan?homeId=${currentHomeId}`)}
+                  className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5"
+                  title="Edit floorplan"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
+                  </svg>
+                  Edit Floorplan
+                </button>
+              )}
             </div>
 
             <VerticalDivider />

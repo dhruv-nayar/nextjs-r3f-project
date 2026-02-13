@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useHome } from '@/lib/home-context'
 import { Room } from '@/types/room'
 
@@ -9,6 +10,7 @@ interface HomeCreationProps {
 }
 
 export function HomeCreation({ onClose }: HomeCreationProps) {
+  const router = useRouter()
   const { createHome } = useHome()
   const [step, setStep] = useState<'name' | 'method' | 'dimensions' | 'floorplan'>('name')
   const [homeName, setHomeName] = useState('')
@@ -63,6 +65,17 @@ export function HomeCreation({ onClose }: HomeCreationProps) {
 
     createHome(homeName, [newRoom])
     onClose()
+  }
+
+  const handleDrawFloorplan = () => {
+    // Create empty home and redirect to floorplan editor
+    const homeId = `home-${Date.now()}`
+    createHome(homeName, [])
+
+    onClose()
+
+    // Redirect to floorplan editor
+    router.push(`/floorplan?homeId=${homeId}&mode=new`)
   }
 
   return (
@@ -133,16 +146,16 @@ export function HomeCreation({ onClose }: HomeCreationProps) {
               </button>
 
               <button
-                disabled
-                className="p-6 rounded-xl border-2 border-white/10 bg-white/5 cursor-not-allowed opacity-50 relative"
+                onClick={handleDrawFloorplan}
+                className="p-6 rounded-xl border-2 border-white/20 hover:border-blue-500 hover:bg-white/5 transition-all group relative"
               >
-                <div className="absolute top-2 right-2 bg-yellow-600/80 text-white text-xs px-2 py-1 rounded">
-                  Coming Soon
+                <div className="absolute top-2 right-2 bg-green-600/80 text-white text-xs px-2 py-1 rounded">
+                  New!
                 </div>
-                <div className="text-4xl mb-3">📄</div>
-                <h3 className="text-white/50 font-semibold mb-2">Upload Floorplan</h3>
-                <p className="text-white/40 text-sm">
-                  Upload an image of your floorplan with dimensions
+                <div className="text-4xl mb-3">✏️</div>
+                <h3 className="text-white font-semibold mb-2">Draw Floorplan</h3>
+                <p className="text-white/60 text-sm">
+                  Draw rooms in 2D and convert to 3D model
                 </p>
               </button>
             </div>
