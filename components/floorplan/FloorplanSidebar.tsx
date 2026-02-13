@@ -1,6 +1,7 @@
 'use client'
 
 import { useFloorplan } from '@/lib/contexts/floorplan-context'
+import { MIN_DOOR_CORNER_DISTANCE } from '@/types/floorplan'
 import { useState, useEffect } from 'react'
 
 export function FloorplanSidebar() {
@@ -224,13 +225,13 @@ function DoorPropertiesPanel({ room, door, onUpdate, onDelete }: DoorPropertiesP
             value={position}
             onChange={(e) => setPosition(parseFloat(e.target.value))}
             onBlur={handleUpdate}
-            min="1"
-            max={wallLength - 1}
+            min={MIN_DOOR_CORNER_DISTANCE}
+            max={wallLength - width - MIN_DOOR_CORNER_DISTANCE}
             step="0.5"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Range: 1.0 - {(wallLength - 1).toFixed(1)}ft
+            Left edge of {width}ft door. Range: {MIN_DOOR_CORNER_DISTANCE.toFixed(1)} - {(wallLength - width - MIN_DOOR_CORNER_DISTANCE).toFixed(1)}ft
           </p>
         </div>
 

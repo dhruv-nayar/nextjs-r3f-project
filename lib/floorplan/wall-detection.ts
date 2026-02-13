@@ -5,7 +5,7 @@
  * Used when placing doors on room walls.
  */
 
-import { FloorplanRoom, Point2D, WallSide } from '@/types/floorplan'
+import { FloorplanRoom, Point2D, WallSide, MIN_DOOR_CORNER_DISTANCE } from '@/types/floorplan'
 import type { Canvas, Group } from 'fabric'
 
 const PIXELS_PER_FOOT = 10
@@ -289,7 +289,7 @@ export function getClosestValidPosition(
   position: number,
   doorWidth: number,
   room: FloorplanRoom,
-  minCornerDistance: number = 1
+  minCornerDistance: number = MIN_DOOR_CORNER_DISTANCE
 ): number {
   const wallLength = getWallLength(wallSide, room)
 

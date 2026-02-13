@@ -2,6 +2,21 @@
 // 2D Floorplan Types for Home Builder
 // ============================================
 
+// ============================================
+// Constants
+// ============================================
+
+/**
+ * Minimum distance a door must be from a wall corner (in feet)
+ * This prevents doors from being placed too close to corners where they would look odd
+ * or interfere with wall structure
+ */
+export const MIN_DOOR_CORNER_DISTANCE = 1
+
+// ============================================
+// Types
+// ============================================
+
 /**
  * 2D point in canvas space
  * Can represent pixels or feet depending on context

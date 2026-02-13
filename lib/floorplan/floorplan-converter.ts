@@ -10,7 +10,7 @@
  * - Conversion: 2D X → 3D X, 2D Y → 3D Z
  */
 
-import { FloorplanData, FloorplanRoom, FloorplanDoor, WallSide, Bounds } from '@/types/floorplan'
+import { FloorplanData, FloorplanRoom, FloorplanDoor, WallSide, Bounds, MIN_DOOR_CORNER_DISTANCE } from '@/types/floorplan'
 import { Room, Door, Vector3, SharedWall, SharedWallDoor } from '@/types/room'
 
 /**
@@ -400,7 +400,9 @@ function convertDoors(
       case 'top':
       case 'bottom':
         // Door is along a horizontal wall (runs along X-axis)
-        doorAbsoluteX2D = room.x + door.position
+        // IMPORTANT: door.position in floorplan is LEFT EDGE of door
+        // Add door.width/2 to get CENTER position for 3D rendering
+        doorAbsoluteX2D = room.x + door.position + door.width / 2
         doorAbsoluteX3D = -(doorAbsoluteX2D - centerX)
         // Use the wall's actual 3D Z position (accounts for alignment adjustments)
         doorAbsoluteZ3D = door.wallSide === 'top'
@@ -414,7 +416,9 @@ function convertDoors(
           ? roomPosition3D[0] - room.width / 2   // West wall
           : roomPosition3D[0] + room.width / 2   // East wall
         // Calculate Z from 2D position
-        const doorAbsoluteZ2D = room.y + door.position
+        // IMPORTANT: door.position in floorplan is TOP EDGE of door
+        // Add door.width/2 to get CENTER position for 3D rendering
+        const doorAbsoluteZ2D = room.y + door.position + door.width / 2
         doorAbsoluteZ3D = -(doorAbsoluteZ2D - centerZ)
         break
     }
@@ -772,11 +776,13 @@ function createSharedWall(candidate: SharedWallCandidate, centerX: number, cente
       let doorWorldPos: number
       if (orientation === 'east-west') {
         // Door position along X axis
-        const doorAbsoluteX2D = room1.x + door.position
+        // IMPORTANT: door.position in floorplan is LEFT EDGE, add door.width/2 for CENTER
+        const doorAbsoluteX2D = room1.x + door.position + door.width / 2
         doorWorldPos = -(doorAbsoluteX2D - centerX)
       } else {
         // Door position along Z axis
-        const doorAbsoluteZ2D = room1.y + door.position
+        // IMPORTANT: door.position in floorplan is TOP EDGE, add door.width/2 for CENTER
+        const doorAbsoluteZ2D = room1.y + door.position + door.width / 2
         doorWorldPos = -(doorAbsoluteZ2D - centerZ)
       }
 
@@ -800,10 +806,12 @@ function createSharedWall(candidate: SharedWallCandidate, centerX: number, cente
     .forEach(door => {
       let doorWorldPos: number
       if (orientation === 'east-west') {
-        const doorAbsoluteX2D = room2.x + door.position
+        // IMPORTANT: door.position in floorplan is LEFT EDGE, add door.width/2 for CENTER
+        const doorAbsoluteX2D = room2.x + door.position + door.width / 2
         doorWorldPos = -(doorAbsoluteX2D - centerX)
       } else {
-        const doorAbsoluteZ2D = room2.y + door.position
+        // IMPORTANT: door.position in floorplan is TOP EDGE, add door.width/2 for CENTER
+        const doorAbsoluteZ2D = room2.y + door.position + door.width / 2
         doorWorldPos = -(doorAbsoluteZ2D - centerZ)
       }
 
@@ -874,9 +882,9 @@ export function validateFloorplan(floorplan: FloorplanData): {
         errors.push(`Door in room "${room.name}" is positioned outside wall bounds`)
       }
 
-      // Check minimum distance from corners (1ft)
-      if (door.position < 1 || door.position > wallLength - 1) {
-        errors.push(`Door in room "${room.name}" is too close to corner (minimum 1ft)`)
+      // Check minimum distance from corners
+      if (door.position < MIN_DOOR_CORNER_DISTANCE || door.position > wallLength - door.width - MIN_DOOR_CORNER_DISTANCE) {
+        errors.push(`Door in room "${room.name}" is too close to corner (minimum ${MIN_DOOR_CORNER_DISTANCE}ft from each corner)`)
       }
     }
   }
