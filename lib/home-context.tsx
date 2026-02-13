@@ -142,6 +142,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     }
     setHomes(prev => [...prev, newHome])
     setCurrentHomeId(newHome.id)
+    return newHome.id
   }
 
   const deleteHome = (homeId: string) => {

@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useRoom } from '@/lib/room-context'
 import { useFurnitureHover } from '@/lib/furniture-hover-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useRoomHover } from '@/lib/room-hover-context'
 import { useItemLibrary } from '@/lib/item-library-context'
+import { useHome } from '@/lib/home-context'
 import { ItemLibraryModal } from '@/components/items/ItemLibraryModal'
 
 export function FurnitureSidebar() {
@@ -14,6 +16,8 @@ export function FurnitureSidebar() {
   const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
   const { hoveredRoomId, setHoveredRoomId } = useRoomHover()
   const { getItem } = useItemLibrary()
+  const { currentHomeId } = useHome()
+  const router = useRouter()
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set([currentRoomId || '']))
   const [showItemLibrary, setShowItemLibrary] = useState(false)
 
@@ -32,7 +36,16 @@ export function FurnitureSidebar() {
       <div className="fixed right-6 top-24 bg-floral-white rounded-2xl shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] w-80 max-h-[calc(100vh-200px)] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-graphite font-display font-semibold text-lg">Furniture</h2>
+            <button
+              onClick={() => currentHomeId && router.push(`/floorplan?homeId=${currentHomeId}`)}
+              className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5"
+              title="Edit floorplan"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
+              </svg>
+              Edit Floorplan
+            </button>
             <button
               onClick={() => setShowItemLibrary(true)}
               className="px-3 py-1.5 bg-taupe hover:bg-taupe/90 text-white text-sm font-body font-medium rounded-lg transition-colors flex items-center gap-1 shadow-sm"

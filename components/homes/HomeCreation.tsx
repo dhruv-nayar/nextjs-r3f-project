@@ -39,8 +39,11 @@ export function HomeCreation({ onClose }: HomeCreationProps) {
       }
     }
 
-    createHome(homeName, [newRoom])
+    const homeId = createHome(homeName, [newRoom])
     onClose()
+
+    // Redirect to floorplan editor
+    router.push(`/floorplan?homeId=${homeId}`)
   }
 
   const handleCreateWithFloorplan = () => {
@@ -63,14 +66,16 @@ export function HomeCreation({ onClose }: HomeCreationProps) {
       }
     }
 
-    createHome(homeName, [newRoom])
+    const homeId = createHome(homeName, [newRoom])
     onClose()
+
+    // Redirect to floorplan editor
+    router.push(`/floorplan?homeId=${homeId}`)
   }
 
   const handleDrawFloorplan = () => {
     // Create empty home and redirect to floorplan editor
-    const homeId = `home-${Date.now()}`
-    createHome(homeName, [])
+    const homeId = createHome(homeName, [])
 
     onClose()
 
