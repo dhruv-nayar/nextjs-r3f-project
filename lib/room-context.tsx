@@ -93,9 +93,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // Sync when home context's rooms are updated (e.g., when instances are added via HomeContext)
   useEffect(() => {
     if (homeContext.currentHome && !isUndoRedoRef.current) {
-      setRoomsState(homeContext.currentHome.rooms)
+      const newRooms = homeContext.currentHome.rooms
+      setRoomsState(newRooms)
+
+      // If current room ID no longer exists in the new rooms, select the first room
+      if (newRooms.length > 0 && !newRooms.find(r => r.id === currentRoomId)) {
+        setCurrentRoomId(newRooms[0].id)
+      }
     }
-  }, [homeContext.currentHome?.rooms, homeContext.currentHome?.updatedAt])
+  }, [homeContext.currentHome?.rooms, homeContext.currentHome?.updatedAt, currentRoomId])
 
   // History management
   const [history, setHistory] = useState<Room[][]>([JSON.parse(JSON.stringify(currentHomeRooms))])

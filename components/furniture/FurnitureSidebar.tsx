@@ -35,7 +35,7 @@ export function FurnitureSidebar() {
             <h2 className="text-graphite font-display font-semibold text-lg">Furniture</h2>
             <button
               onClick={() => setShowItemLibrary(true)}
-              className="px-3 py-1.5 bg-sage hover:bg-sage/90 text-white text-sm font-body font-medium rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+              className="px-3 py-1.5 bg-taupe hover:bg-taupe/90 text-white text-sm font-body font-medium rounded-lg transition-colors flex items-center gap-1 shadow-sm"
             >
               <span className="text-lg leading-none">+</span>
               <span>Add Items</span>
@@ -71,9 +71,15 @@ export function FurnitureSidebar() {
                   <span className="text-sm font-medium">{room.name}</span>
                   <span className="text-xs opacity-70">({totalCount})</span>
                 </div>
-                <span className="text-xs">
-                  {isExpanded ? '▼' : '▶'}
-                </span>
+                <svg
+                  className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
 
               {/* Furniture List */}

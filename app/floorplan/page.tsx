@@ -4,10 +4,10 @@ import { useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useHome } from '@/lib/home-context'
 import { FloorplanProvider, useFloorplan } from '@/lib/contexts/floorplan-context'
-import { FloorplanToolbar } from '@/components/floorplan/FloorplanToolbar'
 import { FloorplanCanvas } from '@/components/floorplan/FloorplanCanvas'
 import { FloorplanSidebar } from '@/components/floorplan/FloorplanSidebar'
 import { convert3DToFloorplan } from '@/lib/floorplan/floorplan-converter'
+import { Navbar } from '@/components/layout/Navbar'
 
 function FloorplanPageContent() {
   const searchParams = useSearchParams()
@@ -38,8 +38,8 @@ function FloorplanPageContent() {
 
 function FloorplanPageWrapper({ homeId }: { homeId: string }) {
   const router = useRouter()
-  const { homes, getFloorplanData, setFloorplanData } = useHome()
-  const { initializeFloorplan } = useFloorplan()
+  const { homes, getFloorplanData, setFloorplanData, buildRoomsFromFloorplan, switchHome } = useHome()
+  const { initializeFloorplan, floorplanData, build3DModel } = useFloorplan()
 
   // Initialize floorplan data
   useEffect(() => {
@@ -63,22 +63,47 @@ function FloorplanPageWrapper({ homeId }: { homeId: string }) {
     initializeFloorplan(homeId, existingData)
   }, [homeId, homes, getFloorplanData, setFloorplanData, initializeFloorplan, router])
 
+  const handleBuild3D = () => {
+    if (!floorplanData) return
+
+    const result = build3DModel()
+
+    if (!result) {
+      console.error('No floorplan data available')
+      return
+    }
+
+    if (result.errors.length > 0) {
+      console.error('Floorplan validation errors:', result.errors)
+      return
+    }
+
+    // Build 3D rooms from floorplan
+    buildRoomsFromFloorplan(floorplanData.homeId, floorplanData)
+
+    // Switch to this home and redirect to 3D editor
+    switchHome(floorplanData.homeId)
+    setTimeout(() => {
+      router.push(`/?homeId=${floorplanData.homeId}`)
+    }, 500)
+  }
+
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Toolbar */}
-      <FloorplanToolbar />
+    <div className="h-screen flex flex-col bg-porcelain">
+      {/* Navigation Bar */}
+      <Navbar />
 
       {/* Main content: Canvas + Sidebar */}
       <div className="flex-1 flex overflow-hidden">
         {/* Canvas area */}
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+          <div className="bg-porcelain rounded-lg border border-gray-200">
             <FloorplanCanvas width={800} height={600} />
           </div>
         </div>
 
         {/* Sidebar */}
-        <FloorplanSidebar />
+        <FloorplanSidebar onBuild3DModel={handleBuild3D} />
       </div>
     </div>
   )

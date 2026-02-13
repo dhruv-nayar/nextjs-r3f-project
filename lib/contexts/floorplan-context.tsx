@@ -347,15 +347,21 @@ export function FloorplanProvider({ children }: FloorplanProviderProps) {
       }
 
       // Delete: Delete or Backspace
+      // Don't trigger delete if user is typing in an input/textarea
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedRoomId) {
-          e.preventDefault()
-          deleteRoom(selectedRoomId)
-        } else if (selectedDoorId) {
-          e.preventDefault()
-          const doorInfo = getDoor(selectedDoorId)
-          if (doorInfo) {
-            deleteDoor(doorInfo.room.id, selectedDoorId)
+        const target = e.target as HTMLElement
+        const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+
+        if (!isTyping) {
+          if (selectedRoomId) {
+            e.preventDefault()
+            deleteRoom(selectedRoomId)
+          } else if (selectedDoorId) {
+            e.preventDefault()
+            const doorInfo = getDoor(selectedDoorId)
+            if (doorInfo) {
+              deleteDoor(doorInfo.room.id, selectedDoorId)
+            }
           }
         }
       }

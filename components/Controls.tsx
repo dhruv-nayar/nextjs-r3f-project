@@ -38,6 +38,25 @@ export function Controls() {
     }
   }
 
+  const handlePan = (direction: 'up' | 'down' | 'left' | 'right') => {
+    if (controls) {
+      switch (direction) {
+        case 'up':
+          controls.truck(0, 1, true)
+          break
+        case 'down':
+          controls.truck(0, -1, true)
+          break
+        case 'left':
+          controls.truck(-1, 0, true)
+          break
+        case 'right':
+          controls.truck(1, 0, true)
+          break
+      }
+    }
+  }
+
   const handleReset = () => {
     if (controls) {
       controls.setPosition(0, 0, 18.5, true)
@@ -46,20 +65,20 @@ export function Controls() {
   }
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-taupe/90 backdrop-blur-md rounded-full px-6 py-3 shadow-xl border border-taupe/20 z-40">
-      <div className="flex items-center gap-4">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-floral-white rounded-2xl px-4 py-2.5 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] z-40">
+      <div className="flex items-center gap-3">
         {/* Undo/Redo */}
         <button
           onClick={undo}
           disabled={!canUndo}
-          className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center ${
+          className={`w-7 h-7 rounded-lg transition-colors flex items-center justify-center ${
             canUndo
-              ? 'bg-white/10 text-white hover:bg-white/20'
-              : 'bg-white/5 text-white/30 cursor-not-allowed'
+              ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
+              : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
           }`}
           title="Undo"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 7v6h6" />
             <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
           </svg>
@@ -67,93 +86,111 @@ export function Controls() {
         <button
           onClick={redo}
           disabled={!canRedo}
-          className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center ${
+          className={`w-7 h-7 rounded-lg transition-colors flex items-center justify-center ${
             canRedo
-              ? 'bg-white/10 text-white hover:bg-white/20'
-              : 'bg-white/5 text-white/30 cursor-not-allowed'
+              ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
+              : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
           }`}
           title="Redo"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 7v6h-6" />
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" />
           </svg>
         </button>
 
-        <div className="w-px h-6 bg-white/20" />
+        <div className="w-px h-5 bg-taupe/10" />
 
         {/* Zoom Controls */}
         <button
           onClick={handleZoomIn}
-          className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white text-lg font-bold"
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite text-base font-semibold font-body"
           title="Zoom In"
         >
           +
         </button>
         <button
           onClick={handleZoomOut}
-          className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white text-lg font-bold"
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite text-base font-semibold font-body"
           title="Zoom Out"
         >
           −
         </button>
 
-        <div className="w-px h-6 bg-white/20" />
+        <div className="w-px h-5 bg-taupe/10" />
+
+        {/* Pan Controls */}
+        <button
+          onClick={() => handlePan('left')}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite"
+          title="Pan Left"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <button
+          onClick={() => handlePan('up')}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite"
+          title="Pan Up"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M18 15l-6-6-6 6" />
+          </svg>
+        </button>
+        <button
+          onClick={() => handlePan('down')}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite"
+          title="Pan Down"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <button
+          onClick={() => handlePan('right')}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite"
+          title="Pan Right"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+
+        <div className="w-px h-5 bg-taupe/10" />
 
         {/* Rotation Controls */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleRotate('up')}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white"
-            title="Rotate Up"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </button>
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={() => handleRotate('left')}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white"
-              title="Rotate Left"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="rotate-[-90deg]">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
-            <button
-              onClick={handleReset}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white text-xs"
-              title="Reset View"
-            >
-              ⌂
-            </button>
-          </div>
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={() => handleRotate('right')}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white"
-              title="Rotate Right"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="rotate-90">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
-            <button
-              onClick={() => handleRotate('down')}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white"
-              title="Rotate Down"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="rotate-180">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => handleRotate('left')}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite"
+          title="Rotate Left"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+        </button>
+        <button
+          onClick={() => handleRotate('right')}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite"
+          title="Rotate Right"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="rotate-180">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+        </button>
+
+        <div className="w-px h-5 bg-taupe/10" />
+
+        {/* Reset View */}
+        <button
+          onClick={handleReset}
+          className="w-7 h-7 rounded-lg bg-taupe/10 hover:bg-taupe/20 transition-colors flex items-center justify-center text-graphite text-sm"
+          title="Reset View"
+        >
+          ⌂
+        </button>
       </div>
     </div>
   )

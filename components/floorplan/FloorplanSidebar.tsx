@@ -4,11 +4,21 @@ import { useFloorplan } from '@/lib/contexts/floorplan-context'
 import { MIN_DOOR_CORNER_DISTANCE } from '@/types/floorplan'
 import { useState, useEffect } from 'react'
 
-export function FloorplanSidebar() {
+interface FloorplanSidebarProps {
+  onBuild3DModel?: () => void
+}
+
+export function FloorplanSidebar({ onBuild3DModel }: FloorplanSidebarProps) {
   const {
     floorplanData,
     selectedRoomId,
     selectedDoorId,
+    activeTool,
+    setActiveTool,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     getRoom,
     getDoor,
     updateRoom,
@@ -21,28 +31,113 @@ export function FloorplanSidebar() {
   const selectedDoorInfo = selectedDoorId ? getDoor(selectedDoorId) : null
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
-      <div className="p-4">
-        {selectedRoom && (
-          <RoomPropertiesPanel
-            room={selectedRoom}
-            onUpdate={(updates) => updateRoom(selectedRoom.id, updates)}
-            onDelete={() => deleteRoom(selectedRoom.id)}
-          />
-        )}
+    <div className="w-[480px] flex-shrink-0">
+      <div className="fixed right-0 top-[68px] bottom-0 w-[480px] p-6 flex flex-col">
+        <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto flex flex-col gap-6">
+          {/* Header with Build Button */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-graphite font-heading">Tools</h3>
+            {onBuild3DModel && (
+              <button
+                onClick={onBuild3DModel}
+                disabled={!floorplanData || floorplanData.rooms.length === 0}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-1.5"
+                title="Build 3D model from floorplan"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                Build 3D
+              </button>
+            )}
+          </div>
 
-        {selectedDoorInfo && (
-          <DoorPropertiesPanel
-            room={selectedDoorInfo.room}
-            door={selectedDoorInfo.door}
-            onUpdate={(updates) => updateDoor(selectedDoorInfo.room.id, selectedDoorInfo.door.id, updates)}
-            onDelete={() => deleteDoor(selectedDoorInfo.room.id, selectedDoorInfo.door.id)}
-          />
-        )}
+          {/* Toolbar Controls */}
+          <div className="flex flex-col gap-4">
 
-        {!selectedRoom && !selectedDoorInfo && (
-          <CanvasPropertiesPanel floorplanData={floorplanData} />
-        )}
+            {/* Tool Buttons */}
+            <div className="flex flex-wrap gap-2">
+              <ToolButton
+                icon="⌖"
+                label="Select"
+                active={activeTool === 'select'}
+                onClick={() => setActiveTool('select')}
+              />
+              <ToolButton
+                icon="▭"
+                label="Draw Room"
+                active={activeTool === 'drawRoom'}
+                onClick={() => setActiveTool('drawRoom')}
+              />
+              <ToolButton
+                icon="⚿"
+                label="Place Door"
+                active={activeTool === 'placeDoor'}
+                onClick={() => setActiveTool('placeDoor')}
+              />
+              <ToolButton
+                icon="🗑"
+                label="Delete"
+                active={activeTool === 'delete'}
+                onClick={() => setActiveTool('delete')}
+              />
+            </div>
+
+            {/* Undo/Redo */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  canUndo
+                    ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
+                    : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
+                }`}
+                title="Undo (Cmd+Z)"
+              >
+                ↶ Undo
+              </button>
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  canRedo
+                    ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
+                    : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
+                }`}
+                title="Redo (Cmd+Shift+Z)"
+              >
+                Redo ↷
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full h-px bg-taupe/10" />
+
+          {/* Properties Panel */}
+          <div className="flex-1 overflow-y-auto">
+            {selectedRoom && (
+              <RoomPropertiesPanel
+                room={selectedRoom}
+                onUpdate={(updates) => updateRoom(selectedRoom.id, updates)}
+                onDelete={() => deleteRoom(selectedRoom.id)}
+              />
+            )}
+
+            {selectedDoorInfo && (
+              <DoorPropertiesPanel
+                room={selectedDoorInfo.room}
+                door={selectedDoorInfo.door}
+                onUpdate={(updates) => updateDoor(selectedDoorInfo.room.id, selectedDoorInfo.door.id, updates)}
+                onDelete={() => deleteDoor(selectedDoorInfo.room.id, selectedDoorInfo.door.id)}
+              />
+            )}
+
+            {!selectedRoom && !selectedDoorInfo && (
+              <CanvasPropertiesPanel floorplanData={floorplanData} />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -272,6 +367,31 @@ function DoorPropertiesPanel({ room, door, onUpdate, onDelete }: DoorPropertiesP
         </div>
       </div>
     </div>
+  )
+}
+
+interface ToolButtonProps {
+  icon: string
+  label: string
+  active: boolean
+  onClick: () => void
+}
+
+function ToolButton({ icon, label, active, onClick }: ToolButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors font-body
+        ${active
+          ? 'bg-blue-100 text-blue-700 border border-blue-300'
+          : 'bg-white text-taupe/80 border border-taupe/10 hover:bg-taupe/5'
+        }
+      `}
+    >
+      <span className="text-xl">{icon}</span>
+      <span className="text-xs font-medium">{label}</span>
+    </button>
   )
 }
 

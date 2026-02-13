@@ -156,7 +156,8 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
     selectRoom,
     addDoor,
     selectDoor,
-    getRoom
+    getRoom,
+    setActiveTool
   } = useFloorplan()
 
   // Initialize Fabric canvas
@@ -166,7 +167,7 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
     const canvas = new FabricCanvas(canvasRef.current, {
       width,
       height,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#F7F5F2',
       selection: activeTool === 'select'
     })
 
@@ -284,11 +285,45 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
     floorplanData.rooms.forEach(room => {
       const roomGroup = createRoomRect(room, PIXELS_PER_FOOT)
       canvas.add(roomGroup)
+    })
 
-      // Render doors for this room
+    // Render doors (deduplicated for shared walls)
+    // Track rendered door positions to avoid duplicates on shared walls
+    const renderedDoorPositions = new Set<string>()
+
+    floorplanData.rooms.forEach(room => {
       room.doors.forEach(door => {
-        const doorMarker = createDoorMarker(room, door, PIXELS_PER_FOOT)
-        canvas.add(doorMarker)
+        // Calculate absolute door position
+        let doorX: number, doorY: number
+
+        switch (door.wallSide) {
+          case 'top':
+            doorX = room.x + door.position + door.width / 2
+            doorY = room.y
+            break
+          case 'bottom':
+            doorX = room.x + door.position + door.width / 2
+            doorY = room.y + room.height
+            break
+          case 'left':
+            doorX = room.x
+            doorY = room.y + door.position + door.width / 2
+            break
+          case 'right':
+            doorX = room.x + room.width
+            doorY = room.y + door.position + door.width / 2
+            break
+        }
+
+        // Create unique position key (rounded to avoid floating point issues)
+        const posKey = `${doorX.toFixed(2)},${doorY.toFixed(2)}`
+
+        // Only render if we haven't rendered a door at this position
+        if (!renderedDoorPositions.has(posKey)) {
+          renderedDoorPositions.add(posKey)
+          const doorMarker = createDoorMarker(room, door, PIXELS_PER_FOOT)
+          canvas.add(doorMarker)
+        }
       })
     })
 
@@ -640,6 +675,9 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
             canvas.remove(wallHighlightRef.current)
             wallHighlightRef.current = null
           }
+
+          // Auto-switch back to select mode after placing door
+          setActiveTool('select')
         }
       }
     }
@@ -765,6 +803,9 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
         }
 
         addRoom(roomData)
+
+        // Auto-switch back to select mode after drawing room
+        setActiveTool('select')
       }
 
       // Reset drawing state
@@ -784,10 +825,10 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
       canvas.off('mouse:move', handleMouseMove)
       canvas.off('mouse:up', handleMouseUp)
     }
-  }, [activeTool, isDrawing, drawStartPoint, tempRect, floorplanData, addRoom, addDoor])
+  }, [activeTool, isDrawing, drawStartPoint, tempRect, floorplanData, addRoom, addDoor, setActiveTool])
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full bg-porcelain">
       <canvas ref={canvasRef} />
     </div>
   )
