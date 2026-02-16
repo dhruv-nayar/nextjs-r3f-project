@@ -1,9 +1,13 @@
 {
   "functions": {
     "api/remove_bg_python.py": {
-      "runtime": "python3.9",
       "maxDuration": 60,
       "memory": 2048
+    }
+  },
+  "build": {
+    "env": {
+      "PYTHON_VERSION": "3.9"
     }
   }
 }
