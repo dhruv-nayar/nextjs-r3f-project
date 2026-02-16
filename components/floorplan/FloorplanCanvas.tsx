@@ -157,7 +157,8 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
     addDoor,
     selectDoor,
     getRoom,
-    setActiveTool
+    setActiveTool,
+    updateReferenceImage
   } = useFloorplan()
 
   // Initialize Fabric canvas
@@ -271,19 +272,28 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
         floorplanData.referenceImage.opacity,
         floorplanData.referenceImage.scale,
         floorplanData.referenceImage.locked,
-        PIXELS_PER_FOOT
+        PIXELS_PER_FOOT,
+        floorplanData.referenceImage.rotation || 0
       ).then(img => {
         canvas.add(img)
-        canvas.sendToBack(img)
+        // Send to back - use sendObjectToBack if available, otherwise use insertAt
+        if ('sendObjectToBack' in canvas) {
+          (canvas as any).sendObjectToBack(img)
+        } else {
+          // Move to index 0 (back)
+          canvas.remove(img)
+          canvas.insertAt(0, img)
+        }
         canvas.renderAll()
       }).catch(err => {
         console.error('Failed to load reference image:', err)
       })
     }
 
-    // Render rooms
+    // Render rooms (semi-transparent if reference image is visible)
+    const roomOpacity = (floorplanData.referenceImage?.opacity ?? 0) > 0 ? 0.7 : 1
     floorplanData.rooms.forEach(room => {
-      const roomGroup = createRoomRect(room, PIXELS_PER_FOOT)
+      const roomGroup = createRoomRect(room, PIXELS_PER_FOOT, roomOpacity)
       canvas.add(roomGroup)
     })
 
@@ -549,18 +559,50 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
       }, 50)
     }
 
+    const handleReferenceImageModified = (e: TEvent) => {
+      const obj = e.target
+      if (!obj || obj.get('objectType') !== 'referenceImage') return
+
+      const img = obj as FabricImage
+
+      // Calculate new position, size, and rotation
+      const newX = (img.left || 0) / PIXELS_PER_FOOT
+      const newY = (img.top || 0) / PIXELS_PER_FOOT
+      const newRotation = img.angle || 0
+
+      // Calculate new scale based on current scaleX (proportional)
+      const originalAspectRatio = img.get('aspectRatio') as number || 1
+      const currentScaleX = img.scaleX || 1
+
+      // Get original width/height from current reference image data
+      if (floorplanData?.referenceImage) {
+        const originalScale = floorplanData.referenceImage.scale
+        const baseScaleX = (floorplanData.referenceImage.width * PIXELS_PER_FOOT) / (img.width || 1) * originalScale
+        const newScale = (currentScaleX / baseScaleX) * originalScale
+
+        updateReferenceImage({
+          x: newX,
+          y: newY,
+          rotation: newRotation,
+          scale: newScale > 0 ? newScale : originalScale
+        })
+      }
+    }
+
     canvas.on('object:moving', handleObjectMoving)
     canvas.on('object:scaling', handleObjectModifying)
     canvas.on('object:rotating', handleObjectModifying)
     canvas.on('object:modified', handleObjectModified)
+    canvas.on('object:modified', handleReferenceImageModified)
 
     return () => {
       canvas.off('object:moving', handleObjectMoving)
       canvas.off('object:scaling', handleObjectModifying)
       canvas.off('object:rotating', handleObjectModifying)
       canvas.off('object:modified', handleObjectModified)
+      canvas.off('object:modified', handleReferenceImageModified)
     }
-  }, [updateRoom, floorplanData])
+  }, [updateRoom, updateReferenceImage, floorplanData])
 
   // Handle mouse events for drawing tools
   useEffect(() => {

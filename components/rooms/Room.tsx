@@ -1,12 +1,14 @@
 'use client'
 
 import * as THREE from 'three'
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ThreeEvent } from '@react-three/fiber'
 import { useRoomHover } from '@/lib/room-hover-context'
 import { useSelection } from '@/lib/selection-context'
 import { WallSide, RoomGridState, createDefaultRoomGridState } from '@/types/selection'
+import { WallHeights } from '@/types/room'
 import { FloorMeasurementGrid, WallMeasurementGrid } from './MeasurementGrid'
+import { useWallMesh } from '@/lib/contexts/wall-mesh-context'
 
 interface Door {
   wall: 'north' | 'south' | 'east' | 'west'  // Which wall (north=+Z, south=-Z, east=+X, west=-X)
@@ -17,7 +19,7 @@ interface Door {
 
 interface RoomProps {
   width: number   // in feet
-  height: number  // in feet
+  height: number  // in feet (default height for all walls)
   depth: number   // in feet
   position?: [number, number, number]  // Position offset for the room
   doors?: Door[]   // Optional door openings
@@ -28,7 +30,15 @@ interface RoomProps {
     east?: boolean
     west?: boolean
   }
+  wallHeights?: WallHeights  // Per-wall height overrides
   gridSettings?: RoomGridState  // Optional grid overlay settings
+}
+
+/**
+ * Get the height for a specific wall, using override if provided or default
+ */
+function getWallHeight(wall: 'north' | 'south' | 'east' | 'west', defaultHeight: number, wallHeights?: WallHeights): number {
+  return wallHeights?.[wall] ?? defaultHeight
 }
 
 function createWallWithDoors(
@@ -63,7 +73,54 @@ function createWallWithDoors(
   return new THREE.ShapeGeometry(shape)
 }
 
-export function Room({ width, height, depth, position = [0, 0, 0], doors = [], roomId, excludedWalls, gridSettings }: RoomProps) {
+export function Room({ width, height, depth, position = [0, 0, 0], doors = [], roomId, excludedWalls, wallHeights, gridSettings }: RoomProps) {
+  // Get individual wall heights
+  const northHeight = getWallHeight('north', height, wallHeights)
+  const southHeight = getWallHeight('south', height, wallHeights)
+  const eastHeight = getWallHeight('east', height, wallHeights)
+  const westHeight = getWallHeight('west', height, wallHeights)
+
+  // Refs for wall meshes (used for wall/ceiling placement raycasting)
+  const northWallRef = useRef<THREE.Mesh>(null)
+  const southWallRef = useRef<THREE.Mesh>(null)
+  const eastWallRef = useRef<THREE.Mesh>(null)
+  const westWallRef = useRef<THREE.Mesh>(null)
+  const ceilingRef = useRef<THREE.Mesh>(null)
+
+  // Wall mesh context for item placement
+  const { registerWall, unregisterWall, registerCeiling, unregisterCeiling } = useWallMesh()
+
+  // Register wall and ceiling meshes with context
+  useEffect(() => {
+    if (!roomId) return
+
+    // Register walls that exist (not excluded)
+    if (northWallRef.current && !excludedWalls?.north) {
+      registerWall(roomId, 'north', northWallRef.current)
+    }
+    if (southWallRef.current && !excludedWalls?.south) {
+      registerWall(roomId, 'south', southWallRef.current)
+    }
+    if (eastWallRef.current && !excludedWalls?.east) {
+      registerWall(roomId, 'east', eastWallRef.current)
+    }
+    if (westWallRef.current && !excludedWalls?.west) {
+      registerWall(roomId, 'west', westWallRef.current)
+    }
+    if (ceilingRef.current) {
+      registerCeiling(roomId, ceilingRef.current)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      unregisterWall(roomId, 'north')
+      unregisterWall(roomId, 'south')
+      unregisterWall(roomId, 'east')
+      unregisterWall(roomId, 'west')
+      unregisterCeiling(roomId)
+    }
+  }, [roomId, excludedWalls, registerWall, unregisterWall, registerCeiling, unregisterCeiling])
+
   // Use provided grid settings or defaults
   const effectiveGridSettings = gridSettings || createDefaultRoomGridState()
   const { hoveredRoomId, setHoveredRoomId } = useRoomHover()
@@ -142,38 +199,38 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
   // Get all doors on a specific wall
   const getDoorsOnWall = (wall: string) => doors.filter(door => door.wall === wall)
 
-  // Create wall geometries with doors
+  // Create wall geometries with doors (using individual wall heights)
   const northWallGeometry = useMemo(() => {
     const wallDoors = getDoorsOnWall('north')
     if (wallDoors.length > 0) {
-      return createWallWithDoors(width, height, wallDoors)
+      return createWallWithDoors(width, northHeight, wallDoors)
     }
     return null
-  }, [width, height, doors])
+  }, [width, northHeight, doors])
 
   const southWallGeometry = useMemo(() => {
     const wallDoors = getDoorsOnWall('south')
     if (wallDoors.length > 0) {
-      return createWallWithDoors(width, height, wallDoors)
+      return createWallWithDoors(width, southHeight, wallDoors)
     }
     return null
-  }, [width, height, doors])
+  }, [width, southHeight, doors])
 
   const eastWallGeometry = useMemo(() => {
     const wallDoors = getDoorsOnWall('east')
     if (wallDoors.length > 0) {
-      return createWallWithDoors(depth, height, wallDoors)
+      return createWallWithDoors(depth, eastHeight, wallDoors)
     }
     return null
-  }, [depth, height, doors])
+  }, [depth, eastHeight, doors])
 
   const westWallGeometry = useMemo(() => {
     const wallDoors = getDoorsOnWall('west')
     if (wallDoors.length > 0) {
-      return createWallWithDoors(depth, height, wallDoors)
+      return createWallWithDoors(depth, westHeight, wallDoors)
     }
     return null
-  }, [depth, height, doors])
+  }, [depth, westHeight, doors])
 
   return (
     <group
@@ -224,13 +281,23 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
         </lineSegments>
       )}
 
-      {/* No ceiling - removed so we can see inside */}
+      {/* Invisible ceiling - for raycasting wall/ceiling mounted items */}
+      <mesh
+        ref={ceilingRef}
+        rotation={[Math.PI / 2, 0, 0]}
+        position={[0, height, 0]}
+        visible={false}
+      >
+        <planeGeometry args={[width, depth]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
 
       {/* South wall (negative Z) - Back wall */}
       {shouldRenderWall('south') && (
         <>
           {southWallGeometry ? (
             <mesh
+              ref={southWallRef}
               position={[0, 0, -depth / 2]}
               receiveShadow
               onClick={(e) => handleWallClick('south', e)}
@@ -247,13 +314,14 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
             </mesh>
           ) : (
             <mesh
-              position={[0, height / 2, -depth / 2]}
+              ref={southWallRef}
+              position={[0, southHeight / 2, -depth / 2]}
               receiveShadow
               onClick={(e) => handleWallClick('south', e)}
               onPointerOver={(e) => handleWallHover('south', true, e)}
               onPointerOut={(e) => handleWallHover('south', false, e)}
             >
-              <planeGeometry args={[width, height]} />
+              <planeGeometry args={[width, southHeight]} />
               <meshStandardMaterial
                 color="#e8e8e8"
                 side={THREE.DoubleSide}
@@ -265,8 +333,8 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
 
           {/* South wall outline when hovered or selected */}
           {(isHovered || isWallSelectedFn('south') || isWallHoveredFn('south')) && !southWallGeometry && (
-            <lineSegments position={[0, height / 2, -depth / 2]}>
-              <edgesGeometry args={[new THREE.PlaneGeometry(width, height)]} />
+            <lineSegments position={[0, southHeight / 2, -depth / 2]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(width, southHeight)]} />
               <lineBasicMaterial color={isWallSelectedFn('south') ? "#ffa500" : "#00ffff"} linewidth={2} />
             </lineSegments>
           )}
@@ -274,7 +342,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {/* South wall Measurement Grid */}
           <WallMeasurementGrid
             wallWidth={width}
-            wallHeight={height}
+            wallHeight={southHeight}
             settings={effectiveGridSettings.walls.south}
             wallPosition={[0, 0, -depth / 2 + 0.01]}
             wallRotation={[0, 0, 0]}
@@ -287,6 +355,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
         <>
           {northWallGeometry ? (
             <mesh
+              ref={northWallRef}
               position={[0, 0, depth / 2]}
               receiveShadow
               onClick={(e) => handleWallClick('north', e)}
@@ -303,13 +372,14 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
             </mesh>
           ) : (
             <mesh
-              position={[0, height / 2, depth / 2]}
+              ref={northWallRef}
+              position={[0, northHeight / 2, depth / 2]}
               receiveShadow
               onClick={(e) => handleWallClick('north', e)}
               onPointerOver={(e) => handleWallHover('north', true, e)}
               onPointerOut={(e) => handleWallHover('north', false, e)}
             >
-              <planeGeometry args={[width, height]} />
+              <planeGeometry args={[width, northHeight]} />
               <meshStandardMaterial
                 color="#e8e8e8"
                 side={THREE.DoubleSide}
@@ -321,8 +391,8 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
 
           {/* North wall outline when hovered or selected */}
           {(isHovered || isWallSelectedFn('north') || isWallHoveredFn('north')) && !northWallGeometry && (
-            <lineSegments position={[0, height / 2, depth / 2]}>
-              <edgesGeometry args={[new THREE.PlaneGeometry(width, height)]} />
+            <lineSegments position={[0, northHeight / 2, depth / 2]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(width, northHeight)]} />
               <lineBasicMaterial color={isWallSelectedFn('north') ? "#ffa500" : "#00ffff"} linewidth={2} />
             </lineSegments>
           )}
@@ -330,7 +400,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {/* North wall Measurement Grid */}
           <WallMeasurementGrid
             wallWidth={width}
-            wallHeight={height}
+            wallHeight={northHeight}
             settings={effectiveGridSettings.walls.north}
             wallPosition={[0, 0, depth / 2 - 0.01]}
             wallRotation={[0, Math.PI, 0]}
@@ -343,6 +413,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
         <>
           {westWallGeometry ? (
             <mesh
+              ref={westWallRef}
               position={[-width / 2, 0, 0]}
               rotation={[0, Math.PI / 2, 0]}
               receiveShadow
@@ -360,14 +431,15 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
             </mesh>
           ) : (
             <mesh
-              position={[-width / 2, height / 2, 0]}
+              ref={westWallRef}
+              position={[-width / 2, westHeight / 2, 0]}
               rotation={[0, Math.PI / 2, 0]}
               receiveShadow
               onClick={(e) => handleWallClick('west', e)}
               onPointerOver={(e) => handleWallHover('west', true, e)}
               onPointerOut={(e) => handleWallHover('west', false, e)}
             >
-              <planeGeometry args={[depth, height]} />
+              <planeGeometry args={[depth, westHeight]} />
               <meshStandardMaterial
                 color="#e8e8e8"
                 side={THREE.DoubleSide}
@@ -379,8 +451,8 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
 
           {/* West wall outline when hovered or selected */}
           {(isHovered || isWallSelectedFn('west') || isWallHoveredFn('west')) && !westWallGeometry && (
-            <lineSegments position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-              <edgesGeometry args={[new THREE.PlaneGeometry(depth, height)]} />
+            <lineSegments position={[-width / 2, westHeight / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(depth, westHeight)]} />
               <lineBasicMaterial color={isWallSelectedFn('west') ? "#ffa500" : "#00ffff"} linewidth={2} />
             </lineSegments>
           )}
@@ -388,7 +460,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {/* West wall Measurement Grid */}
           <WallMeasurementGrid
             wallWidth={depth}
-            wallHeight={height}
+            wallHeight={westHeight}
             settings={effectiveGridSettings.walls.west}
             wallPosition={[-width / 2 + 0.01, 0, 0]}
             wallRotation={[0, Math.PI / 2, 0]}
@@ -401,6 +473,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
         <>
           {eastWallGeometry ? (
             <mesh
+              ref={eastWallRef}
               position={[width / 2, 0, 0]}
               rotation={[0, -Math.PI / 2, 0]}
               receiveShadow
@@ -418,14 +491,15 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
             </mesh>
           ) : (
             <mesh
-              position={[width / 2, height / 2, 0]}
+              ref={eastWallRef}
+              position={[width / 2, eastHeight / 2, 0]}
               rotation={[0, -Math.PI / 2, 0]}
               receiveShadow
               onClick={(e) => handleWallClick('east', e)}
               onPointerOver={(e) => handleWallHover('east', true, e)}
               onPointerOut={(e) => handleWallHover('east', false, e)}
             >
-              <planeGeometry args={[depth, height]} />
+              <planeGeometry args={[depth, eastHeight]} />
               <meshStandardMaterial
                 color="#e8e8e8"
                 side={THREE.DoubleSide}
@@ -437,8 +511,8 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
 
           {/* East wall outline when hovered or selected */}
           {(isHovered || isWallSelectedFn('east') || isWallHoveredFn('east')) && !eastWallGeometry && (
-            <lineSegments position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
-              <edgesGeometry args={[new THREE.PlaneGeometry(depth, height)]} />
+            <lineSegments position={[width / 2, eastHeight / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
+              <edgesGeometry args={[new THREE.PlaneGeometry(depth, eastHeight)]} />
               <lineBasicMaterial color={isWallSelectedFn('east') ? "#ffa500" : "#00ffff"} linewidth={2} />
             </lineSegments>
           )}
@@ -446,7 +520,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {/* East wall Measurement Grid */}
           <WallMeasurementGrid
             wallWidth={depth}
-            wallHeight={height}
+            wallHeight={eastHeight}
             settings={effectiveGridSettings.walls.east}
             wallPosition={[width / 2 - 0.01, 0, 0]}
             wallRotation={[0, -Math.PI / 2, 0]}

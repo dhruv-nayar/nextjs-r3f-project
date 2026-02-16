@@ -47,6 +47,16 @@ export interface FloorplanDoor {
 }
 
 /**
+ * Per-wall height overrides for floorplan rooms
+ */
+export interface FloorplanWallHeights {
+  top?: number     // Top wall (becomes north in 3D)
+  bottom?: number  // Bottom wall (becomes south in 3D)
+  left?: number    // Left wall (becomes west in 3D)
+  right?: number   // Right wall (becomes east in 3D)
+}
+
+/**
  * Rectangle-based room in 2D floorplan
  * Positioned with (x, y) as top-left corner
  */
@@ -61,7 +71,8 @@ export interface FloorplanRoom {
   height: number              // Depth (becomes Z-axis depth in 3D)
 
   // 3D conversion properties
-  wallHeight: number          // Wall height for 3D conversion (default 10ft)
+  wallHeight: number          // Default wall height for 3D conversion (default 10ft)
+  wallHeights?: FloorplanWallHeights  // Per-wall height overrides
   doors: FloorplanDoor[]      // Doors on room walls
 
   // Visual properties for editor
@@ -80,7 +91,9 @@ export interface ReferenceImage {
   width: number               // Image width in feet (real-world dimensions)
   height: number              // Image height in feet (real-world dimensions)
   scale: number               // User scale adjustment (default 1.0)
+  rotation: number            // Rotation in degrees (default 0)
   locked: boolean             // Lock position/movement (default false)
+  aspectRatio?: number        // Original aspect ratio for proportional resize
 }
 
 /**

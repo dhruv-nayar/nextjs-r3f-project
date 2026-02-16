@@ -91,8 +91,17 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [homeContext.currentHomeId])
 
   // Sync when home context's rooms are updated (e.g., when instances are added via HomeContext)
+  // Use a ref to track the last synced updatedAt to avoid unnecessary updates
+  const lastSyncedUpdatedAt = useRef<string | undefined>(undefined)
+
   useEffect(() => {
     if (homeContext.currentHome && !isUndoRedoRef.current) {
+      // Only sync if updatedAt actually changed (prevents update loops)
+      if (lastSyncedUpdatedAt.current === homeContext.currentHome.updatedAt) {
+        return
+      }
+      lastSyncedUpdatedAt.current = homeContext.currentHome.updatedAt
+
       const newRooms = homeContext.currentHome.rooms
       setRoomsState(newRooms)
 

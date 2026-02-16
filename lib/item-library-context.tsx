@@ -31,6 +31,7 @@ const DEFAULT_ITEMS: Item[] = [
     },
     category: 'seating',
     tags: ['sofa', 'modern', 'seating'],
+    placementType: 'floor',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isCustom: false
@@ -47,6 +48,7 @@ const DEFAULT_ITEMS: Item[] = [
     },
     category: 'seating',
     tags: ['chair', 'wood', 'classic'],
+    placementType: 'floor',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isCustom: false
@@ -63,6 +65,7 @@ const DEFAULT_ITEMS: Item[] = [
     },
     category: 'table',
     tags: ['table', 'dining', 'modern', 'extending'],
+    placementType: 'floor',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isCustom: false
@@ -79,6 +82,120 @@ const DEFAULT_ITEMS: Item[] = [
     },
     category: 'bed',
     tags: ['bed', 'modern', 'bedroom', 'furniture'],
+    placementType: 'floor',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isCustom: false
+  },
+  // Wall-mounted items
+  {
+    id: 'item-wall-sconce',
+    name: 'Wall Sconce Light',
+    description: 'Modern wall-mounted light fixture',
+    parametricShape: {
+      type: 'extrusion',
+      points: [
+        { x: 0, y: 0 },
+        { x: 0.5, y: 0 },
+        { x: 0.5, y: 0.8 },
+        { x: 0.25, y: 1.2 },
+        { x: 0, y: 0.8 }
+      ],
+      height: 0.3,
+      color: '#d4af37'  // Gold color
+    },
+    dimensions: {
+      width: 0.5,
+      height: 1.2,
+      depth: 0.3
+    },
+    category: 'lighting',
+    tags: ['sconce', 'wall', 'light', 'modern'],
+    placementType: 'wall',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isCustom: false
+  },
+  {
+    id: 'item-picture-frame',
+    name: 'Picture Frame',
+    description: 'Wall-mounted picture frame',
+    parametricShape: {
+      type: 'extrusion',
+      points: [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 1.5 },
+        { x: 0, y: 1.5 }
+      ],
+      height: 0.1,
+      color: '#4a3728'  // Brown frame
+    },
+    dimensions: {
+      width: 2,
+      height: 1.5,
+      depth: 0.1
+    },
+    category: 'decoration',
+    tags: ['frame', 'picture', 'wall', 'art'],
+    placementType: 'wall',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isCustom: false
+  },
+  // Ceiling-mounted items
+  {
+    id: 'item-pendant-light',
+    name: 'Pendant Light',
+    description: 'Modern ceiling-mounted pendant lamp',
+    parametricShape: {
+      type: 'extrusion',
+      points: [
+        { x: 0, y: 0 },
+        { x: 0.8, y: 0 },
+        { x: 0.6, y: 1 },
+        { x: 0.2, y: 1 }
+      ],
+      height: 0.6,
+      color: '#f5f5f5'  // White/cream
+    },
+    dimensions: {
+      width: 0.8,
+      height: 1,
+      depth: 0.6
+    },
+    category: 'lighting',
+    tags: ['pendant', 'ceiling', 'light', 'modern'],
+    placementType: 'ceiling',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isCustom: false
+  },
+  {
+    id: 'item-ceiling-fan',
+    name: 'Ceiling Fan',
+    description: 'Ceiling-mounted fan with light',
+    parametricShape: {
+      type: 'extrusion',
+      points: [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 0.3 },
+        { x: 1.5, y: 0.5 },
+        { x: 0.5, y: 0.5 },
+        { x: 0, y: 0.3 }
+      ],
+      height: 2,
+      color: '#8b4513'  // Brown wood color
+    },
+    dimensions: {
+      width: 2,
+      height: 0.5,
+      depth: 2
+    },
+    category: 'lighting',
+    tags: ['fan', 'ceiling', 'modern'],
+    placementType: 'ceiling',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isCustom: false

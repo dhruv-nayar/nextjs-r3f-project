@@ -1,8 +1,9 @@
 'use client'
 
 import { useFloorplan } from '@/lib/contexts/floorplan-context'
-import { MIN_DOOR_CORNER_DISTANCE } from '@/types/floorplan'
+import { MIN_DOOR_CORNER_DISTANCE, ReferenceImage, FloorplanWallHeights } from '@/types/floorplan'
 import { useState, useEffect } from 'react'
+import { ReferenceImageUpload } from './ReferenceImageUpload'
 
 interface FloorplanSidebarProps {
   onBuild3DModel?: () => void
@@ -24,7 +25,9 @@ export function FloorplanSidebar({ onBuild3DModel }: FloorplanSidebarProps) {
     updateRoom,
     updateDoor,
     deleteRoom,
-    deleteDoor
+    deleteDoor,
+    setReferenceImage,
+    updateReferenceImage
   } = useFloorplan()
 
   const selectedRoom = selectedRoomId ? getRoom(selectedRoomId) : null
@@ -134,7 +137,11 @@ export function FloorplanSidebar({ onBuild3DModel }: FloorplanSidebarProps) {
             )}
 
             {!selectedRoom && !selectedDoorInfo && (
-              <CanvasPropertiesPanel floorplanData={floorplanData} />
+              <CanvasPropertiesPanel
+                floorplanData={floorplanData}
+                onSetReferenceImage={setReferenceImage}
+                onUpdateReferenceImage={updateReferenceImage}
+              />
             )}
           </div>
         </div>
@@ -154,10 +161,35 @@ function RoomPropertiesPanel({ room, onUpdate, onDelete }: RoomPropertiesPanelPr
   const [width, setWidth] = useState(room.width)
   const [height, setHeight] = useState(room.height)
   const [wallHeight, setWallHeight] = useState(room.wallHeight)
+  const [showWallHeights, setShowWallHeights] = useState(false)
+  const [wallHeights, setWallHeights] = useState<FloorplanWallHeights>(room.wallHeights || {})
+
+  // Sync local state with prop changes
+  useEffect(() => {
+    setName(room.name)
+    setWidth(room.width)
+    setHeight(room.height)
+    setWallHeight(room.wallHeight)
+    setWallHeights(room.wallHeights || {})
+  }, [room.id, room.name, room.width, room.height, room.wallHeight, room.wallHeights])
 
   const handleUpdate = () => {
-    onUpdate({ name, width, height, wallHeight })
+    onUpdate({ name, width, height, wallHeight, wallHeights: Object.keys(wallHeights).length > 0 ? wallHeights : undefined })
   }
+
+  const handleWallHeightChange = (wall: keyof FloorplanWallHeights, value: string) => {
+    const numValue = parseFloat(value)
+    if (value === '' || isNaN(numValue)) {
+      // Remove the override
+      const newWallHeights = { ...wallHeights }
+      delete newWallHeights[wall]
+      setWallHeights(newWallHeights)
+    } else {
+      setWallHeights({ ...wallHeights, [wall]: numValue })
+    }
+  }
+
+  const hasAnyWallHeightOverride = Object.keys(wallHeights).length > 0
 
   return (
     <div>
@@ -222,7 +254,7 @@ function RoomPropertiesPanel({ room, onUpdate, onDelete }: RoomPropertiesPanelPr
         {/* Wall Height */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Wall Height (ft)
+            Default Wall Height (ft)
           </label>
           <input
             type="number"
@@ -235,6 +267,108 @@ function RoomPropertiesPanel({ room, onUpdate, onDelete }: RoomPropertiesPanelPr
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <p className="text-xs text-gray-500 mt-1">Standard ceiling: 8-10ft</p>
+        </div>
+
+        {/* Individual Wall Heights */}
+        <div>
+          <button
+            onClick={() => setShowWallHeights(!showWallHeights)}
+            className="flex items-center justify-between w-full text-sm font-medium text-gray-700 py-2"
+          >
+            <span className="flex items-center gap-2">
+              Individual Wall Heights
+              {hasAnyWallHeightOverride && (
+                <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                  {Object.keys(wallHeights).length} custom
+                </span>
+              )}
+            </span>
+            <svg
+              className={`w-4 h-4 transition-transform ${showWallHeights ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showWallHeights && (
+            <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-3">
+              <p className="text-xs text-gray-500 mb-2">
+                Leave empty to use default height ({wallHeight}ft)
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Top/North (ft)</label>
+                  <input
+                    type="number"
+                    value={wallHeights.top ?? ''}
+                    onChange={(e) => handleWallHeightChange('top', e.target.value)}
+                    onBlur={handleUpdate}
+                    placeholder={wallHeight.toString()}
+                    min="6"
+                    max="15"
+                    step="0.5"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Bottom/South (ft)</label>
+                  <input
+                    type="number"
+                    value={wallHeights.bottom ?? ''}
+                    onChange={(e) => handleWallHeightChange('bottom', e.target.value)}
+                    onBlur={handleUpdate}
+                    placeholder={wallHeight.toString()}
+                    min="6"
+                    max="15"
+                    step="0.5"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Left/East (ft)</label>
+                  <input
+                    type="number"
+                    value={wallHeights.left ?? ''}
+                    onChange={(e) => handleWallHeightChange('left', e.target.value)}
+                    onBlur={handleUpdate}
+                    placeholder={wallHeight.toString()}
+                    min="6"
+                    max="15"
+                    step="0.5"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Right/West (ft)</label>
+                  <input
+                    type="number"
+                    value={wallHeights.right ?? ''}
+                    onChange={(e) => handleWallHeightChange('right', e.target.value)}
+                    onBlur={handleUpdate}
+                    placeholder={wallHeight.toString()}
+                    min="6"
+                    max="15"
+                    step="0.5"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              {hasAnyWallHeightOverride && (
+                <button
+                  onClick={() => {
+                    setWallHeights({})
+                    setTimeout(handleUpdate, 0)
+                  }}
+                  className="w-full mt-2 px-2 py-1 text-xs text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                >
+                  Reset all to default
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Doors */}
@@ -397,9 +531,17 @@ function ToolButton({ icon, label, active, onClick }: ToolButtonProps) {
 
 interface CanvasPropertiesPanelProps {
   floorplanData: any
+  onSetReferenceImage: (image: ReferenceImage | undefined) => void
+  onUpdateReferenceImage: (updates: Partial<ReferenceImage>) => void
 }
 
-function CanvasPropertiesPanel({ floorplanData }: CanvasPropertiesPanelProps) {
+function CanvasPropertiesPanel({
+  floorplanData,
+  onSetReferenceImage,
+  onUpdateReferenceImage
+}: CanvasPropertiesPanelProps) {
+  const referenceImage = floorplanData?.referenceImage
+
   return (
     <div>
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Floorplan Info</h3>
@@ -421,6 +563,140 @@ function CanvasPropertiesPanel({ floorplanData }: CanvasPropertiesPanelProps) {
           <div className="px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-900">
             {floorplanData?.rooms.length || 0} room(s)
           </div>
+        </div>
+
+        {/* Reference Image Section */}
+        <div className="pt-4 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Reference Image</h4>
+
+          {referenceImage ? (
+            <div className="space-y-3">
+              {/* Preview thumbnail */}
+              <div className="bg-white/50 rounded-lg p-2 border border-taupe/10">
+                <img
+                  src={referenceImage.url}
+                  alt="Reference"
+                  className="max-w-full h-auto max-h-20 mx-auto rounded opacity-70"
+                />
+              </div>
+
+              {/* Visibility toggle */}
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-gray-600">Visible</label>
+                <button
+                  onClick={() => onUpdateReferenceImage({
+                    opacity: referenceImage.opacity > 0 ? 0 : 0.5
+                  })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    referenceImage.opacity > 0 ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                      referenceImage.opacity > 0 ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Opacity slider */}
+              {referenceImage.opacity > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-600">Opacity</label>
+                    <span className="text-xs text-gray-500">{Math.round(referenceImage.opacity * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={referenceImage.opacity}
+                    onChange={(e) => onUpdateReferenceImage({ opacity: parseFloat(e.target.value) })}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                </div>
+              )}
+
+              {/* Scale input */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Scale</label>
+                <input
+                  type="number"
+                  value={referenceImage.scale}
+                  onChange={(e) => onUpdateReferenceImage({ scale: parseFloat(e.target.value) || 1 })}
+                  min="0.1"
+                  max="5"
+                  step="0.1"
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Rotation input */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-gray-600">Rotation</label>
+                  <span className="text-xs text-gray-500">{Math.round(referenceImage.rotation || 0)}°</span>
+                </div>
+                <input
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  value={referenceImage.rotation || 0}
+                  onChange={(e) => onUpdateReferenceImage({ rotation: parseFloat(e.target.value) })}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+                <div className="flex justify-between mt-1">
+                  <button
+                    onClick={() => onUpdateReferenceImage({ rotation: (referenceImage.rotation || 0) - 90 })}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    -90°
+                  </button>
+                  <button
+                    onClick={() => onUpdateReferenceImage({ rotation: 0 })}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => onUpdateReferenceImage({ rotation: (referenceImage.rotation || 0) + 90 })}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    +90°
+                  </button>
+                </div>
+              </div>
+
+              {/* Lock toggle */}
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-gray-600">Lock Position</label>
+                <button
+                  onClick={() => onUpdateReferenceImage({ locked: !referenceImage.locked })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    referenceImage.locked ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                      referenceImage.locked ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Remove button */}
+              <button
+                onClick={() => onSetReferenceImage(undefined)}
+                className="w-full px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg transition-colors"
+              >
+                Remove Image
+              </button>
+            </div>
+          ) : (
+            <ReferenceImageUpload onUpload={onSetReferenceImage} />
+          )}
         </div>
 
         <div className="pt-4 border-t border-gray-200">

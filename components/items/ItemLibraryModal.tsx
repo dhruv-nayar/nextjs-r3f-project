@@ -7,6 +7,7 @@ import { useRoom } from '@/lib/room-context'
 import { useInteractionMode } from '@/lib/interaction-mode-context'
 import { ItemCategory } from '@/types/room'
 import { ItemThumbnail } from './ItemThumbnail'
+import { CustomItemCreator } from './CustomItemCreator'
 
 interface ItemLibraryModalProps {
   isOpen: boolean
@@ -21,6 +22,7 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
+  const [showCustomCreator, setShowCustomCreator] = useState(false)
 
   if (!isOpen) return null
 
@@ -88,21 +90,34 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
             </span>
           </div>
 
-          {/* Category Filters */}
-          <div className="flex gap-2 flex-wrap">
-            {categories.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => setSelectedCategory(cat.value)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  selectedCategory === cat.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+          {/* Category Filters and Create Custom Button */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex gap-2 flex-wrap">
+              {categories.map(cat => (
+                <button
+                  key={cat.value}
+                  onClick={() => setSelectedCategory(cat.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    selectedCategory === cat.value
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Create Custom Item Button */}
+            <button
+              onClick={() => setShowCustomCreator(true)}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Custom
+            </button>
           </div>
         </div>
 
@@ -162,6 +177,12 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
           </p>
         </div>
       </div>
+
+      {/* Custom Item Creator Modal */}
+      <CustomItemCreator
+        isOpen={showCustomCreator}
+        onClose={() => setShowCustomCreator(false)}
+      />
     </div>
   )
 }

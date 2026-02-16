@@ -10,8 +10,8 @@
  * - Conversion: 2D X → 3D X, 2D Y → 3D Z
  */
 
-import { FloorplanData, FloorplanRoom, FloorplanDoor, WallSide, Bounds, MIN_DOOR_CORNER_DISTANCE } from '@/types/floorplan'
-import { Room, Door, Vector3, SharedWall, SharedWallDoor } from '@/types/room'
+import { FloorplanData, FloorplanRoom, FloorplanDoor, WallSide, Bounds, MIN_DOOR_CORNER_DISTANCE, FloorplanWallHeights } from '@/types/floorplan'
+import { Room, Door, Vector3, SharedWall, SharedWallDoor, WallHeights } from '@/types/room'
 
 /**
  * SharedWall candidate detected during conversion
@@ -174,6 +174,9 @@ export function convertFloorplanTo3D(floorplanData: FloorplanData): {
       floorplanRoom.wallHeight
     )
 
+    // Convert wallHeights from 2D to 3D if present
+    const wallHeights3D = convertWallHeights(floorplanRoom.wallHeights)
+
     // Create 3D Room object
     const room3D: Room = {
       id: floorplanRoom.id,
@@ -185,6 +188,7 @@ export function convertFloorplanTo3D(floorplanData: FloorplanData): {
         depth: floorplanRoom.height,  // 2D height becomes 3D depth (Z-axis)
         height: floorplanRoom.wallHeight
       },
+      wallHeights: wallHeights3D,  // Per-wall height overrides
       position: position3D,
       doors: doors3D,
       instances: [],
@@ -477,6 +481,43 @@ function getWallLength(wallSide: WallSide, room: FloorplanRoom): number {
 }
 
 /**
+ * Convert 2D FloorplanWallHeights to 3D WallHeights
+ * Maps 2D directions (top/bottom/left/right) to 3D (north/south/east/west)
+ */
+function convertWallHeights(wallHeights: FloorplanWallHeights | undefined): WallHeights | undefined {
+  if (!wallHeights) return undefined
+
+  // Only return if at least one override is defined
+  const result: WallHeights = {}
+
+  if (wallHeights.top !== undefined) result.north = wallHeights.top
+  if (wallHeights.bottom !== undefined) result.south = wallHeights.bottom
+  // Note: left/right are flipped due to X-axis negation in 2D→3D conversion
+  if (wallHeights.left !== undefined) result.east = wallHeights.left
+  if (wallHeights.right !== undefined) result.west = wallHeights.right
+
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+/**
+ * Convert 3D WallHeights back to 2D FloorplanWallHeights
+ * Reverse of convertWallHeights
+ */
+function convertWallHeightsTo2D(wallHeights: WallHeights | undefined): FloorplanWallHeights | undefined {
+  if (!wallHeights) return undefined
+
+  const result: FloorplanWallHeights = {}
+
+  if (wallHeights.north !== undefined) result.top = wallHeights.north
+  if (wallHeights.south !== undefined) result.bottom = wallHeights.south
+  // Note: east/west are flipped back to left/right
+  if (wallHeights.east !== undefined) result.left = wallHeights.east
+  if (wallHeights.west !== undefined) result.right = wallHeights.west
+
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+/**
  * Convert 2D wall side to 3D wall orientation
  *
  * Mapping (accounts for coordinate flip in position conversion):
@@ -741,10 +782,24 @@ function createSharedWall(candidate: SharedWallCandidate, centerX: number, cente
   const wallWidth = overlapRange.max - overlapRange.min
   const wallCenter = (overlapRange.min + overlapRange.max) / 2
 
-  // Wall height (use maximum of both rooms)
+  // Helper to get wall height from 2D wallHeights (maps 3D wall names to 2D)
+  const get2DWallHeight = (room: FloorplanRoom, wall3D: 'north' | 'south' | 'east' | 'west'): number => {
+    const defaultHeight = room.wallHeight || 10
+    if (!room.wallHeights) return defaultHeight
+
+    // Map 3D wall names back to 2D (reverse of wallSideToOrientation)
+    switch (wall3D) {
+      case 'north': return room.wallHeights.top ?? defaultHeight
+      case 'south': return room.wallHeights.bottom ?? defaultHeight
+      case 'east': return room.wallHeights.left ?? defaultHeight  // Flipped
+      case 'west': return room.wallHeights.right ?? defaultHeight  // Flipped
+    }
+  }
+
+  // Wall height (use maximum of both rooms' specific wall heights)
   const wallHeight = Math.max(
-    room1.wallHeight || 10,
-    room2.wallHeight || 10
+    get2DWallHeight(room1, room1Wall),
+    get2DWallHeight(room2, room2Wall)
   )
 
   // Position in 3D space
@@ -966,6 +1021,9 @@ export function convert3DToFloorplan(
       }
     })
 
+    // Convert wallHeights from 3D to 2D if present
+    const wallHeights2D = convertWallHeightsTo2D(room3D.wallHeights)
+
     // Create 2D room
     const floorplanRoom: FloorplanRoom = {
       id: room3D.floorplanRoomId || `room-${Date.now()}-${index}`,
@@ -975,6 +1033,7 @@ export function convert3DToFloorplan(
       width,
       height: depth,
       wallHeight: height,
+      wallHeights: wallHeights2D,  // Per-wall height overrides
       doors: doors2D,
       color: assignRoomColor(index)
     }

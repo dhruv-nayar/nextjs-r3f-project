@@ -15,6 +15,7 @@ import { PlacementGhost } from '../furniture/PlacementGhost'
 import { Room } from './Room'
 import { SharedWall } from './SharedWall'
 import { SCALE } from '@/lib/constants'
+import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
 
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
@@ -187,6 +188,7 @@ export function RoomScene() {
   ]
 
   return (
+    <WallMeshProvider>
     <Canvas
       shadows
       style={{ background: '#FAF9F6' }}
@@ -254,6 +256,7 @@ export function RoomScene() {
                 doors={roomDoors}
                 roomId={room.id}
                 excludedWalls={room.excludedWalls}
+                wallHeights={room.wallHeights}
                 gridSettings={room.gridSettings}
               />
             )}
@@ -291,5 +294,6 @@ export function RoomScene() {
       {/* Environment */}
       <Environment preset="city" />
     </Canvas>
+    </WallMeshProvider>
   )
 }

@@ -21,10 +21,14 @@ const PIXELS_PER_FOOT = 10  // Default scale: 10 pixels = 1 foot
 
 /**
  * Create a room rectangle with label (grouped together)
+ * @param room - The room data
+ * @param pixelsPerFoot - Scale factor
+ * @param opacity - Optional opacity for semi-transparent rooms (when reference image visible)
  */
 export function createRoomRect(
   room: FloorplanRoom,
-  pixelsPerFoot: number = PIXELS_PER_FOOT
+  pixelsPerFoot: number = PIXELS_PER_FOOT,
+  opacity: number = 1
 ): Group {
   const rectWidth = room.width * pixelsPerFoot
   const rectHeight = room.height * pixelsPerFoot
@@ -38,7 +42,8 @@ export function createRoomRect(
     stroke: '#1976D2',
     strokeWidth: 2,
     originX: 'center',
-    originY: 'center'
+    originY: 'center',
+    opacity  // Apply opacity for semi-transparency
   })
 
   // Create label centered on rectangle
@@ -135,8 +140,9 @@ export function createDoorMarker(
 
 /**
  * Create reference image from URL
+ * Supports rotation and proportional resizing (aspect ratio locked)
  */
-export function createReferenceImage(
+export async function createReferenceImage(
   url: string,
   x: number,
   y: number,
@@ -145,39 +151,44 @@ export function createReferenceImage(
   opacity: number,
   scale: number,
   locked: boolean,
-  pixelsPerFoot: number = PIXELS_PER_FOOT
+  pixelsPerFoot: number = PIXELS_PER_FOOT,
+  rotation: number = 0
 ): Promise<FabricImage> {
-  return new Promise((resolve, reject) => {
-    FabricImage.fromURL(
-      url,
-      (img: FabricImage | null) => {
-        if (!img) {
-          reject(new Error('Failed to load image'))
-          return
-        }
+  const img = await FabricImage.fromURL(url, { crossOrigin: 'anonymous' })
 
-        // Calculate scale to fit specified dimensions
-        const scaleX = (width * pixelsPerFoot) / (img.width || 1) * scale
-        const scaleY = (height * pixelsPerFoot) / (img.height || 1) * scale
+  // Calculate scale to fit specified dimensions
+  const scaleX = (width * pixelsPerFoot) / (img.width || 1) * scale
+  const scaleY = (height * pixelsPerFoot) / (img.height || 1) * scale
 
-        img.set({
-          left: x * pixelsPerFoot,
-          top: y * pixelsPerFoot,
-          scaleX,
-          scaleY,
-          opacity,
-          selectable: !locked,
-          evented: !locked,
-          lockRotation: true
-        })
+  // Store original aspect ratio
+  const aspectRatio = (img.width || 1) / (img.height || 1)
 
-        img.set('objectType', 'referenceImage')
-
-        resolve(img)
-      },
-      { crossOrigin: 'anonymous' }
-    )
+  img.set({
+    left: x * pixelsPerFoot,
+    top: y * pixelsPerFoot,
+    scaleX,
+    scaleY,
+    opacity,
+    angle: rotation,
+    selectable: !locked,
+    evented: !locked,
+    // Enable rotation and resizing
+    lockRotation: locked,
+    // Lock aspect ratio for proportional resize
+    lockUniScaling: true,
+    // Controls appearance
+    cornerStyle: 'circle',
+    cornerColor: '#4CAF50',
+    cornerSize: 10,
+    transparentCorners: false,
+    borderColor: '#4CAF50',
+    borderScaleFactor: 2
   })
+
+  img.set('objectType', 'referenceImage')
+  img.set('aspectRatio', aspectRatio)
+
+  return img
 }
 
 /**

@@ -4,6 +4,17 @@ export interface Vector3 {
   z: number
 }
 
+/**
+ * Per-wall height overrides
+ * If undefined, the wall uses the room's default height (dimensions.height)
+ */
+export interface WallHeights {
+  north?: number  // Override for north wall
+  south?: number  // Override for south wall
+  east?: number   // Override for east wall
+  west?: number   // Override for west wall
+}
+
 // ============================================
 // NEW: Items & Instances Architecture
 // ============================================
@@ -11,6 +22,17 @@ export interface Vector3 {
 export type ItemCategory = 'seating' | 'table' | 'storage' | 'bed' | 'decoration' | 'lighting' | 'other'
 
 export type PlacementType = 'floor' | 'wall' | 'ceiling'
+
+/**
+ * ParametricShape: A user-drawn 2D polygon that gets extruded to 3D
+ * This allows users to create custom items without needing 3D modeling tools
+ */
+export interface ParametricShape {
+  type: 'extrusion'
+  points: Array<{ x: number; y: number }>  // 2D polygon vertices (closed, in feet)
+  height: number                            // Extrusion depth in feet
+  color: string                             // Hex color (e.g., "#FF5733")
+}
 
 /**
  * MaterialOverride: Customization for a specific material in a 3D model
@@ -26,12 +48,20 @@ export interface MaterialOverride {
 /**
  * Item: A reusable 3D model template in the user's library
  * Think of this as a "stamp" that can be placed multiple times
+ *
+ * Items can be either:
+ * 1. GLB model-based (modelPath set)
+ * 2. Parametric shape-based (parametricShape set)
  */
 export interface Item {
   id: string                    // e.g., "item_chair_001"
   name: string                  // "Modern Office Chair"
   description?: string          // "Ergonomic mesh back chair"
-  modelPath: string             // "/models/whiteback-wood-chair.glb"
+
+  // Model source (one of these should be set)
+  modelPath?: string            // "/models/whiteback-wood-chair.glb" (for GLB models)
+  parametricShape?: ParametricShape  // For user-created extruded shapes
+
   thumbnailPath?: string        // "/thumbnails/chair_thumb.jpg"
 
   // Default real-world dimensions
@@ -235,8 +265,9 @@ export interface Room {
   dimensions?: {                // Explicit dimensions from floorplan
     width: number               // Width in feet (X-axis)
     depth: number               // Depth in feet (Z-axis)
-    height: number              // Height in feet (Y-axis)
+    height: number              // Height in feet (Y-axis, default for all walls)
   }
+  wallHeights?: WallHeights     // Per-wall height overrides
   doors?: Door[]                // Door openings in walls
   position?: [number, number, number]  // Position offset for the room
 

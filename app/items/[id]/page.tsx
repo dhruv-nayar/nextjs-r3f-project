@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { ItemPreview } from '@/components/items/ItemPreview'
+import { ParametricShapePreview } from '@/components/items/ParametricShapePreview'
 import Toast from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -237,6 +238,11 @@ export default function ItemDetailPage() {
                 modelPath={item.modelPath}
                 category={item.category}
                 materialOverrides={isEditing ? editMaterialOverrides : item.materialOverrides}
+              />
+            ) : item.parametricShape ? (
+              <ParametricShapePreview
+                shape={item.parametricShape}
+                dimensions={item.dimensions}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">

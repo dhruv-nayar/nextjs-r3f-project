@@ -12,6 +12,7 @@ import { SectionHeader } from '@/components/ui/Typography'
 import { Navbar } from '@/components/layout/Navbar'
 import { CategoryFilterSidebar } from '@/components/items/CategoryFilterSidebar'
 import { ItemCard, AddItemCard } from '@/components/items/ItemCard'
+import { CustomItemCreator } from '@/components/items/CustomItemCreator'
 import Image from 'next/image'
 
 export default function ItemsPage() {
@@ -24,6 +25,7 @@ export default function ItemsPage() {
   // Upload flow state
   const [uploadStep, setUploadStep] = useState<'choose' | 'upload' | 'metadata'>('choose')
   const [uploadMethod, setUploadMethod] = useState<'glb' | 'images' | null>(null)
+  const [showCustomCreator, setShowCustomCreator] = useState(false)
   const [uploadedModelPath, setUploadedModelPath] = useState('')
   const [uploadedThumbnailPath, setUploadedThumbnailPath] = useState('')
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
@@ -43,8 +45,10 @@ export default function ItemsPage() {
 
   // Filter items based on search and category
   const filteredItems = items.filter(item => {
-    // Skip items without valid model paths
-    if (!item.modelPath || item.modelPath === 'placeholder') {
+    // Skip items without valid model paths OR parametric shapes
+    const hasValidModel = item.modelPath && item.modelPath !== 'placeholder'
+    const hasParametricShape = !!item.parametricShape
+    if (!hasValidModel && !hasParametricShape) {
       return false
     }
 
@@ -326,6 +330,27 @@ export default function ItemsPage() {
                     </div>
                   </div>
                 </button>
+
+                {/* Draw Custom Shape Option */}
+                <button
+                  onClick={() => {
+                    handleCloseModal()
+                    setShowCustomCreator(true)
+                  }}
+                  className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="text-4xl">✏️</div>
+                    <div className="flex-1">
+                      <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
+                        Draw Custom Shape
+                      </h4>
+                      <p className="text-taupe/70 text-sm font-body">
+                        Draw a 2D shape and extrude it into a 3D item
+                      </p>
+                    </div>
+                  </div>
+                </button>
               </div>
             )}
 
@@ -544,6 +569,12 @@ export default function ItemsPage() {
           </div>
         </div>
       )}
+
+      {/* Custom Item Creator Modal */}
+      <CustomItemCreator
+        isOpen={showCustomCreator}
+        onClose={() => setShowCustomCreator(false)}
+      />
     </div>
   )
 }
