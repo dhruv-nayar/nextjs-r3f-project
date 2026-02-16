@@ -38,12 +38,12 @@ function HomeContent() {
   }, [selectInstance, selectFurniture])
 
   return (
-    <>
+    <div className="h-screen w-screen overflow-hidden flex flex-col">
       {/* Navigation Bar */}
       <Navbar />
 
-      {/* 3D Scene */}
-      <main className="w-full h-screen bg-porcelain">
+      {/* 3D Scene - takes remaining height */}
+      <main className="flex-1 w-full bg-porcelain relative overflow-hidden">
         <RoomScene />
       </main>
 
@@ -52,14 +52,14 @@ function HomeContent() {
       <Controls />
       <SceneHierarchyPanel />
       <PropertiesPanel />
-    </>
+    </div>
   );
 }
 
 export default function Home() {
   return (
     <Suspense fallback={
-      <div className="w-full h-screen bg-porcelain flex items-center justify-center">
+      <div className="h-screen w-screen overflow-hidden bg-porcelain flex items-center justify-center">
         <p className="text-taupe/70">Loading...</p>
       </div>
     }>

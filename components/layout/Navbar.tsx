@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { cn } from '@/lib/design-system'
@@ -33,7 +33,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }: NavbarProps) {
-  const { homes, currentHomeId, switchHome } = useHome()
+  const { homes, currentHomeId, switchHome, renameHome } = useHome()
   const { items } = useItemLibrary()
   const router = useRouter()
   const pathname = usePathname()
@@ -48,6 +48,11 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
   const [showSettings, setShowSettings] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [storageInfo, setStorageInfo] = useState({ used: 0, total: 0, percentage: 0, available: false })
+
+  // Editable project name state
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editNameValue, setEditNameValue] = useState('')
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   // Show saving indicator when data changes
   useEffect(() => {
@@ -67,6 +72,36 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
       setStorageInfo(getStorageInfo())
     }
   }, [showSettings])
+
+  // Focus name input when editing starts
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus()
+      nameInputRef.current.select()
+    }
+  }, [isEditingName])
+
+  const handleStartEditName = () => {
+    if (currentHome) {
+      setEditNameValue(currentHome.name)
+      setIsEditingName(true)
+    }
+  }
+
+  const handleSaveName = () => {
+    if (currentHome && editNameValue.trim() && editNameValue !== currentHome.name) {
+      renameHome(currentHome.id, editNameValue.trim())
+    }
+    setIsEditingName(false)
+  }
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveName()
+    } else if (e.key === 'Escape') {
+      setIsEditingName(false)
+    }
+  }
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -127,14 +162,21 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                   header="Recent Projects"
                   value={undefined}
                   buttonClassName="font-body text-sm text-taupe/70 font-light hover:text-graphite transition-colors flex items-center gap-1"
-                  options={homes.map(home => ({
-                    label: home.name,
-                    value: home.id,
-                    onClick: () => {
-                      switchHome(home.id)
-                      router.push('/')
-                    }
-                  }))}
+                  options={[
+                    {
+                      label: 'All Projects',
+                      value: 'all-projects',
+                      onClick: () => router.push('/homes')
+                    },
+                    ...homes.map(home => ({
+                      label: home.name,
+                      value: home.id,
+                      onClick: () => {
+                        switchHome(home.id)
+                        router.push('/')
+                      }
+                    }))
+                  ]}
                   showSeparator
                   footerOption={{
                     label: '+ Create Project',
@@ -150,14 +192,21 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                     value={currentHomeId || undefined}
                     alwaysShowLabel
                     buttonClassName="font-body text-sm text-graphite font-medium transition-colors flex items-center gap-1"
-                    options={homes.map(home => ({
-                      label: home.name,
-                      value: home.id,
-                      onClick: () => {
-                        switchHome(home.id)
-                        router.push('/')
-                      }
-                    }))}
+                    options={[
+                      {
+                        label: 'All Projects',
+                        value: 'all-projects',
+                        onClick: () => router.push('/homes')
+                      },
+                      ...homes.map(home => ({
+                        label: home.name,
+                        value: home.id,
+                        onClick: () => {
+                          switchHome(home.id)
+                          router.push('/')
+                        }
+                      }))
+                    ]}
                     showSeparator
                     footerOption={{
                       label: '+ Create Project',
@@ -170,7 +219,25 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                       <svg className="w-4 h-4 text-taupe/40 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
-                      <span className="font-body font-medium text-sm text-graphite">{currentHome.name}</span>
+                      {isEditingName ? (
+                        <input
+                          ref={nameInputRef}
+                          type="text"
+                          value={editNameValue}
+                          onChange={(e) => setEditNameValue(e.target.value)}
+                          onBlur={handleSaveName}
+                          onKeyDown={handleNameKeyDown}
+                          className="font-body font-medium text-sm text-graphite bg-transparent border-b border-sage focus:outline-none px-0 py-0 min-w-[100px]"
+                        />
+                      ) : (
+                        <button
+                          onClick={handleStartEditName}
+                          className="font-body font-medium text-sm text-graphite hover:text-sage transition-colors cursor-text"
+                          title="Click to rename project"
+                        >
+                          {currentHome.name}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

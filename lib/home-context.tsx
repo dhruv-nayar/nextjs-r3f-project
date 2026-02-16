@@ -14,6 +14,8 @@ interface HomeContextType {
   deleteHome: (homeId: string) => void
   switchHome: (homeId: string) => void
   updateHome: (homeId: string, updates: Partial<Home>) => void
+  renameHome: (homeId: string, newName: string) => void
+  updateHomeThumbnail: (homeId: string, thumbnailPath: string) => void
 
   // NEW: Instance management
   addInstanceToRoom: (roomId: string, itemId: string, position: Vector3) => string
@@ -166,6 +168,27 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       prev.map(home =>
         home.id === homeId
           ? { ...home, ...updates, updatedAt: new Date().toISOString() }
+          : home
+      )
+    )
+  }
+
+  const renameHome = (homeId: string, newName: string) => {
+    if (!newName.trim()) return
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? { ...home, name: newName.trim(), updatedAt: new Date().toISOString() }
+          : home
+      )
+    )
+  }
+
+  const updateHomeThumbnail = (homeId: string, thumbnailPath: string) => {
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? { ...home, thumbnailPath, updatedAt: new Date().toISOString() }
           : home
       )
     )
@@ -325,6 +348,8 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         deleteHome,
         switchHome,
         updateHome,
+        renameHome,
+        updateHomeThumbnail,
         addInstanceToRoom,
         updateInstance,
         deleteInstance,

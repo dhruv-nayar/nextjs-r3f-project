@@ -47,6 +47,11 @@
   }
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
 body {
   background: var(--color-porcelain);
   color: var(--color-graphite);

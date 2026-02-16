@@ -17,6 +17,7 @@ import { Room } from './Room'
 import { SharedWall } from './SharedWall'
 import { SCALE } from '@/lib/constants'
 import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
+import { ProjectThumbnailCapture } from '../homes/ProjectThumbnailCapture'
 
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
@@ -327,6 +328,11 @@ export function RoomScene() {
 
       {/* Environment */}
       <Environment preset="city" />
+
+      {/* Auto-capture thumbnail for project */}
+      {currentHome && (
+        <ProjectThumbnailCapture homeId={currentHome.id} />
+      )}
     </Canvas>
     </WallMeshProvider>
   )
