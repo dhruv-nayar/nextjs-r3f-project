@@ -15,9 +15,18 @@ export function ReferenceImageUpload({ onUpload }: ReferenceImageUploadProps) {
   const [error, setError] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Debug: log when component renders
+  console.log('[ReferenceImageUpload] Rendered, preview:', !!preview, 'widthFeet:', widthFeet, 'heightFeet:', heightFeet)
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[ReferenceImageUpload] handleFileChange triggered')
     const selectedFile = e.target.files?.[0]
-    if (!selectedFile) return
+    if (!selectedFile) {
+      console.log('[ReferenceImageUpload] No file selected')
+      return
+    }
+
+    console.log('[ReferenceImageUpload] File selected:', selectedFile.name, selectedFile.type)
 
     if (!selectedFile.type.startsWith('image/')) {
       setError('Please select an image file')
@@ -29,14 +38,21 @@ export function ReferenceImageUpload({ onUpload }: ReferenceImageUploadProps) {
 
     // Create preview as data URL
     const reader = new FileReader()
-    reader.onload = (e) => {
-      const result = e.target?.result as string
+    reader.onload = (loadEvent) => {
+      console.log('[ReferenceImageUpload] FileReader onload triggered')
+      const result = loadEvent.target?.result as string
+      console.log('[ReferenceImageUpload] Preview data URL length:', result?.length)
       setPreview(result)
+    }
+    reader.onerror = (err) => {
+      console.error('[ReferenceImageUpload] FileReader error:', err)
     }
     reader.readAsDataURL(selectedFile)
   }
 
   const handleSubmit = () => {
+    console.log('[ReferenceImageUpload] handleSubmit called', { preview: !!preview, widthFeet, heightFeet })
+
     if (!preview) {
       setError('Please select an image')
       return
@@ -44,6 +60,8 @@ export function ReferenceImageUpload({ onUpload }: ReferenceImageUploadProps) {
 
     const width = parseFloat(widthFeet)
     const height = parseFloat(heightFeet)
+
+    console.log('[ReferenceImageUpload] Parsed dimensions:', { width, height })
 
     if (!width || width <= 0) {
       setError('Please enter a valid width')
@@ -68,6 +86,13 @@ export function ReferenceImageUpload({ onUpload }: ReferenceImageUploadProps) {
       aspectRatio: width / height
     }
 
+    console.log('[ReferenceImageUpload] Uploading reference image:', {
+      urlLength: preview.length,
+      width,
+      height,
+      opacity: referenceImage.opacity
+    })
+
     onUpload(referenceImage)
   }
 
@@ -83,7 +108,10 @@ export function ReferenceImageUpload({ onUpload }: ReferenceImageUploadProps) {
           className="hidden"
         />
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            console.log('[ReferenceImageUpload] Choose Image button clicked')
+            fileInputRef.current?.click()
+          }}
           className="w-full px-3 py-2 bg-taupe/10 hover:bg-taupe/20 rounded-lg text-graphite text-sm transition-colors border border-taupe/20 border-dashed"
         >
           {file ? file.name : 'Choose Image...'}
@@ -145,7 +173,10 @@ export function ReferenceImageUpload({ onUpload }: ReferenceImageUploadProps) {
       {/* Submit */}
       {preview && (
         <button
-          onClick={handleSubmit}
+          onClick={() => {
+            console.log('[ReferenceImageUpload] Add Reference Image button clicked')
+            handleSubmit()
+          }}
           disabled={!widthFeet || !heightFeet}
           className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
         >

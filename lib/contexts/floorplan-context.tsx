@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react'
 import {
   FloorplanData,
   FloorplanRoom,
@@ -80,13 +80,16 @@ export function FloorplanProvider({ children }: FloorplanProviderProps) {
   const [history, setHistory] = useState<FloorplanData[]>([])
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
 
+  // Clipboard for copy/paste
+  const clipboardRef = useRef<FloorplanRoom | null>(null)
+
   // Initialize floorplan data
   const initializeFloorplan = useCallback((homeId: string, existingData?: FloorplanData) => {
     const initialData: FloorplanData = existingData || {
       id: `floorplan-${Date.now()}`,
       homeId,
-      canvasWidth: 50,
-      canvasHeight: 50,
+      canvasWidth: 120,
+      canvasHeight: 90,
       rooms: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -265,6 +268,12 @@ export function FloorplanProvider({ children }: FloorplanProviderProps) {
 
   // Reference image actions
   const setReferenceImage = useCallback((image: ReferenceImage | undefined) => {
+    console.log('[FloorplanContext] setReferenceImage called:', image ? {
+      urlLength: image.url?.length,
+      width: image.width,
+      height: image.height,
+      opacity: image.opacity
+    } : 'undefined')
     updateFloorplanData(prev => ({
       ...prev,
       referenceImage: image
@@ -334,6 +343,10 @@ export function FloorplanProvider({ children }: FloorplanProviderProps) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle keyboard shortcuts if user is typing in an input/textarea
+      const target = e.target as HTMLElement
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+
       // Undo: Cmd/Ctrl + Z
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -346,12 +359,35 @@ export function FloorplanProvider({ children }: FloorplanProviderProps) {
         redo()
       }
 
-      // Delete: Delete or Backspace
-      // Don't trigger delete if user is typing in an input/textarea
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const target = e.target as HTMLElement
-        const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      // Copy: Cmd/Ctrl + C
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !isTyping && selectedRoomId) {
+        e.preventDefault()
+        const room = floorplanData?.rooms.find(r => r.id === selectedRoomId)
+        if (room) {
+          clipboardRef.current = { ...room }
+        }
+      }
 
+      // Paste: Cmd/Ctrl + V
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !isTyping && clipboardRef.current) {
+        e.preventDefault()
+        const copied = clipboardRef.current
+        const newRoom = {
+          name: `${copied.name} Copy`,
+          x: copied.x + 2,  // Offset by 2 feet
+          y: copied.y + 2,
+          width: copied.width,
+          height: copied.height,
+          wallHeight: copied.wallHeight,
+          doors: [],  // Don't copy doors
+          wallHeights: copied.wallHeights
+        }
+        const newId = addRoom(newRoom)
+        setSelectedRoomId(newId)
+      }
+
+      // Delete: Delete or Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         if (!isTyping) {
           if (selectedRoomId) {
             e.preventDefault()
@@ -376,7 +412,7 @@ export function FloorplanProvider({ children }: FloorplanProviderProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, selectedRoomId, selectedDoorId, deleteRoom, deleteDoor, getDoor])
+  }, [undo, redo, selectedRoomId, selectedDoorId, deleteRoom, deleteDoor, getDoor, floorplanData, addRoom])
 
   const value: FloorplanContextType = {
     // State

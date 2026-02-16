@@ -136,7 +136,7 @@ function findSharedWallRooms(
   return sharedRooms
 }
 
-export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasProps) {
+export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<FabricCanvas | null>(null)
   const [isDrawing, setIsDrawing] = useState(false)
@@ -145,6 +145,7 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
   const isModifyingRef = useRef(false)
   const snapGuideLinesRef = useRef<Line[]>([])
   const wallHighlightRef = useRef<Line | null>(null)
+  const loadedReferenceImageUrlRef = useRef<string | null>(null)
 
   const {
     floorplanData,
@@ -252,17 +253,59 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
     const canvas = fabricCanvasRef.current
     if (!canvas || !floorplanData) return
 
+    console.log('[FloorplanCanvas] useEffect triggered, floorplanData:', {
+      roomCount: floorplanData.rooms?.length,
+      hasReferenceImage: !!floorplanData.referenceImage,
+      refImageUrl: floorplanData.referenceImage?.url?.substring(0, 30)
+    })
+
     // Skip re-render if currently modifying objects (dragging/resizing)
     // But allow initial render
     if (isModifyingRef.current && canvas.getObjects().length > 0) {
       return
     }
 
-    // Clear canvas
-    clearCanvas(canvas)
+    // Check if reference image URL changed
+    const currentRefUrl = floorplanData.referenceImage?.url || null
+    const refImageChanged = currentRefUrl !== loadedReferenceImageUrlRef.current
 
-    // Render reference image first (background)
-    if (floorplanData.referenceImage) {
+    // Check if we already have the reference image on canvas
+    const existingRefImage = canvas.getObjects().find(obj => obj.get('objectType') === 'referenceImage')
+
+    // Only clear and re-render if necessary
+    // Clear all objects except reference image if it hasn't changed
+    if (!refImageChanged && existingRefImage) {
+      // Just remove rooms and doors, keep reference image
+      const objectsToRemove = canvas.getObjects().filter(obj => {
+        const type = obj.get('objectType')
+        return type === 'room' || type === 'door'
+      })
+      objectsToRemove.forEach(obj => canvas.remove(obj))
+    } else {
+      // Full clear if reference image changed or doesn't exist
+      clearCanvas(canvas)
+      loadedReferenceImageUrlRef.current = null
+    }
+
+    // Check if reference image is visible
+    const hasVisibleReferenceImage = floorplanData.referenceImage && (floorplanData.referenceImage.opacity ?? 0) > 0
+
+    // Render rooms (very transparent if reference image is visible for tracing)
+    const roomOpacity = hasVisibleReferenceImage ? 0.3 : 1
+    floorplanData.rooms.forEach(room => {
+      const roomGroup = createRoomRect(room, PIXELS_PER_FOOT, roomOpacity)
+      canvas.add(roomGroup)
+    })
+
+    // Render reference image and send to back (so rooms appear on top for drawing)
+    if (floorplanData.referenceImage && refImageChanged) {
+      console.log('[FloorplanCanvas] Loading reference image:', {
+        url: floorplanData.referenceImage.url?.substring(0, 50) + '...',
+        width: floorplanData.referenceImage.width,
+        height: floorplanData.referenceImage.height,
+        opacity: floorplanData.referenceImage.opacity,
+        scale: floorplanData.referenceImage.scale
+      })
       createReferenceImage(
         floorplanData.referenceImage.url,
         floorplanData.referenceImage.x,
@@ -275,27 +318,36 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
         PIXELS_PER_FOOT,
         floorplanData.referenceImage.rotation || 0
       ).then(img => {
-        canvas.add(img)
-        // Send to back - use sendObjectToBack if available, otherwise use insertAt
-        if ('sendObjectToBack' in canvas) {
-          (canvas as any).sendObjectToBack(img)
-        } else {
-          // Move to index 0 (back)
-          canvas.remove(img)
-          canvas.insertAt(0, img)
+        // Check if canvas still exists
+        if (!fabricCanvasRef.current) {
+          return // Canvas was disposed
         }
-        canvas.renderAll()
+
+        console.log('[FloorplanCanvas] Reference image loaded:', {
+          imgWidth: img.width,
+          imgHeight: img.height,
+          scaleX: img.scaleX,
+          scaleY: img.scaleY,
+          left: img.left,
+          top: img.top,
+          opacity: img.opacity
+        })
+
+        // Mark as loaded
+        loadedReferenceImageUrlRef.current = currentRefUrl
+
+        // Add the image to canvas
+        canvas.add(img)
+
+        // Send to back using Fabric's method
+        canvas.sendObjectToBack(img)
+
+        console.log('[FloorplanCanvas] Canvas objects after insert:', canvas.getObjects().map(o => o.get('objectType')))
+        canvas.requestRenderAll()
       }).catch(err => {
-        console.error('Failed to load reference image:', err)
+        console.error('[FloorplanCanvas] Failed to load reference image:', err)
       })
     }
-
-    // Render rooms (semi-transparent if reference image is visible)
-    const roomOpacity = (floorplanData.referenceImage?.opacity ?? 0) > 0 ? 0.7 : 1
-    floorplanData.rooms.forEach(room => {
-      const roomGroup = createRoomRect(room, PIXELS_PER_FOOT, roomOpacity)
-      canvas.add(roomGroup)
-    })
 
     // Render doors (deduplicated for shared walls)
     // Track rendered door positions to avoid duplicates on shared walls
@@ -530,8 +582,168 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
       canvas.requestRenderAll()
     }
 
-    const handleObjectModifying = () => {
+    const handleObjectScaling = (e: TEvent) => {
       isModifyingRef.current = true
+
+      const obj = e.target
+      if (!obj || obj.get('objectType') !== 'room') return
+
+      // Clear previous snap guide lines
+      snapGuideLinesRef.current.forEach(line => canvas.remove(line))
+      snapGuideLinesRef.current = []
+
+      const scalingGroup = obj as Group
+      const scalingRoomId = obj.get('roomId') as string
+
+      // Detect which control handle is being dragged
+      const corner = (scalingGroup as any).__corner as string
+      if (!corner) return
+
+      // Determine which edges are being dragged based on control handle
+      const draggingRight = corner.includes('r')  // mr, tr, br
+      const draggingLeft = corner.includes('l')   // ml, tl, bl
+      const draggingTop = corner.includes('t')    // mt, tl, tr
+      const draggingBottom = corner.includes('b') // mb, bl, br
+
+      // Get the base dimensions and current state
+      const baseWidth = scalingGroup.width || 0
+      const baseHeight = scalingGroup.height || 0
+      const centerX = scalingGroup.left || 0
+      const centerY = scalingGroup.top || 0
+      const currentScaleX = scalingGroup.scaleX || 1
+      const currentScaleY = scalingGroup.scaleY || 1
+
+      // Calculate current edges
+      const scaledWidth = baseWidth * currentScaleX
+      const scaledHeight = baseHeight * currentScaleY
+      const scalingLeft = centerX - scaledWidth / 2
+      const scalingTop = centerY - scaledHeight / 2
+      const scalingRight = centerX + scaledWidth / 2
+      const scalingBottom = centerY + scaledHeight / 2
+
+      let snapLineX: number | null = null
+      let snapLineY: number | null = null
+      let newScaleX: number | null = null
+      let newScaleY: number | null = null
+      let newCenterX: number | null = null
+      let newCenterY: number | null = null
+
+      // Check all other rooms for snapping
+      canvas.getObjects().forEach(otherObj => {
+        if (otherObj.get('objectType') !== 'room') return
+        if (otherObj.get('roomId') === scalingRoomId) return
+
+        const otherGroup = otherObj as Group
+        const otherScaleX = otherGroup.scaleX || 1
+        const otherScaleY = otherGroup.scaleY || 1
+        const otherWidth = (otherGroup.width || 0) * otherScaleX
+        const otherHeight = (otherGroup.height || 0) * otherScaleY
+        const otherLeft = (otherGroup.left || 0) - otherWidth / 2
+        const otherTop = (otherGroup.top || 0) - otherHeight / 2
+        const otherRight = (otherGroup.left || 0) + otherWidth / 2
+        const otherBottom = (otherGroup.top || 0) + otherHeight / 2
+
+        // Only check edges that are being dragged
+        if (draggingRight) {
+          if (Math.abs(scalingRight - otherLeft) < SNAP_THRESHOLD) {
+            // Snap right edge to other's left edge, keep left edge fixed
+            const newWidth = otherLeft - scalingLeft
+            newScaleX = newWidth / baseWidth
+            newCenterX = scalingLeft + newWidth / 2
+            snapLineX = otherLeft
+          } else if (Math.abs(scalingRight - otherRight) < SNAP_THRESHOLD) {
+            const newWidth = otherRight - scalingLeft
+            newScaleX = newWidth / baseWidth
+            newCenterX = scalingLeft + newWidth / 2
+            snapLineX = otherRight
+          }
+        }
+
+        if (draggingLeft) {
+          if (Math.abs(scalingLeft - otherRight) < SNAP_THRESHOLD) {
+            // Snap left edge to other's right edge, keep right edge fixed
+            const newWidth = scalingRight - otherRight
+            newScaleX = newWidth / baseWidth
+            newCenterX = otherRight + newWidth / 2
+            snapLineX = otherRight
+          } else if (Math.abs(scalingLeft - otherLeft) < SNAP_THRESHOLD) {
+            const newWidth = scalingRight - otherLeft
+            newScaleX = newWidth / baseWidth
+            newCenterX = otherLeft + newWidth / 2
+            snapLineX = otherLeft
+          }
+        }
+
+        if (draggingBottom) {
+          if (Math.abs(scalingBottom - otherTop) < SNAP_THRESHOLD) {
+            // Snap bottom edge to other's top edge, keep top edge fixed
+            const newHeight = otherTop - scalingTop
+            newScaleY = newHeight / baseHeight
+            newCenterY = scalingTop + newHeight / 2
+            snapLineY = otherTop
+          } else if (Math.abs(scalingBottom - otherBottom) < SNAP_THRESHOLD) {
+            const newHeight = otherBottom - scalingTop
+            newScaleY = newHeight / baseHeight
+            newCenterY = scalingTop + newHeight / 2
+            snapLineY = otherBottom
+          }
+        }
+
+        if (draggingTop) {
+          if (Math.abs(scalingTop - otherBottom) < SNAP_THRESHOLD) {
+            // Snap top edge to other's bottom edge, keep bottom edge fixed
+            const newHeight = scalingBottom - otherBottom
+            newScaleY = newHeight / baseHeight
+            newCenterY = otherBottom + newHeight / 2
+            snapLineY = otherBottom
+          } else if (Math.abs(scalingTop - otherTop) < SNAP_THRESHOLD) {
+            const newHeight = scalingBottom - otherTop
+            newScaleY = newHeight / baseHeight
+            newCenterY = otherTop + newHeight / 2
+            snapLineY = otherTop
+          }
+        }
+      })
+
+      // Apply snapping - adjust both scale AND position to keep opposite edge fixed
+      if (newScaleX !== null && newScaleX > 0.1 && newCenterX !== null) {
+        scalingGroup.set({ scaleX: newScaleX, left: newCenterX })
+      }
+      if (newScaleY !== null && newScaleY > 0.1 && newCenterY !== null) {
+        scalingGroup.set({ scaleY: newScaleY, top: newCenterY })
+      }
+
+      if (newScaleX !== null || newScaleY !== null) {
+        scalingGroup.setCoords()
+      }
+
+      // Draw snap guide lines only for the edge being dragged
+      if (snapLineX !== null) {
+        const guideLine = new Line([snapLineX, 0, snapLineX, canvas.height || 900], {
+          stroke: '#FF6B00',
+          strokeWidth: 2,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
+          opacity: 0.7
+        })
+        canvas.add(guideLine)
+        snapGuideLinesRef.current.push(guideLine)
+      }
+      if (snapLineY !== null) {
+        const guideLine = new Line([0, snapLineY, canvas.width || 1200, snapLineY], {
+          stroke: '#FF6B00',
+          strokeWidth: 2,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
+          opacity: 0.7
+        })
+        canvas.add(guideLine)
+        snapGuideLinesRef.current.push(guideLine)
+      }
+
+      canvas.requestRenderAll()
     }
 
     const handleObjectModified = (e: TEvent) => {
@@ -590,15 +802,13 @@ export function FloorplanCanvas({ width = 800, height = 600 }: FloorplanCanvasPr
     }
 
     canvas.on('object:moving', handleObjectMoving)
-    canvas.on('object:scaling', handleObjectModifying)
-    canvas.on('object:rotating', handleObjectModifying)
+    canvas.on('object:scaling', handleObjectScaling)
     canvas.on('object:modified', handleObjectModified)
     canvas.on('object:modified', handleReferenceImageModified)
 
     return () => {
       canvas.off('object:moving', handleObjectMoving)
-      canvas.off('object:scaling', handleObjectModifying)
-      canvas.off('object:rotating', handleObjectModifying)
+      canvas.off('object:scaling', handleObjectScaling)
       canvas.off('object:modified', handleObjectModified)
       canvas.off('object:modified', handleReferenceImageModified)
     }

@@ -47,7 +47,30 @@ export function createRoomRect(
   })
 
   // Create label centered on rectangle
-  const label = new Text(room.name, {
+  // Truncate text if it would be wider than the room
+  const maxTextWidth = rectWidth - 16  // 8px padding on each side
+  let displayName = room.name
+
+  // Create temp text to measure width
+  const tempLabel = new Text(room.name, {
+    fontSize: 14,
+    fontFamily: 'Arial, sans-serif'
+  })
+
+  // Truncate with ellipsis if too wide
+  if (tempLabel.width && tempLabel.width > maxTextWidth && maxTextWidth > 30) {
+    while (displayName.length > 1) {
+      displayName = displayName.slice(0, -1)
+      tempLabel.set('text', displayName + '...')
+      if (tempLabel.width && tempLabel.width <= maxTextWidth) break
+    }
+    displayName = displayName + '...'
+  } else if (maxTextWidth <= 30) {
+    // Room too small for text, hide it
+    displayName = ''
+  }
+
+  const label = new Text(displayName, {
     left: 0,
     top: 0,
     fontSize: 14,
@@ -268,16 +291,40 @@ export function updateRoomRect(
 
 /**
  * Update room label position and text
+ * Truncates text if wider than room
  */
 export function updateRoomLabel(
   label: Text,
   room: FloorplanRoom,
   pixelsPerFoot: number = PIXELS_PER_FOOT
 ) {
+  const rectWidth = room.width * pixelsPerFoot
+  const maxTextWidth = rectWidth - 16  // 8px padding on each side
+  let displayName = room.name
+
+  // Create temp text to measure width
+  const tempLabel = new Text(room.name, {
+    fontSize: 14,
+    fontFamily: 'Arial, sans-serif'
+  })
+
+  // Truncate with ellipsis if too wide
+  if (tempLabel.width && tempLabel.width > maxTextWidth && maxTextWidth > 30) {
+    while (displayName.length > 1) {
+      displayName = displayName.slice(0, -1)
+      tempLabel.set('text', displayName + '...')
+      if (tempLabel.width && tempLabel.width <= maxTextWidth) break
+    }
+    displayName = displayName + '...'
+  } else if (maxTextWidth <= 30) {
+    // Room too small for text, hide it
+    displayName = ''
+  }
+
   label.set({
     left: room.x * pixelsPerFoot + (room.width * pixelsPerFoot) / 2,
     top: room.y * pixelsPerFoot + (room.height * pixelsPerFoot) / 2,
-    text: room.name
+    text: displayName
   })
 }
 

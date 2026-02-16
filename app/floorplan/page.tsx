@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, Suspense } from 'react'
+import { useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useHome } from '@/lib/home-context'
 import { FloorplanProvider, useFloorplan } from '@/lib/contexts/floorplan-context'
@@ -40,6 +40,8 @@ function FloorplanPageWrapper({ homeId }: { homeId: string }) {
   const router = useRouter()
   const { homes, getFloorplanData, setFloorplanData, buildRoomsFromFloorplan, switchHome } = useHome()
   const { initializeFloorplan, floorplanData, build3DModel } = useFloorplan()
+  const isInitializedRef = useRef(false)
+  const lastSavedAtRef = useRef<string | null>(null)
 
   // Initialize floorplan data
   useEffect(() => {
@@ -61,7 +63,20 @@ function FloorplanPageWrapper({ homeId }: { homeId: string }) {
 
     // Initialize floorplan context
     initializeFloorplan(homeId, existingData)
+    isInitializedRef.current = true
+    lastSavedAtRef.current = existingData?.updatedAt || null
   }, [homeId, homes, getFloorplanData, setFloorplanData, initializeFloorplan, router])
+
+  // Sync floorplan changes back to home context for persistence
+  useEffect(() => {
+    if (!floorplanData || !isInitializedRef.current) return
+
+    // Only save if updatedAt changed (real edit, not initialization)
+    if (floorplanData.updatedAt !== lastSavedAtRef.current) {
+      lastSavedAtRef.current = floorplanData.updatedAt
+      setFloorplanData(homeId, floorplanData)
+    }
+  }, [floorplanData, homeId, setFloorplanData])
 
   const handleBuild3D = () => {
     if (!floorplanData) return
@@ -98,7 +113,7 @@ function FloorplanPageWrapper({ homeId }: { homeId: string }) {
         {/* Canvas area */}
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="bg-porcelain rounded-lg border border-gray-200">
-            <FloorplanCanvas width={800} height={600} />
+            <FloorplanCanvas width={1200} height={900} />
           </div>
         </div>
 
