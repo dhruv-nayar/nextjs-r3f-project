@@ -7,6 +7,7 @@ import { useControls } from '@/lib/controls-context'
 import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
 import { useSelection } from '@/lib/selection-context'
+import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useInteractionMode } from '@/lib/interaction-mode-context'
 import type CameraControlsImpl from 'camera-controls'
 import { Floorplan } from '../floorplan/Floorplan'
@@ -20,17 +21,50 @@ import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
   const { setControls } = useControls()
-  const { currentRoom, rooms } = useRoom()
+  const { currentRoom, rooms, deleteInstance } = useRoom()
   const { currentHome } = useHome()
-  const { clearSelection } = useSelection()
+  const { clearSelection, selection } = useSelection()
+  const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
   const { mode, setMode, isDraggingObject, isPlacing, placementState } = useInteractionMode()
   const [spaceHeld, setSpaceHeld] = useState(false)
 
-  // Space key handler for Figma-style camera pan
+  // Combined clear function that clears both selection systems
+  const clearAllSelections = useCallback(() => {
+    clearSelection()
+    setSelectedFurnitureId(null)
+  }, [clearSelection, setSelectedFurnitureId])
+
+  // Delete selected furniture
+  const deleteSelectedFurniture = useCallback(() => {
+    // Check both selection systems for selected furniture
+    const instanceId = selectedFurnitureId ||
+      (selection && 'instanceId' in selection ? selection.instanceId : null)
+
+    if (instanceId) {
+      deleteInstance(instanceId)
+      clearAllSelections()
+    }
+  }, [selectedFurnitureId, selection, deleteInstance, clearAllSelections])
+
+  // Space key handler for Figma-style camera pan + Escape to deselect + Delete to remove
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture Space if user is typing in an input
+      // Don't capture keys if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      // Escape key clears all selections
+      if (e.code === 'Escape') {
+        e.preventDefault()
+        clearAllSelections()
+        return
+      }
+
+      // Delete or Backspace removes selected furniture
+      if (e.code === 'Delete' || e.code === 'Backspace') {
+        e.preventDefault()
+        deleteSelectedFurniture()
         return
       }
 
@@ -58,7 +92,7 @@ export function RoomScene() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [mode, setMode])
+  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture])
 
   // Update cursor when in camera mode and dragging
   useEffect(() => {
@@ -192,7 +226,7 @@ export function RoomScene() {
     <Canvas
       shadows
       style={{ background: '#FAF9F6' }}
-      onPointerMissed={() => clearSelection()}
+      onPointerMissed={() => clearAllSelections()}
     >
       <color attach="background" args={['#FAF9F6']} />
 

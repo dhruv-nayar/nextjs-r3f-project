@@ -13,6 +13,7 @@ interface RoomContextType {
   updateRoom: (roomId: string, updates: Partial<Room>) => void
   updateFurniture: (furnitureId: string, updates: any) => void // DEPRECATED: use updateInstance
   updateInstance: (instanceId: string, updates: any) => void // NEW: for item instances
+  deleteInstance: (instanceId: string) => void // NEW: delete item instance
   deleteRoom: (roomId: string) => void
   switchRoom: (roomId: string) => void
   currentRoomId: string | null
@@ -190,6 +191,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  // NEW: Delete item instance
+  const deleteInstance = (instanceId: string) => {
+    setRoomsState(prev => {
+      const newState = prev.map(room => ({
+        ...room,
+        instances: room.instances ? room.instances.filter(instance =>
+          instance.id !== instanceId
+        ) : undefined
+      }))
+      recordHistory(newState)
+      return newState
+    })
+  }
+
   const deleteRoom = (roomId: string) => {
     setRoomsState(prev => {
       const filtered = prev.filter(r => r.id !== roomId)
@@ -271,6 +286,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         updateRoom,
         updateFurniture,
         updateInstance,
+        deleteInstance,
         deleteRoom,
         switchRoom,
         currentRoomId,
