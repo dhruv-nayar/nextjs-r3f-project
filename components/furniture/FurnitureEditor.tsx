@@ -1,14 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useRoom } from '@/lib/room-context'
 import { useItemLibrary } from '@/lib/item-library-context'
+import { useHome } from '@/lib/home-context'
+import { useResizeMode } from '@/lib/resize-mode-context'
 
 export function FurnitureEditor() {
+  const router = useRouter()
   const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
   const { rooms, updateFurniture, updateInstance } = useRoom()
-  const { getItem } = useItemLibrary()
+  const { getItem, updateItem } = useItemLibrary()
+  const { currentHomeId } = useHome()
+  const { isResizeMode, setResizeMode } = useResizeMode()
 
   // Find the selected item - could be old furniture or new instance
   const selectedFurniture = rooms
@@ -102,12 +108,25 @@ export function FurnitureEditor() {
       ...(selected.targetDimensions || { width: 1, height: 1, depth: 1 }),
       [dimension]: totalFeet
     }
-    // For instances, dimensions are stored in the Item, not the instance
-    // For now, we'll just update furniture (legacy) - proper solution is to update the Item in library
-    if (!isInstance) {
+
+    if (isInstance && selectedItem) {
+      // Update the Item template (affects all instances)
+      updateItem(selectedItem.id, { dimensions: newDimensions })
+    } else if (!isInstance) {
+      // Legacy furniture update
       updateFurniture(selected.id, { targetDimensions: newDimensions })
     }
-    // TODO: For instances, we'd need to update the scaleMultiplier to achieve the dimension change
+  }
+
+  const handleEditItem = () => {
+    if (selectedInstance && selectedItem) {
+      // Encode return context in URL
+      const returnContext = encodeURIComponent(JSON.stringify({
+        homeId: currentHomeId,
+        instanceId: selectedInstance.id,
+      }))
+      router.push(`/items/${selectedItem.id}?returnTo=${returnContext}`)
+    }
   }
 
   const handleScaleChange = (axis: 'x' | 'y' | 'z', value: number) => {
@@ -139,12 +158,34 @@ export function FurnitureEditor() {
           <h2 className="text-white font-semibold text-lg">{selected.name}</h2>
           <p className="text-white/60 text-sm">{selected.category || 'uncategorized'}</p>
         </div>
-        <button
-          onClick={() => setSelectedFurnitureId(null)}
-          className="text-white/70 hover:text-white transition-colors ml-2"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Resize Mode Toggle */}
+          <button
+            onClick={() => setResizeMode(!isResizeMode)}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              isResizeMode
+                ? 'bg-orange-500 text-white'
+                : 'bg-white/10 hover:bg-white/20 text-white/80 hover:text-white'
+            }`}
+            title="Toggle resize mode (R)"
+          >
+            Resize
+          </button>
+          {isInstance && selectedItem && (
+            <button
+              onClick={handleEditItem}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-sm rounded-lg transition-colors"
+            >
+              Edit Item
+            </button>
+          )}
+          <button
+            onClick={() => setSelectedFurnitureId(null)}
+            className="text-white/70 hover:text-white transition-colors"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Position Controls */}
@@ -199,6 +240,13 @@ export function FurnitureEditor() {
       {/* Dimensions Controls */}
       <div className="mb-4">
         <h3 className="text-white font-medium text-sm mb-2">Dimensions</h3>
+        {isInstance && (
+          <div className="mb-3 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <p className="text-amber-400 text-xs">
+              Changes affect the item template and all instances.
+            </p>
+          </div>
+        )}
         <div className="space-y-2">
           {/* Width */}
           <div className="flex items-center gap-2">
@@ -377,7 +425,7 @@ export function FurnitureEditor() {
 
       {/* Keyboard Hint */}
       <div className="text-white/50 text-xs pt-3 border-t border-white/10">
-        <p>💡 Use arrow keys to move • Drag to reposition</p>
+        <p>💡 Arrow keys to move • R to resize • Drag to reposition</p>
       </div>
     </div>
   )

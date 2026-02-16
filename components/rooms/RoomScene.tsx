@@ -1,31 +1,108 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { CameraControls, PerspectiveCamera, Environment, Grid } from '@react-three/drei'
+import { CameraControls, PerspectiveCamera, Environment } from '@react-three/drei'
 import { useControls } from '@/lib/controls-context'
 import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
+import { useSelection } from '@/lib/selection-context'
+import { useInteractionMode } from '@/lib/interaction-mode-context'
 import type CameraControlsImpl from 'camera-controls'
 import { Floorplan } from '../floorplan/Floorplan'
 import { Furniture, ItemInstanceRenderer } from '../furniture/FurnitureLibrary'
+import { PlacementGhost } from '../furniture/PlacementGhost'
 import { Room } from './Room'
 import { SharedWall } from './SharedWall'
-import { GRID, SCALE } from '@/lib/constants'
+import { SCALE } from '@/lib/constants'
 
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
   const { setControls } = useControls()
   const { currentRoom, rooms } = useRoom()
   const { currentHome } = useHome()
+  const { clearSelection } = useSelection()
+  const { mode, setMode, isDraggingObject, isPlacing, placementState } = useInteractionMode()
+  const [spaceHeld, setSpaceHeld] = useState(false)
+
+  // Space key handler for Figma-style camera pan
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't capture Space if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      if (e.code === 'Space' && !e.repeat && mode === 'idle') {
+        e.preventDefault() // Prevent page scroll
+        setSpaceHeld(true)
+        setMode('camera')
+        document.body.style.cursor = 'grab'
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setSpaceHeld(false)
+        if (mode === 'camera') {
+          setMode('idle')
+        }
+        document.body.style.cursor = 'default'
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [mode, setMode])
+
+  // Update cursor when in camera mode and dragging
+  useEffect(() => {
+    if (spaceHeld) {
+      const handleMouseDown = () => {
+        document.body.style.cursor = 'grabbing'
+      }
+      const handleMouseUp = () => {
+        document.body.style.cursor = spaceHeld ? 'grab' : 'default'
+      }
+      window.addEventListener('mousedown', handleMouseDown)
+      window.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        window.removeEventListener('mousedown', handleMouseDown)
+        window.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [spaceHeld])
+
+  // Memoize camera position based on room ID only - prevents re-render from resetting camera
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const memoizedCameraPosition = useMemo<[number, number, number]>(() => {
+    if (!currentRoom) return [0, 15, 20]
+    return [
+      currentRoom.cameraPosition.x,
+      currentRoom.cameraPosition.y,
+      currentRoom.cameraPosition.z
+    ]
+  }, [currentRoom?.id]) // Only recompute when room ID changes
+
+  // Track previous room ID for camera animation
+  const prevRoomIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (controlsRef.current) {
-        setControls(controlsRef.current)
+    if (!controlsRef.current || !currentRoom) return
 
-        // Animate camera to room position
-        if (currentRoom) {
+    // Always set controls reference
+    setControls(controlsRef.current)
+
+    // Only animate camera if room actually changed (not just property updates)
+    if (prevRoomIdRef.current !== currentRoom.id) {
+      prevRoomIdRef.current = currentRoom.id
+
+      const timer = setTimeout(() => {
+        if (controlsRef.current) {
           controlsRef.current.setPosition(
             currentRoom.cameraPosition.x,
             currentRoom.cameraPosition.y,
@@ -39,10 +116,35 @@ export function RoomScene() {
             true
           )
         }
-      }
-    }, 100)
-    return () => clearTimeout(timer)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
   }, [setControls, currentRoom])
+
+  // Camera is ONLY fully enabled when Space is held
+  // No mouse interactions with camera otherwise (scroll zoom handled via effect)
+  const cameraEnabled = spaceHeld && !isDraggingObject && !isPlacing
+
+  // Handle scroll wheel zoom when camera is not in full control mode
+  useEffect(() => {
+    if (!controlsRef.current) return
+    if (cameraEnabled) return // Let CameraControls handle it when Space is held
+
+    const handleWheel = (e: WheelEvent) => {
+      if (isDraggingObject || isPlacing) return
+      e.preventDefault()
+
+      const zoomSpeed = 0.001
+      const delta = e.deltaY * zoomSpeed
+      controlsRef.current?.dolly(-delta * 10, true)
+    }
+
+    const canvas = document.querySelector('canvas')
+    if (canvas) {
+      canvas.addEventListener('wheel', handleWheel, { passive: false })
+      return () => canvas.removeEventListener('wheel', handleWheel)
+    }
+  }, [cameraEnabled, isDraggingObject, isPlacing])
 
   if (!currentRoom) {
     return (
@@ -85,27 +187,30 @@ export function RoomScene() {
   ]
 
   return (
-    <Canvas shadows style={{ background: '#FAF9F6' }}>
+    <Canvas
+      shadows
+      style={{ background: '#FAF9F6' }}
+      onPointerMissed={() => clearSelection()}
+    >
       <color attach="background" args={['#FAF9F6']} />
 
       <PerspectiveCamera
         makeDefault
-        position={[
-          currentRoom.cameraPosition.x,
-          currentRoom.cameraPosition.y,
-          currentRoom.cameraPosition.z
-        ]}
+        position={memoizedCameraPosition}
         fov={75}
       />
 
       <CameraControls
         ref={controlsRef}
+        enabled={cameraEnabled}
         minPolarAngle={0}
         maxPolarAngle={Math.PI / 2}
         minDistance={SCALE.CAMERA.MIN_DISTANCE}
         maxDistance={SCALE.CAMERA.MAX_DISTANCE}
         dollySpeed={1}
         truckSpeed={2}
+        azimuthRotateSpeed={1}
+        polarRotateSpeed={1}
       />
 
       {/* Lighting */}
@@ -149,6 +254,7 @@ export function RoomScene() {
                 doors={roomDoors}
                 roomId={room.id}
                 excludedWalls={room.excludedWalls}
+                gridSettings={room.gridSettings}
               />
             )}
 
@@ -173,6 +279,14 @@ export function RoomScene() {
       {currentHome?.sharedWalls?.map(wall => (
         <SharedWall key={wall.id} wall={wall} />
       ))}
+
+      {/* Placement Ghost - shows preview when adding new item */}
+      {isPlacing && placementState.itemId && (
+        <PlacementGhost
+          itemId={placementState.itemId}
+          position={placementState.previewPosition}
+        />
+      )}
 
       {/* Environment */}
       <Environment preset="city" />

@@ -248,6 +248,9 @@ export interface Room {
     west?: boolean
   }
 
+  // NEW: Grid settings for measurement overlay on surfaces
+  gridSettings?: import('./selection').RoomGridState
+
   cameraPosition: Vector3
   cameraTarget: Vector3
   lighting?: LightingConfig

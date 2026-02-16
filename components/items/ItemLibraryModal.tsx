@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { useRoom } from '@/lib/room-context'
+import { useInteractionMode } from '@/lib/interaction-mode-context'
 import { ItemCategory } from '@/types/room'
 import { ItemThumbnail } from './ItemThumbnail'
 
@@ -16,6 +17,7 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
   const { items } = useItemLibrary()
   const { addInstanceToRoom } = useHome()
   const { currentRoom } = useRoom()
+  const { startPlacing } = useInteractionMode()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
@@ -51,9 +53,9 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
       return
     }
 
-    // Place item at center of room (0, 0, 0)
-    const instanceId = addInstanceToRoom(currentRoom.id, itemId, { x: 0, y: 0, z: 0 })
-
+    // Start placement mode - ghost will follow cursor
+    // User clicks in 3D scene to confirm position
+    startPlacing(itemId)
     onClose()
   }
 
@@ -156,7 +158,7 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
         {/* Footer */}
         <div className="p-4 border-t border-white/10 bg-black/20">
           <p className="text-white/50 text-sm text-center">
-            Click an item to place it in the current room
+            Click an item to enter placement mode, then click in the scene to place
           </p>
         </div>
       </div>

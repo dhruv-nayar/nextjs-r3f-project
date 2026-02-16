@@ -7,6 +7,9 @@ import { RoomProvider } from "@/lib/room-context";
 import { FurnitureHoverProvider } from "@/lib/furniture-hover-context";
 import { RoomHoverProvider } from "@/lib/room-hover-context";
 import { FurnitureSelectionProvider } from "@/lib/furniture-selection-context";
+import { SelectionProvider } from "@/lib/selection-context";
+import { ResizeModeProvider } from "@/lib/resize-mode-context";
+import { InteractionModeProvider } from "@/lib/interaction-mode-context";
 import { ControlsProvider } from "@/lib/controls-context";
 
 const geistSans = Geist({
@@ -54,9 +57,15 @@ export default function RootLayout({
               <RoomHoverProvider>
                 <FurnitureHoverProvider>
                   <FurnitureSelectionProvider>
-                    <ControlsProvider>
-                      {children}
-                    </ControlsProvider>
+                    <SelectionProvider>
+                      <ResizeModeProvider>
+                        <InteractionModeProvider>
+                          <ControlsProvider>
+                            {children}
+                          </ControlsProvider>
+                        </InteractionModeProvider>
+                      </ResizeModeProvider>
+                    </SelectionProvider>
                   </FurnitureSelectionProvider>
                 </FurnitureHoverProvider>
               </RoomHoverProvider>

@@ -5,10 +5,17 @@ import { useGLTF } from '@react-three/drei'
 import { FurnitureItem, Item, ItemInstance } from '@/types/room'
 import { useFurnitureHover } from '@/lib/furniture-hover-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
+import { useSelection } from '@/lib/selection-context'
 import { useRoom } from '@/lib/room-context'
 import { useItemLibrary } from '@/lib/item-library-context'
+import { useResizeMode } from '@/lib/resize-mode-context'
+import { useInteractionMode } from '@/lib/interaction-mode-context'
+import { ResizeHandles } from './ResizeHandles'
 import * as THREE from 'three'
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber'
+
+// Drag threshold in world units - prevents accidental micro-drags
+const DRAG_THRESHOLD = 0.1
 
 interface FurnitureProps {
   item: FurnitureItem
@@ -327,12 +334,20 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const clonedScene = scene.clone()
   const groupRef = useRef<THREE.Group>(null)
   const { hoveredFurnitureId, setHoveredFurnitureId } = useFurnitureHover()
+  // Use both old and new selection context during migration
   const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
+  const { selectFurniture, isFurnitureSelected, hoveredItem, setHoveredItem } = useSelection()
   const { updateInstance } = useRoom()
+  const { updateItem } = useItemLibrary()
+  const { isResizeMode, setResizeMode } = useResizeMode()
+  const { mode, setMode } = useInteractionMode()
   const { camera, gl } = useThree()
   const isHovered = hoveredFurnitureId === instance.id
-  const isSelected = selectedFurnitureId === instance.id
+  // Check both old and new selection systems
+  const isSelected = selectedFurnitureId === instance.id || isFurnitureSelected(instance.id)
   const [isDragging, setIsDragging] = useState(false)
+  const [isVisuallyDragging, setIsVisuallyDragging] = useState(false)
+  const dragStartPosRef = useRef<THREE.Vector3 | null>(null)
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
 
   // Calculate the model's original bounding box
@@ -351,6 +366,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   clonedScene.position.set(-center.x, -box.min.y, -center.z)
 
   // Apply highlight effect when hovered or selected
+  // Different intensity for dragging state
   useEffect(() => {
     if (!groupRef.current) return
 
@@ -363,7 +379,8 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
           const highlightMaterial = child.material.clone()
           if (highlightMaterial instanceof THREE.MeshStandardMaterial) {
             highlightMaterial.emissive = new THREE.Color(isSelected ? 0xffa500 : 0x00ffff)
-            highlightMaterial.emissiveIntensity = 0.8
+            // Higher intensity when actively dragging
+            highlightMaterial.emissiveIntensity = isVisuallyDragging ? 1.2 : (isSelected ? 0.5 : 0.3)
           }
           child.material = highlightMaterial
         } else if (child.userData.originalMaterial) {
@@ -371,13 +388,23 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
         }
       }
     })
-  }, [isHovered, isSelected])
+  }, [isHovered, isSelected, isVisuallyDragging])
 
-  // Handle arrow key movement when selected
+  // Handle arrow key movement and resize mode toggle when selected
   useEffect(() => {
     if (!isSelected) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle resize mode with 'R' key
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault()
+        setResizeMode(!isResizeMode)
+        return
+      }
+
+      // Disable movement in resize mode
+      if (isResizeMode) return
+
       const moveSpeed = 0.5
       let newX = instance.position.x
       let newZ = instance.position.z
@@ -410,31 +437,62 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isSelected, instance.id, instance.position, updateInstance])
+  }, [isSelected, instance.id, instance.position, updateInstance, isResizeMode, setResizeMode])
 
-  // Handle drag movement
-  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (!isSelected) {
-      e.stopPropagation()
-      setSelectedFurnitureId(instance.id)
-    } else {
-      e.stopPropagation()
-      setIsDragging(true)
-      document.body.style.cursor = 'grabbing'
-    }
+  // Handle dimension change from resize handles
+  const handleDimensionChange = (dimension: 'width' | 'height' | 'depth', newValue: number) => {
+    updateItem(item.id, {
+      dimensions: {
+        ...item.dimensions,
+        [dimension]: newValue
+      }
+    })
   }
 
-  const handlePointerUp = () => {
+  // Exit resize mode when deselected
+  useEffect(() => {
+    if (!isSelected && isResizeMode) {
+      setResizeMode(false)
+    }
+  }, [isSelected, isResizeMode, setResizeMode])
+
+  // Handle drag movement - SINGLE-CLICK-DRAG pattern
+  // Click immediately starts potential drag, with threshold to prevent accidental micro-drags
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+
+    // Don't start drag in resize mode or if camera mode is active
+    if (isResizeMode || mode === 'camera') return
+
+    // Select the item
+    setSelectedFurnitureId(instance.id)
+    selectFurniture(instance.id, instance.roomId)
+
+    // Start potential drag immediately (single-click-drag pattern)
+    setIsDragging(true)
+    setIsVisuallyDragging(false)
+    dragStartPosRef.current = e.point.clone()
+    setMode('dragging')
+    document.body.style.cursor = 'grab'
+  }
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation() // FIX: Was missing - prevents camera from also receiving event
+
     if (isDragging) {
       setIsDragging(false)
+      setIsVisuallyDragging(false)
+      dragStartPosRef.current = null
+      setMode('idle')
       document.body.style.cursor = isHovered ? 'pointer' : 'default'
     }
   }
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
-    if (!isDragging) return
+    if (!isDragging || !dragStartPosRef.current) return
 
     e.stopPropagation()
+
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(
       new THREE.Vector2(
@@ -448,6 +506,17 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     raycaster.ray.intersectPlane(dragPlaneRef.current, intersectionPoint)
 
     if (intersectionPoint) {
+      // Check if we've exceeded drag threshold before visually dragging
+      if (!isVisuallyDragging) {
+        const distance = intersectionPoint.distanceTo(dragStartPosRef.current)
+        if (distance < DRAG_THRESHOLD) {
+          return // Don't start visual drag yet
+        }
+        setIsVisuallyDragging(true)
+        document.body.style.cursor = 'grabbing'
+      }
+
+      // Actually move the furniture
       updateInstance(instance.id, {
         position: { ...instance.position, x: intersectionPoint.x, z: intersectionPoint.z }
       })
@@ -455,55 +524,76 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   }
 
   return (
-    <group
-      ref={groupRef}
-      position={[instance.position.x, instance.position.y, instance.position.z]}
-      rotation={[instance.rotation.x, instance.rotation.y, instance.rotation.z]}
-      scale={[
-        instance.scaleMultiplier.x * autoScale.x,
-        instance.scaleMultiplier.y * autoScale.y,
-        instance.scaleMultiplier.z * autoScale.z
-      ]}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        setHoveredFurnitureId(instance.id)
-        document.body.style.cursor = isDragging ? 'grabbing' : 'pointer'
-      }}
-      onPointerOut={() => {
-        setHoveredFurnitureId(null)
-        if (!isDragging) {
-          document.body.style.cursor = 'default'
-        }
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerMove={handlePointerMove}
-    >
-      <primitive object={clonedScene} castShadow receiveShadow />
+    <>
+      {/* Main model group with scaling */}
+      <group
+        ref={groupRef}
+        position={[instance.position.x, instance.position.y, instance.position.z]}
+        rotation={[instance.rotation.x, instance.rotation.y, instance.rotation.z]}
+        scale={[
+          instance.scaleMultiplier.x * autoScale.x,
+          instance.scaleMultiplier.y * autoScale.y,
+          instance.scaleMultiplier.z * autoScale.z
+        ]}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHoveredFurnitureId(instance.id)
+          setHoveredItem({ type: 'furniture', instanceId: instance.id, roomId: instance.roomId })
+          // Show appropriate cursor based on state
+          if (isVisuallyDragging) {
+            document.body.style.cursor = 'grabbing'
+          } else if (isSelected) {
+            document.body.style.cursor = 'grab'
+          } else {
+            document.body.style.cursor = 'pointer'
+          }
+        }}
+        onPointerOut={() => {
+          setHoveredFurnitureId(null)
+          setHoveredItem(null)
+          if (!isVisuallyDragging) {
+            document.body.style.cursor = 'default'
+          }
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerMove={handlePointerMove}
+      >
+        <primitive object={clonedScene} castShadow receiveShadow />
 
-      {/* Outline border when hovered or selected */}
-      {(isHovered || isSelected) && (
-        <>
-          <mesh position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
-            <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
-            <meshBasicMaterial
-              color={isSelected ? "#ffa500" : "#00ffff"}
-              wireframe
-              transparent
-              opacity={0.6}
-            />
-          </mesh>
-          <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
-            <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
-            <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
-          </lineSegments>
-          <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
-            <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
-            <lineBasicMaterial color="#ffffff" />
-          </lineSegments>
-        </>
+        {/* Outline border when hovered or selected (not in resize mode) */}
+        {(isHovered || isSelected) && !isResizeMode && (
+          <>
+            <mesh position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+              <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
+              <meshBasicMaterial
+                color={isSelected ? "#ffa500" : "#00ffff"}
+                wireframe
+                transparent
+                opacity={0.6}
+              />
+            </mesh>
+            <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+              <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
+              <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
+            </lineSegments>
+            <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+              <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
+              <lineBasicMaterial color="#ffffff" />
+            </lineSegments>
+          </>
+        )}
+      </group>
+
+      {/* Resize handles rendered outside the scaled group at world-space positions */}
+      {isSelected && isResizeMode && (
+        <ResizeHandles
+          dimensions={item.dimensions}
+          position={instance.position}
+          onDimensionChange={handleDimensionChange}
+        />
       )}
-    </group>
+    </>
   )
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
@@ -19,10 +19,31 @@ import { MaterialExtractor } from '@/hooks/useMaterialExtraction'
 export default function ItemDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const itemId = params.id as string
 
   const { getItem, updateItem, deleteItem } = useItemLibrary()
-  const { getInstancesForItem, deleteAllInstancesOfItem } = useHome()
+  const { getInstancesForItem, deleteAllInstancesOfItem, switchHome } = useHome()
+
+  // Parse return context for "Back to Project" navigation
+  const returnToParam = searchParams.get('returnTo')
+  const returnContext = returnToParam ? (() => {
+    try {
+      return JSON.parse(decodeURIComponent(returnToParam))
+    } catch {
+      return null
+    }
+  })() : null
+
+  const handleBackToProject = () => {
+    if (returnContext) {
+      // Switch to the correct home and navigate back with selection restoration
+      if (returnContext.homeId) {
+        switchHome(returnContext.homeId)
+      }
+      router.push(`/?selectInstance=${returnContext.instanceId}`)
+    }
+  }
 
   const item = getItem(itemId)
   const instances = item ? getInstancesForItem(itemId) : []
@@ -239,6 +260,18 @@ export default function ItemDetailPage() {
         {/* Right Side - Sidebar Panel */}
         <aside className="w-[480px] flex-shrink-0">
           <div className="fixed right-0 top-[68px] bottom-0 w-[480px] p-6 flex flex-col">
+            {/* Back to Project Button - only shown when coming from home editor */}
+            {returnContext && (
+              <button
+                onClick={handleBackToProject}
+                className="mb-4 flex items-center gap-2 px-4 py-3 bg-sage/10 hover:bg-sage/20 text-sage rounded-xl border border-sage/20 transition-colors group"
+              >
+                <svg className="w-5 h-5 transition-transform group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="font-body font-medium">Back to Project</span>
+              </button>
+            )}
             <div className="bg-floral-white rounded-2xl p-6 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] flex-1 overflow-y-auto space-y-6">
                 {/* Item Header Section */}
                 <div>
