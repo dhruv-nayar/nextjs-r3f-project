@@ -418,3 +418,64 @@ export function fitCanvasToViewport(
   canvas.setZoom(scale)
   canvas.renderAll()
 }
+
+/**
+ * Center viewport on all rooms in the canvas
+ * Calculates bounding box of all rooms and centers the view with appropriate zoom
+ */
+export function centerViewportOnRooms(canvas: Canvas) {
+  const rooms = canvas.getObjects().filter(obj => obj.get('objectType') === 'room')
+
+  if (rooms.length === 0) return
+
+  // Calculate bounding box of all rooms
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+
+  rooms.forEach(obj => {
+    const group = obj as Group
+    const width = (group.width || 0) * (group.scaleX || 1)
+    const height = (group.height || 0) * (group.scaleY || 1)
+    const left = (group.left || 0) - width / 2
+    const top = (group.top || 0) - height / 2
+    const right = left + width
+    const bottom = top + height
+
+    minX = Math.min(minX, left)
+    minY = Math.min(minY, top)
+    maxX = Math.max(maxX, right)
+    maxY = Math.max(maxY, bottom)
+  })
+
+  // Add padding around the content (50 pixels)
+  const padding = 50
+  minX -= padding
+  minY -= padding
+  maxX += padding
+  maxY += padding
+
+  // Calculate content dimensions
+  const contentWidth = maxX - minX
+  const contentHeight = maxY - minY
+  const contentCenterX = (minX + maxX) / 2
+  const contentCenterY = (minY + maxY) / 2
+
+  // Calculate zoom to fit content with some margin
+  const canvasWidth = canvas.getWidth()
+  const canvasHeight = canvas.getHeight()
+  const zoomX = canvasWidth / contentWidth
+  const zoomY = canvasHeight / contentHeight
+  const zoom = Math.min(zoomX, zoomY, 2)  // Cap at 2x zoom
+
+  // Calculate pan offset to center the content
+  const vpCenterX = canvasWidth / 2
+  const vpCenterY = canvasHeight / 2
+  const panX = vpCenterX - contentCenterX * zoom
+  const panY = vpCenterY - contentCenterY * zoom
+
+  // Apply viewport transform [scaleX, skewY, skewX, scaleY, translateX, translateY]
+  canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY])
+  canvas.requestRenderAll()
+}

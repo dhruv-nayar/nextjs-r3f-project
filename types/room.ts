@@ -63,6 +63,7 @@ export interface Item {
   parametricShape?: ParametricShape  // For user-created extruded shapes
 
   thumbnailPath?: string        // "/thumbnails/chair_thumb.jpg"
+  images?: ImagePair[]          // All uploaded images (original and processed versions)
 
   // Default real-world dimensions
   dimensions: {
@@ -133,10 +134,19 @@ export interface GLBUploadResult {
 }
 
 /**
+ * Image pair containing original and processed (background removed) versions
+ */
+export interface ImagePair {
+  original: string
+  processed: string | null  // null if background removal failed
+}
+
+/**
  * Result from image upload
  */
 export interface ImageUploadResult {
-  imagePaths: string[]
+  imagePaths: string[]  // All image paths (both original and processed) for backward compatibility
+  imagePairs: ImagePair[]  // Pairs of original and processed images
   selectedThumbnailIndex?: number
 }
 

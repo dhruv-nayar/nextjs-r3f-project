@@ -13,7 +13,8 @@ import Input from '@/components/ui/Input'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
-import { PlacementType, MaterialOverride } from '@/types/room'
+import { PlacementType, MaterialOverride, ImagePair } from '@/types/room'
+import { ImageGallery } from '@/components/items/ImageGallery'
 import { MaterialInfo } from '@/lib/material-utils'
 import { MaterialExtractor } from '@/hooks/useMaterialExtraction'
 
@@ -61,6 +62,8 @@ export default function ItemDetailPage() {
   const [editTags, setEditTags] = useState(item?.tags.join(', ') || '')
   const [editProductUrl, setEditProductUrl] = useState(item?.productUrl || '')
   const [editPlacementType, setEditPlacementType] = useState<PlacementType | undefined>(item?.placementType)
+  const [editThumbnailPath, setEditThumbnailPath] = useState(item?.thumbnailPath || '')
+  const [editImages, setEditImages] = useState<ImagePair[]>(item?.images || [])
 
   // Dimension state (feet and inches)
   const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
@@ -89,6 +92,8 @@ export default function ItemDetailPage() {
       setEditProductUrl(item.productUrl || '')
       setEditPlacementType(item.placementType)
       setEditMaterialOverrides(item.materialOverrides || [])
+      setEditThumbnailPath(item.thumbnailPath || '')
+      setEditImages(item.images || [])
 
       // Update dimension state
       setWidthFeet(Math.floor(item.dimensions?.width || 0))
@@ -126,6 +131,8 @@ export default function ItemDetailPage() {
       productUrl: editProductUrl,
       placementType: editPlacementType,
       materialOverrides: editMaterialOverrides.length > 0 ? editMaterialOverrides : undefined,
+      thumbnailPath: editThumbnailPath || undefined,
+      images: editImages.length > 0 ? editImages : undefined,
       dimensions: {
         width: totalWidth,
         height: totalHeight,
@@ -147,6 +154,8 @@ export default function ItemDetailPage() {
       setEditProductUrl(item.productUrl || '')
       setEditPlacementType(item.placementType)
       setEditMaterialOverrides(item.materialOverrides || [])
+      setEditThumbnailPath(item.thumbnailPath || '')
+      setEditImages(item.images || [])
 
       setWidthFeet(Math.floor(item.dimensions?.width || 0))
       setWidthInches(((item.dimensions?.width || 0) % 1) * 12)
@@ -205,6 +214,15 @@ export default function ItemDetailPage() {
 
   const handleResetAllMaterials = () => {
     setEditMaterialOverrides([])
+  }
+
+  const handleImagesAdd = (newPairs: ImagePair[]) => {
+    setEditImages(prev => [...prev, ...newPairs])
+    // If no thumbnail is set yet, use the first processed or original image
+    if (!editThumbnailPath && newPairs.length > 0) {
+      const firstImage = newPairs[0].processed || newPairs[0].original
+      setEditThumbnailPath(firstImage)
+    }
   }
 
   // Get current color for a material (from override or original)
@@ -333,6 +351,16 @@ export default function ItemDetailPage() {
                     </p>
                   )}
                 </div>
+
+                {/* Images Section */}
+                <ImageGallery
+                  images={isEditing ? editImages : (item.images || [])}
+                  thumbnailPath={item.thumbnailPath}
+                  isEditing={isEditing}
+                  onThumbnailChange={setEditThumbnailPath}
+                  onImagesAdd={handleImagesAdd}
+                  currentThumbnail={isEditing ? editThumbnailPath : item.thumbnailPath}
+                />
 
                 {/* Metadata Section */}
                 <div>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useItemLibrary } from '@/lib/item-library-context'
-import { ItemCategory, GLBUploadResult, ImageUploadResult } from '@/types/room'
+import { ItemCategory, GLBUploadResult, ImageUploadResult, ImagePair } from '@/types/room'
 import { GLBUpload } from '@/components/items/GLBUpload'
 import { ImageUpload } from '@/components/items/ImageUpload'
 import { DimensionInput } from '@/components/items/DimensionInput'
@@ -29,6 +29,7 @@ export default function ItemsPage() {
   const [uploadedModelPath, setUploadedModelPath] = useState('')
   const [uploadedThumbnailPath, setUploadedThumbnailPath] = useState('')
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [uploadedImagePairs, setUploadedImagePairs] = useState<ImagePair[]>([])
   const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState(0)
   const [uploadError, setUploadError] = useState('')
 
@@ -94,8 +95,12 @@ export default function ItemsPage() {
 
   const handleImageUploadComplete = (result: ImageUploadResult) => {
     setUploadedImages(result.imagePaths)
+    setUploadedImagePairs(result.imagePairs || [])
     setSelectedThumbnailIndex(result.selectedThumbnailIndex || 0)
-    setUploadedThumbnailPath(result.imagePaths[result.selectedThumbnailIndex || 0])
+    // Default to processed image if available, otherwise original
+    const firstPair = result.imagePairs?.[0]
+    const defaultThumbnail = firstPair?.processed || firstPair?.original || result.imagePaths[0]
+    setUploadedThumbnailPath(defaultThumbnail)
     setUploadStep('metadata')
   }
 
@@ -123,6 +128,7 @@ export default function ItemsPage() {
       description: newItemDescription.trim() || undefined,
       modelPath,
       thumbnailPath: uploadedThumbnailPath.trim() || undefined,
+      images: uploadedImagePairs.length > 0 ? uploadedImagePairs : undefined,
       dimensions: newItemDimensions,
       category: newItemCategory,
       tags: newItemTags.split(',').map(t => t.trim()).filter(t => t.length > 0),
@@ -138,6 +144,7 @@ export default function ItemsPage() {
     setUploadedModelPath('')
     setUploadedThumbnailPath('')
     setUploadedImages([])
+    setUploadedImagePairs([])
     setSelectedThumbnailIndex(0)
     setUploadMethod(null)
     setUploadStep('choose')
@@ -155,6 +162,7 @@ export default function ItemsPage() {
     setUploadedModelPath('')
     setUploadedThumbnailPath('')
     setUploadedImages([])
+    setUploadedImagePairs([])
     setSelectedThumbnailIndex(0)
     setUploadMethod(null)
     setUploadStep('choose')
@@ -395,39 +403,90 @@ export default function ItemsPage() {
                 </div>
 
                 {/* Image Gallery with Thumbnail Selection */}
-                {uploadedImages.length > 0 && (
+                {uploadedImagePairs.length > 0 && (
                   <div className="space-y-3">
                     <label className="block text-graphite text-sm font-body font-medium">
                       Select Thumbnail Image
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {uploadedImages.map((imagePath, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => {
-                            setSelectedThumbnailIndex(index)
-                            setUploadedThumbnailPath(imagePath)
-                          }}
-                          className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
-                            selectedThumbnailIndex === index
-                              ? 'border-sage ring-2 ring-sage/30'
-                              : 'border-taupe/20 hover:border-taupe/40'
-                          }`}
-                        >
-                          <Image
-                            src={imagePath}
-                            alt={`Image ${index + 1}`}
-                            fill
-                            className="object-contain bg-floral-white"
-                            unoptimized
-                          />
-                          {selectedThumbnailIndex === index && (
-                            <div className="absolute top-2 right-2 w-6 h-6 bg-sage rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs">✓</span>
+                    <div className="space-y-4">
+                      {uploadedImagePairs.map((pair, pairIndex) => (
+                        <div key={pairIndex} className="space-y-2">
+                          {uploadedImagePairs.length > 1 && (
+                            <div className="text-xs text-taupe/60 font-medium">
+                              Image {pairIndex + 1}
                             </div>
                           )}
-                        </button>
+                          <div className="grid grid-cols-2 gap-3">
+                            {/* Original Image */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedThumbnailIndex(pairIndex * 2)
+                                setUploadedThumbnailPath(pair.original)
+                              }}
+                              className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
+                                uploadedThumbnailPath === pair.original
+                                  ? 'border-sage ring-2 ring-sage/30'
+                                  : 'border-taupe/20 hover:border-taupe/40'
+                              }`}
+                            >
+                              <Image
+                                src={pair.original}
+                                alt={`Original ${pairIndex + 1}`}
+                                fill
+                                className="object-contain bg-floral-white"
+                                unoptimized
+                              />
+                              <div className="absolute bottom-0 left-0 right-0 bg-graphite/70 text-white text-xs py-1 text-center">
+                                Original
+                              </div>
+                              {uploadedThumbnailPath === pair.original && (
+                                <div className="absolute top-2 right-2 w-6 h-6 bg-sage rounded-full flex items-center justify-center">
+                                  <span className="text-white text-xs">✓</span>
+                                </div>
+                              )}
+                            </button>
+
+                            {/* Processed Image (Background Removed) */}
+                            {pair.processed ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedThumbnailIndex(pairIndex * 2 + 1)
+                                  setUploadedThumbnailPath(pair.processed!)
+                                }}
+                                className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
+                                  uploadedThumbnailPath === pair.processed
+                                    ? 'border-sage ring-2 ring-sage/30'
+                                    : 'border-taupe/20 hover:border-taupe/40'
+                                }`}
+                              >
+                                <div className="absolute inset-0 bg-[url('/checkerboard.svg')] bg-repeat" />
+                                <Image
+                                  src={pair.processed}
+                                  alt={`Processed ${pairIndex + 1}`}
+                                  fill
+                                  className="object-contain relative"
+                                  unoptimized
+                                />
+                                <div className="absolute bottom-0 left-0 right-0 bg-sage/90 text-white text-xs py-1 text-center">
+                                  No Background
+                                </div>
+                                {uploadedThumbnailPath === pair.processed && (
+                                  <div className="absolute top-2 right-2 w-6 h-6 bg-sage rounded-full flex items-center justify-center">
+                                    <span className="text-white text-xs">✓</span>
+                                  </div>
+                                )}
+                              </button>
+                            ) : (
+                              <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-taupe/10 bg-taupe/5 flex items-center justify-center">
+                                <span className="text-taupe/40 text-xs text-center px-2">
+                                  Background removal failed
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
                     <p className="text-taupe/60 text-xs font-body">

@@ -13,7 +13,8 @@ import {
   fabricRectToRoom,
   getObjectById,
   clearCanvas,
-  createReferenceImage
+  createReferenceImage,
+  centerViewportOnRooms
 } from '@/lib/floorplan/fabric-utils'
 import { detectWallClick, getClosestValidPosition } from '@/lib/floorplan/wall-detection'
 
@@ -146,6 +147,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
   const snapGuideLinesRef = useRef<Line[]>([])
   const wallHighlightRef = useRef<Line | null>(null)
   const loadedReferenceImageUrlRef = useRef<string | null>(null)
+  const hasInitialCenteredRef = useRef(false)
 
   const {
     floorplanData,
@@ -347,6 +349,17 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
       }).catch(err => {
         console.error('[FloorplanCanvas] Failed to load reference image:', err)
       })
+    }
+
+    // Center viewport on rooms on initial load (only once)
+    if (!hasInitialCenteredRef.current && floorplanData.rooms.length > 0) {
+      // Small delay to ensure objects are fully rendered
+      setTimeout(() => {
+        if (fabricCanvasRef.current) {
+          centerViewportOnRooms(fabricCanvasRef.current)
+          hasInitialCenteredRef.current = true
+        }
+      }, 50)
     }
 
     // Render doors (deduplicated for shared walls)

@@ -148,6 +148,7 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                     label="Projects"
                     header="Recent Projects"
                     value={currentHomeId || undefined}
+                    alwaysShowLabel
                     buttonClassName="font-body text-sm text-graphite font-medium transition-colors flex items-center gap-1"
                     options={homes.map(home => ({
                       label: home.name,

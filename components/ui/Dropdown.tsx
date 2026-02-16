@@ -19,6 +19,8 @@ interface DropdownProps {
   header?: string
   showSeparator?: boolean
   footerOption?: DropdownOption
+  /** Always show the label prop instead of the selected option's label */
+  alwaysShowLabel?: boolean
 }
 
 export function Dropdown({
@@ -30,7 +32,8 @@ export function Dropdown({
   buttonClassName,
   header,
   showSeparator = false,
-  footerOption
+  footerOption,
+  alwaysShowLabel = false
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -60,7 +63,7 @@ export function Dropdown({
   }
 
   const selectedOption = options.find(opt => opt.value === value)
-  const displayLabel = selectedOption ? selectedOption.label : label
+  const displayLabel = alwaysShowLabel ? label : (selectedOption ? selectedOption.label : label)
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>

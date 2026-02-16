@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { ImageUploadResult } from '@/types/room'
+import { ImageUploadResult, ImagePair } from '@/types/room'
 import Image from 'next/image'
 
 interface ImageUploadProps {
@@ -11,8 +11,8 @@ interface ImageUploadProps {
 
 interface ProcessedImage {
   originalUrl: string
-  processedUrl: string
-  status: 'uploading' | 'completed' | 'error'
+  processedUrl: string | null
+  status: 'uploading' | 'processing' | 'completed' | 'error'
   error?: string
 }
 
@@ -44,7 +44,8 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
     }
 
     setIsProcessing(true)
-    const processedImages: string[] = []
+    const allImagePaths: string[] = []
+    const imagePairs: ImagePair[] = []
 
     try {
       // Process each image
@@ -54,7 +55,7 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
         // Initialize status
         const imageEntry: ProcessedImage = {
           originalUrl: '',
-          processedUrl: '',
+          processedUrl: null,
           status: 'uploading'
         }
 
@@ -64,69 +65,107 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
         // Step 1: Convert image to base64
         const base64Image = await fileToBase64(file)
 
-        // Step 2: Remove background
-        const bgRemovalRes = await fetch('/api/remove_bg', {
+        // Step 2: Upload ORIGINAL image first
+        const originalBlob = await base64ToBlob(base64Image)
+        const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
+
+        const originalFormData = new FormData()
+        originalFormData.append('files', originalFile)
+        originalFormData.append('itemId', `temp-${Date.now()}-original`)
+
+        const originalUploadRes = await fetch('/api/items/upload-images', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageData: base64Image })
+          body: originalFormData
         })
 
-        const bgRemovalResult = await bgRemovalRes.json()
+        const originalUploadResult = await originalUploadRes.json()
 
-        if (!bgRemovalResult.success) {
-          console.warn('Background removal failed, using original image:', bgRemovalResult.error)
-          // Continue with original image if background removal fails
-        }
-
-        const processedBase64 = bgRemovalResult.success
-          ? bgRemovalResult.processedImageData
-          : base64Image
-
-        // Step 3: Convert processed base64 back to blob
-        const processedBlob = await base64ToBlob(processedBase64)
-        const processedFile = new File([processedBlob], file.name, { type: 'image/png' })
-
-        // Step 4: Upload processed image to Vercel Blob
-        const formData = new FormData()
-        formData.append('files', processedFile)
-        formData.append('itemId', `temp-${Date.now()}`)
-
-        const uploadRes = await fetch('/api/items/upload-images', {
-          method: 'POST',
-          body: formData
-        })
-
-        const uploadResult = await uploadRes.json()
-
-        if (!uploadResult.success) {
+        if (!originalUploadResult.success) {
           setImages(prev => {
             const newImages = [...prev]
             newImages[currentIndex].status = 'error'
-            newImages[currentIndex].error = uploadResult.error
+            newImages[currentIndex].error = originalUploadResult.error
             return newImages
           })
           continue
         }
 
-        const uploadedUrl = uploadResult.imagePaths[0]
+        const originalUrl = originalUploadResult.imagePaths[0]
 
-        // Update with uploaded URL and mark as completed
+        // Update original URL and change status to processing
         setImages(prev => {
           const newImages = [...prev]
-          newImages[currentIndex].originalUrl = uploadedUrl
-          newImages[currentIndex].processedUrl = uploadedUrl
+          newImages[currentIndex].originalUrl = originalUrl
+          newImages[currentIndex].status = 'processing'
+          return newImages
+        })
+
+        // Step 3: Try to remove background
+        let processedUrl: string | null = null
+
+        try {
+          const bgRemovalRes = await fetch('/api/remove_bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageData: base64Image })
+          })
+
+          const bgRemovalResult = await bgRemovalRes.json()
+
+          if (bgRemovalResult.success) {
+            // Step 4: Upload PROCESSED image
+            const processedBase64 = bgRemovalResult.processedImageData
+            const processedBlob = await base64ToBlob(processedBase64)
+            const processedFile = new File([processedBlob], `processed_${file.name.replace(/\.[^/.]+$/, '')}.png`, { type: 'image/png' })
+
+            const processedFormData = new FormData()
+            processedFormData.append('files', processedFile)
+            processedFormData.append('itemId', `temp-${Date.now()}-processed`)
+
+            const processedUploadRes = await fetch('/api/items/upload-images', {
+              method: 'POST',
+              body: processedFormData
+            })
+
+            const processedUploadResult = await processedUploadRes.json()
+
+            if (processedUploadResult.success) {
+              processedUrl = processedUploadResult.imagePaths[0]
+            }
+          } else {
+            console.warn('Background removal failed:', bgRemovalResult.error)
+          }
+        } catch (bgError) {
+          console.warn('Background removal error:', bgError)
+        }
+
+        // Update with both URLs and mark as completed
+        setImages(prev => {
+          const newImages = [...prev]
+          newImages[currentIndex].originalUrl = originalUrl
+          newImages[currentIndex].processedUrl = processedUrl
           newImages[currentIndex].status = 'completed'
           return newImages
         })
 
-        processedImages.push(uploadedUrl)
+        // Add to results
+        allImagePaths.push(originalUrl)
+        if (processedUrl) {
+          allImagePaths.push(processedUrl)
+        }
+
+        imagePairs.push({
+          original: originalUrl,
+          processed: processedUrl
+        })
       }
 
       // All images processed, call completion callback
-      if (processedImages.length > 0) {
+      if (imagePairs.length > 0) {
         onUploadComplete({
-          imagePaths: processedImages,
-          selectedThumbnailIndex: 0 // Default to first image
+          imagePaths: allImagePaths,
+          imagePairs,
+          selectedThumbnailIndex: 0 // Default to first image (processed if available, else original)
         })
       } else {
         onError('No images were successfully processed')
@@ -222,33 +261,64 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
             Processing {images.length} image{images.length > 1 ? 's' : ''}...
           </p>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="space-y-4">
             {images.map((img, index) => (
               <div key={index} className="space-y-2">
-                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
-                  {img.processedUrl && (
-                    <Image
-                      src={img.processedUrl}
-                      alt={`Processed ${index + 1}`}
-                      fill
-                      className="object-contain"
-                      unoptimized
-                    />
-                  )}
-                  {!img.processedUrl && img.originalUrl && (
-                    <Image
-                      src={img.originalUrl}
-                      alt={`Original ${index + 1}`}
-                      fill
-                      className="object-contain opacity-50"
-                      unoptimized
-                    />
-                  )}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Original Image */}
+                  <div className="space-y-1">
+                    <div className="text-xs text-gray-500 font-medium">Original</div>
+                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative border border-gray-200">
+                      {img.originalUrl && (
+                        <Image
+                          src={img.originalUrl}
+                          alt={`Original ${index + 1}`}
+                          fill
+                          className="object-contain"
+                          unoptimized
+                        />
+                      )}
+                      {!img.originalUrl && img.status === 'uploading' && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Processed Image */}
+                  <div className="space-y-1">
+                    <div className="text-xs text-gray-500 font-medium">Background Removed</div>
+                    <div className="aspect-square bg-[url('/checkerboard.svg')] bg-repeat rounded-lg overflow-hidden relative border border-gray-200">
+                      {img.processedUrl && (
+                        <Image
+                          src={img.processedUrl}
+                          alt={`Processed ${index + 1}`}
+                          fill
+                          className="object-contain"
+                          unoptimized
+                        />
+                      )}
+                      {!img.processedUrl && img.status === 'processing' && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80">
+                          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        </div>
+                      )}
+                      {!img.processedUrl && img.status === 'completed' && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80">
+                          <span className="text-gray-400 text-xs">Failed</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="text-xs text-center">
                   {img.status === 'uploading' && (
-                    <span className="text-blue-600">Uploading...</span>
+                    <span className="text-blue-600">Uploading original...</span>
+                  )}
+                  {img.status === 'processing' && (
+                    <span className="text-blue-600">Removing background...</span>
                   )}
                   {img.status === 'completed' && (
                     <span className="text-green-600">✓ Complete</span>
