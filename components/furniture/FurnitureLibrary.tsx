@@ -331,7 +331,7 @@ interface ItemInstanceProps {
  * with item model/dimension data from the library
  */
 function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
-  const { scene } = useGLTF(item.modelPath)
+  const { scene } = useGLTF(item.modelPath!)
   const clonedScene = scene.clone()
   const groupRef = useRef<THREE.Group>(null)
   const { hoveredFurnitureId, setHoveredFurnitureId } = useFurnitureHover()

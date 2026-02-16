@@ -36,7 +36,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               sizeStyles[inputSize],
               errorStyles,
               fullWidth && 'w-full',
-              icon && 'pl-9',
+              icon ? 'pl-9' : undefined,
               className
             )}
             {...props}

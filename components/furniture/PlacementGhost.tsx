@@ -315,7 +315,7 @@ function GhostModelWithAsset({
   handleClick: (e: ThreeEvent<MouseEvent>) => void
   groupRef: React.RefObject<THREE.Group | null>
 }) {
-  const { scene } = useGLTF(item.modelPath)
+  const { scene } = useGLTF(item.modelPath!)
   const clonedScene = useMemo(() => scene.clone(), [scene])
 
   // Calculate bounding box and auto-scale
@@ -343,7 +343,7 @@ function GhostModelWithAsset({
     const box = new THREE.Box3().setFromObject(clonedScene)
     clonedScene.position.y = -box.min.y
 
-    clonedScene.traverse((child) => {
+    clonedScene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.material = new THREE.MeshStandardMaterial({
           color: 0x4ade80, // Green tint

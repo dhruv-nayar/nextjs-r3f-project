@@ -219,7 +219,8 @@ export async function createReferenceImage(
  */
 export function setupZoomPan(canvas: Canvas) {
   // Mouse wheel zoom
-  canvas.on('mouse:wheel', (opt: TEvent<WheelEvent>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  canvas.on('mouse:wheel', (opt: any) => {
     const delta = opt.e.deltaY
     let zoom = canvas.getZoom()
     zoom *= 0.999 ** delta
@@ -229,7 +230,8 @@ export function setupZoomPan(canvas: Canvas) {
     if (zoom < 0.1) zoom = 0.1
 
     // Zoom to pointer position
-    canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY } as any, zoom)
 
     opt.e.preventDefault()
     opt.e.stopPropagation()
@@ -240,7 +242,8 @@ export function setupZoomPan(canvas: Canvas) {
   let lastPosX = 0
   let lastPosY = 0
 
-  canvas.on('mouse:down', (opt: TEvent<MouseEvent>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  canvas.on('mouse:down', (opt: any) => {
     const evt = opt.e
     // Middle mouse button or Alt+drag
     if (evt.button === 1 || (evt.altKey && evt.button === 0)) {
@@ -251,7 +254,8 @@ export function setupZoomPan(canvas: Canvas) {
     }
   })
 
-  canvas.on('mouse:move', (opt: TEvent<MouseEvent>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  canvas.on('mouse:move', (opt: any) => {
     if (isPanning) {
       const evt = opt.e
       const vpt = canvas.viewportTransform!

@@ -429,7 +429,8 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
     const canvas = fabricCanvasRef.current
     if (!canvas) return
 
-    const handleSelection = (e: TEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleSelection = (e: any) => {
       const obj = e.selected?.[0]
       if (!obj) return
 
@@ -467,7 +468,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
     const canvas = fabricCanvasRef.current
     if (!canvas || !floorplanData) return
 
-    const handleObjectMoving = (e: TEvent) => {
+    const handleObjectMoving = (e: any) => {
       isModifyingRef.current = true
 
       const obj = e.target
@@ -582,7 +583,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
       canvas.requestRenderAll()
     }
 
-    const handleObjectScaling = (e: TEvent) => {
+    const handleObjectScaling = (e: any) => {
       isModifyingRef.current = true
 
       const obj = e.target
@@ -746,7 +747,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
       canvas.requestRenderAll()
     }
 
-    const handleObjectModified = (e: TEvent) => {
+    const handleObjectModified = (e: any) => {
       // Clear snap guide lines when done dragging
       snapGuideLinesRef.current.forEach(line => canvas.remove(line))
       snapGuideLinesRef.current = []
@@ -771,7 +772,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
       }, 50)
     }
 
-    const handleReferenceImageModified = (e: TEvent) => {
+    const handleReferenceImageModified = (e: any) => {
       const obj = e.target
       if (!obj || obj.get('objectType') !== 'referenceImage') return
 
@@ -820,16 +821,17 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
     if (!canvas || !floorplanData) return
 
     // Helper to get pointer position in canvas coordinates
-    const getPointer = (e: TEvent): { x: number, y: number } => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getPointer = (e: any): { x: number, y: number } => {
       // In Fabric v6, e.pointer already accounts for viewport transform
       if (e.pointer) {
         return { x: e.pointer.x, y: e.pointer.y }
       }
       // Fallback to screen coordinates
-      return { x: e.e.offsetX, y: e.e.offsetY }
+      return { x: e.e?.offsetX || 0, y: e.e?.offsetY || 0 }
     }
 
-    const handleMouseDown = (e: TEvent) => {
+    const handleMouseDown = (e: any) => {
       const pointer = getPointer(e)
 
       if (activeTool === 'drawRoom') {
@@ -934,7 +936,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
       }
     }
 
-    const handleMouseMove = (e: TEvent) => {
+    const handleMouseMove = (e: any) => {
       const pointer = getPointer(e)
 
       if (activeTool === 'drawRoom') {
@@ -1028,7 +1030,7 @@ export function FloorplanCanvas({ width = 1200, height = 900 }: FloorplanCanvasP
       }
     }
 
-    const handleMouseUp = (e: TEvent) => {
+    const handleMouseUp = (e: any) => {
       if (!isDrawing || !tempRect || !drawStartPoint) return
 
       const pointer = getPointer(e)
