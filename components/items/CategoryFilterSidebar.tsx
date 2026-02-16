@@ -2,6 +2,7 @@ import { cn } from '@/lib/design-system'
 import { Panel } from '@/components/ui/Panel'
 import { SectionHeader } from '@/components/ui/Typography'
 import Button from '@/components/ui/Button'
+import { ItemCategory } from '@/types/room'
 
 /**
  * CategoryFilterSidebar Component
@@ -13,8 +14,10 @@ import Button from '@/components/ui/Button'
  * - Add New Item button
  */
 
+type CategoryValue = ItemCategory | 'all'
+
 interface Category {
-  value: string
+  value: CategoryValue
   label: string
 }
 
@@ -22,9 +25,9 @@ interface CategoryFilterSidebarProps {
   /** List of available categories */
   categories: Category[]
   /** Currently selected category */
-  selectedCategory: string
+  selectedCategory: CategoryValue
   /** Callback when category selection changes */
-  onCategoryChange: (category: string) => void
+  onCategoryChange: (category: CategoryValue) => void
   /** Item count per category */
   itemCounts: Record<string, number>
   /** Optional callback for Add New Item button */
