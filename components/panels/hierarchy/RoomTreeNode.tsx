@@ -14,6 +14,11 @@ interface RoomTreeNodeProps {
 
 const WALL_SIDES: WallSide[] = ['north', 'south', 'east', 'west']
 
+// Check if room is a polygon room (V2 wall-first floorplan)
+function isPolygonRoom(room: Room): boolean {
+  return Boolean(room.polygon && room.polygon.length >= 3)
+}
+
 export function RoomTreeNode({ room, isCurrentRoom = false }: RoomTreeNodeProps) {
   const {
     selection,
@@ -78,44 +83,79 @@ export function RoomTreeNode({ room, isCurrentRoom = false }: RoomTreeNodeProps)
       {isRoomExpanded && (
         <div className="mt-0.5">
           {/* Walls Group */}
-          <HierarchyItem
-            label="Walls"
-            icon={Icons.group}
-            indent={1}
-            isExpanded={isWallsExpanded}
-            hasChildren={true}
-            onToggle={() => setIsWallsExpanded(!isWallsExpanded)}
-            secondaryLabel="4"
-          />
+          {isPolygonRoom(room) ? (
+            // Polygon room - show wall count based on polygon edges
+            <>
+              <HierarchyItem
+                label="Walls"
+                icon={Icons.group}
+                indent={1}
+                isExpanded={isWallsExpanded}
+                hasChildren={true}
+                onToggle={() => setIsWallsExpanded(!isWallsExpanded)}
+                secondaryLabel={`${room.polygon?.length || 0}`}
+              />
 
-          {isWallsExpanded && (
-            <div>
-              {WALL_SIDES.map((side) => {
-                const isSelected = isWallSelected(room.id, side)
-                const isHovered =
-                  hoveredItem?.type === 'wall' &&
-                  hoveredItem.roomId === room.id &&
-                  hoveredItem.side === side
+              {isWallsExpanded && room.polygon && (
+                <div>
+                  {room.polygon.map((_, index) => {
+                    const wallLabel = `Wall ${index + 1}`
+                    return (
+                      <HierarchyItem
+                        key={`wall-${index}`}
+                        label={wallLabel}
+                        icon={Icons.wall}
+                        indent={2}
+                        secondaryLabel={room.dimensions ? `${room.dimensions.height}'` : undefined}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            // Rectangular room - show cardinal direction walls
+            <>
+              <HierarchyItem
+                label="Walls"
+                icon={Icons.group}
+                indent={1}
+                isExpanded={isWallsExpanded}
+                hasChildren={true}
+                onToggle={() => setIsWallsExpanded(!isWallsExpanded)}
+                secondaryLabel="4"
+              />
 
-                return (
-                  <HierarchyItem
-                    key={side}
-                    label={WALL_DISPLAY_NAMES[side]}
-                    icon={Icons.wall}
-                    indent={2}
-                    isSelected={isSelected}
-                    isHovered={isHovered}
-                    onClick={() => selectWall(room.id, side)}
-                    onHover={(hovered) =>
-                      setHoveredItem(
-                        hovered ? { type: 'wall', roomId: room.id, side } : null
-                      )
-                    }
-                    secondaryLabel={room.dimensions ? `${room.dimensions.height}'` : undefined}
-                  />
-                )
-              })}
-            </div>
+              {isWallsExpanded && (
+                <div>
+                  {WALL_SIDES.map((side) => {
+                    const isSelected = isWallSelected(room.id, side)
+                    const isHovered =
+                      hoveredItem?.type === 'wall' &&
+                      hoveredItem.roomId === room.id &&
+                      hoveredItem.side === side
+
+                    return (
+                      <HierarchyItem
+                        key={side}
+                        label={WALL_DISPLAY_NAMES[side]}
+                        icon={Icons.wall}
+                        indent={2}
+                        isSelected={isSelected}
+                        isHovered={isHovered}
+                        onClick={() => selectWall(room.id, side)}
+                        onHover={(hovered) =>
+                          setHoveredItem(
+                            hovered ? { type: 'wall', roomId: room.id, side } : null
+                          )
+                        }
+                        secondaryLabel={room.dimensions ? `${room.dimensions.height}'` : undefined}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {/* Floor */}

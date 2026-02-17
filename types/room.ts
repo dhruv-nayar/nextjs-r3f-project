@@ -292,6 +292,9 @@ export interface Room {
   // NEW: Grid settings for measurement overlay on surfaces
   gridSettings?: import('./selection').RoomGridState
 
+  // V2: Polygon vertices for arbitrary room shapes (wall-first floorplan)
+  polygon?: Array<{ x: number; z: number }>
+
   cameraPosition: Vector3
   cameraTarget: Vector3
   lighting?: LightingConfig
@@ -308,8 +311,9 @@ export interface Home {
   description?: string          // NEW: optional description
   rooms: Room[]
   thumbnailPath?: string        // NEW: auto-generated or manual
-  floorplanData?: import('./floorplan').FloorplanData  // NEW: 2D floorplan source
-  sharedWalls?: SharedWall[]    // NEW: Shared walls between adjacent rooms
+  floorplanData?: import('./floorplan').FloorplanData  // V1: Rectangle-based floorplan
+  floorplanDataV2?: import('./floorplan-v2').FloorplanDataV2  // V2: Wall-first polygon floorplan
+  sharedWalls?: SharedWall[]    // Shared walls between adjacent rooms
   createdAt: string
   updatedAt: string
 }

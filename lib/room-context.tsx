@@ -162,6 +162,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       recordHistory(newState)
       return newState
     })
+
+    // Two-way sync: Update V2 floorplan data when room properties change
+    if (homeContext.currentHomeId) {
+      homeContext.syncRoomChangesToFloorplanV2(homeContext.currentHomeId, roomId, updates)
+    }
   }
 
   const updateFurniture = (furnitureId: string, updates: any) => {

@@ -10,10 +10,10 @@ import { useSelection } from '@/lib/selection-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useInteractionMode } from '@/lib/interaction-mode-context'
 import type CameraControlsImpl from 'camera-controls'
-import { Floorplan } from '../floorplan/Floorplan'
 import { Furniture, ItemInstanceRenderer } from '../furniture/FurnitureLibrary'
 import { PlacementGhost } from '../furniture/PlacementGhost'
 import { Room } from './Room'
+import { PolygonRoom } from './PolygonRoom'
 import { SharedWall } from './SharedWall'
 import { SCALE } from '@/lib/constants'
 import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
@@ -288,9 +288,14 @@ export function RoomScene() {
 
         return (
           <group key={room.id}>
-            {/* Room */}
-            {room.floorplan ? (
-              <Floorplan config={room.floorplan} />
+            {/* Room - use PolygonRoom for arbitrary polygon shapes, Room for rectangles */}
+            {room.polygon && room.polygon.length >= 3 ? (
+              <PolygonRoom
+                polygon={room.polygon}
+                height={roomHeight}
+                position={roomPosition}
+                roomId={room.id}
+              />
             ) : (
               <Room
                 width={roomWidth}

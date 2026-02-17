@@ -3,8 +3,10 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
 import { Home, Room, ItemInstance, Vector3 } from '@/types/room'
 import { FloorplanData } from '@/types/floorplan'
+import { FloorplanDataV2 } from '@/types/floorplan-v2'
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from './storage'
 import { convertFloorplanTo3D } from './floorplan/floorplan-converter'
+import { convertV2To3D } from './utils/floorplan-geometry'
 
 interface HomeContextType {
   homes: Home[]
@@ -28,10 +30,18 @@ interface HomeContextType {
     home: Home
   }>
 
-  // NEW: Floorplan integration
+  // Floorplan V1 integration
   setFloorplanData: (homeId: string, floorplan: FloorplanData) => void
   getFloorplanData: (homeId: string) => FloorplanData | undefined
   buildRoomsFromFloorplan: (homeId: string, floorplan: FloorplanData) => void
+
+  // Floorplan V2 (wall-first) integration
+  setFloorplanDataV2: (homeId: string, data: FloorplanDataV2) => void
+  getFloorplanDataV2: (homeId: string) => FloorplanDataV2 | undefined
+  buildRoomsFromFloorplanV2: (homeId: string, data: FloorplanDataV2) => void
+
+  // Two-way sync: 3D → V2
+  syncRoomChangesToFloorplanV2: (homeId: string, roomId: string, updates: Partial<Room>) => void
 }
 
 const HomeContext = createContext<HomeContextType | undefined>(undefined)
@@ -338,6 +348,147 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     console.log('[buildRoomsFromFloorplan] Homes updated successfully')
   }
 
+  // V2 Floorplan methods (wall-first architecture)
+  const setFloorplanDataV2 = (homeId: string, data: FloorplanDataV2) => {
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? {
+              ...home,
+              floorplanDataV2: data,
+              updatedAt: new Date().toISOString()
+            }
+          : home
+      )
+    )
+  }
+
+  const getFloorplanDataV2 = (homeId: string): FloorplanDataV2 | undefined => {
+    const home = homes.find(h => h.id === homeId)
+    return home?.floorplanDataV2
+  }
+
+  const buildRoomsFromFloorplanV2 = (homeId: string, data: FloorplanDataV2) => {
+    console.log('[buildRoomsFromFloorplanV2] Starting conversion for home:', homeId)
+    console.log('[buildRoomsFromFloorplanV2] V2 data:', data)
+
+    // Convert V2 floorplan to 3D rooms
+    const { rooms: rooms3D, sharedWalls } = convertV2To3D(
+      data.vertices,
+      data.walls,
+      data.rooms,
+      homeId
+    )
+
+    console.log('[buildRoomsFromFloorplanV2] Converted rooms:', rooms3D.length)
+    console.log('[buildRoomsFromFloorplanV2] Shared walls:', sharedWalls.length)
+
+    // Update rooms with the correct homeId
+    const roomsWithHomeId = rooms3D.map(room => ({
+      ...room,
+      homeId
+    }))
+
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? {
+              ...home,
+              rooms: roomsWithHomeId,
+              sharedWalls,
+              floorplanDataV2: data,
+              updatedAt: new Date().toISOString()
+            }
+          : home
+      )
+    )
+
+    console.log('[buildRoomsFromFloorplanV2] Homes updated successfully')
+  }
+
+  // Two-way sync: Sync room changes from 3D back to V2 floorplan data
+  const syncRoomChangesToFloorplanV2 = (homeId: string, roomId: string, updates: Partial<Room>) => {
+    const home = homes.find(h => h.id === homeId)
+    if (!home || !home.floorplanDataV2) {
+      // No V2 data to sync to
+      return
+    }
+
+    const v2Data = home.floorplanDataV2
+    let hasChanges = false
+
+    // Find the room in V2 data
+    const v2RoomIndex = v2Data.rooms.findIndex(r => r.id === roomId)
+    if (v2RoomIndex === -1) {
+      console.log('[syncRoomChangesToFloorplanV2] Room not found in V2 data:', roomId)
+      return
+    }
+
+    const updatedRooms = [...v2Data.rooms]
+    const v2Room = { ...updatedRooms[v2RoomIndex] }
+
+    // Sync room name
+    if (updates.name && updates.name !== v2Room.name) {
+      console.log('[syncRoomChangesToFloorplanV2] Syncing room name:', updates.name)
+      v2Room.name = updates.name
+      hasChanges = true
+    }
+
+    // Sync wall height (applies to all walls of the room)
+    if (updates.dimensions?.height) {
+      const newHeight = updates.dimensions.height
+      const updatedWalls = v2Data.walls.map(wall => {
+        // Check if this wall belongs to the room
+        if (v2Room.wallIds.includes(wall.id)) {
+          if (wall.height !== newHeight) {
+            hasChanges = true
+            return { ...wall, height: newHeight }
+          }
+        }
+        return wall
+      })
+
+      if (hasChanges) {
+        console.log('[syncRoomChangesToFloorplanV2] Syncing wall heights:', newHeight)
+        setHomes(prev =>
+          prev.map(h =>
+            h.id === homeId
+              ? {
+                  ...h,
+                  floorplanDataV2: {
+                    ...v2Data,
+                    rooms: updatedRooms.map((r, i) => (i === v2RoomIndex ? v2Room : r)),
+                    walls: updatedWalls,
+                    updatedAt: new Date().toISOString(),
+                  },
+                }
+              : h
+          )
+        )
+        return
+      }
+    }
+
+    // If only room properties changed (not walls)
+    if (hasChanges) {
+      updatedRooms[v2RoomIndex] = v2Room
+      setHomes(prev =>
+        prev.map(h =>
+          h.id === homeId
+            ? {
+                ...h,
+                floorplanDataV2: {
+                  ...v2Data,
+                  rooms: updatedRooms,
+                  updatedAt: new Date().toISOString(),
+                },
+              }
+            : h
+        )
+      )
+    }
+  }
+
   return (
     <HomeContext.Provider
       value={{
@@ -357,7 +508,11 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         getInstancesForItem,
         setFloorplanData,
         getFloorplanData,
-        buildRoomsFromFloorplan
+        buildRoomsFromFloorplan,
+        setFloorplanDataV2,
+        getFloorplanDataV2,
+        buildRoomsFromFloorplanV2,
+        syncRoomChangesToFloorplanV2
       }}
     >
       {children}
