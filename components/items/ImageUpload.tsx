@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ImageUploadResult, ImagePair } from '@/types/room'
 import Image from 'next/image'
+import { useCreateBackgroundJob, useItemJobs } from '@/lib/use-background-jobs'
 
 interface ImageUploadProps {
+  itemId: string // The item ID to associate uploads with
   onUploadComplete: (result: ImageUploadResult) => void
   onError: (error: string) => void
 }
@@ -13,15 +15,61 @@ interface ProcessedImage {
   localPreview: string // Local preview URL (immediate)
   originalUrl: string // Blob storage URL (after upload)
   processedUrl: string | null
-  status: 'processing' | 'completed' | 'error'
+  status: 'uploading' | 'processing' | 'completed' | 'error'
   error?: string
+  jobId?: string // Background job ID for tracking
 }
 
-export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
+export function ImageUpload({ itemId, onUploadComplete, onError }: ImageUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [images, setImages] = useState<ProcessedImage[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const createJob = useCreateBackgroundJob()
+
+  // Watch for job updates and update image status
+  const { jobs } = useItemJobs(itemId, 1000)
+
+  // Update image statuses based on background jobs
+  useEffect(() => {
+    if (jobs.length === 0) return
+
+    setImages(prev => {
+      const newImages = [...prev]
+      let updated = false
+
+      for (let i = 0; i < newImages.length; i++) {
+        const img = newImages[i]
+        if (!img.jobId) continue
+
+        const job = jobs.find(j => j.id === img.jobId)
+        if (!job) continue
+
+        // Update based on job status
+        if (job.status === 'completed' && job.output?.processedImageUrl) {
+          if (img.processedUrl !== job.output.processedImageUrl) {
+            newImages[i] = {
+              ...img,
+              processedUrl: job.output.processedImageUrl,
+              status: 'completed'
+            }
+            updated = true
+          }
+        } else if (job.status === 'failed') {
+          if (img.status !== 'error') {
+            newImages[i] = {
+              ...img,
+              status: 'error',
+              error: job.output?.error || 'Processing failed'
+            }
+            updated = true
+          }
+        }
+      }
+
+      return updated ? newImages : prev
+    })
+  }, [jobs])
 
   const handleFileSelect = async (files: FileList) => {
     const fileArray = Array.from(files)
@@ -51,14 +99,10 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
       localPreview: URL.createObjectURL(file),
       originalUrl: '',
       processedUrl: null,
-      status: 'processing' as const
+      status: 'uploading' as const
     }))
     setImages(initialImages)
 
-    // Force React to render before starting heavy async work
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    const allImagePaths: string[] = []
     const imagePairs: ImagePair[] = []
 
     try {
@@ -67,121 +111,88 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
         const file = fileArray[i]
         const currentIndex = i
 
-        // Step 2: Convert image to base64
-        const base64Image = await fileToBase64(file)
+        // Step 2: Upload original image to blob storage IMMEDIATELY
+        const formData = new FormData()
+        formData.append('files', file)
+        formData.append('itemId', itemId)
 
-        // Step 3: Start background removal AND original upload in parallel
-        const [bgRemovalResult, originalUploadResult] = await Promise.all([
-          // Background removal
-          fetch('/api/remove_bg', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageData: base64Image })
-          }).then(res => res.json()).catch(err => ({ success: false, error: err.message })),
+        const uploadResponse = await fetch('/api/items/upload-images', {
+          method: 'POST',
+          body: formData
+        })
 
-          // Original image upload
-          (async () => {
-            const originalBlob = await base64ToBlob(base64Image)
-            const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
-
-            const originalFormData = new FormData()
-            originalFormData.append('files', originalFile)
-            originalFormData.append('itemId', `temp-${Date.now()}-original`)
-
-            const res = await fetch('/api/items/upload-images', {
-              method: 'POST',
-              body: originalFormData
-            })
-            return res.json()
-          })()
-        ])
-
-        // Handle original upload result
-        if (!originalUploadResult.success) {
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json()
           setImages(prev => {
             const newImages = [...prev]
             newImages[currentIndex].status = 'error'
-            newImages[currentIndex].error = originalUploadResult.error
+            newImages[currentIndex].error = errorData.error || 'Upload failed'
             return newImages
           })
           continue
         }
 
-        const originalUrl = originalUploadResult.imagePaths[0]
+        const uploadResult = await uploadResponse.json()
 
-        // Handle background removal result
-        let processedUrl: string | null = null
-
-        if (bgRemovalResult.success) {
-          // Upload processed image
-          try {
-            const processedBase64 = bgRemovalResult.processedImageData
-            const processedBlob = await base64ToBlob(processedBase64)
-            const processedFile = new File([processedBlob], `processed_${file.name.replace(/\.[^/.]+$/, '')}.png`, { type: 'image/png' })
-
-            const processedFormData = new FormData()
-            processedFormData.append('files', processedFile)
-            processedFormData.append('itemId', `temp-${Date.now()}-processed`)
-
-            const processedUploadRes = await fetch('/api/items/upload-images', {
-              method: 'POST',
-              body: processedFormData
-            })
-
-            const processedUploadResult = await processedUploadRes.json()
-
-            if (processedUploadResult.success) {
-              processedUrl = processedUploadResult.imagePaths[0]
-            }
-          } catch (uploadErr) {
-            console.warn('Processed image upload error:', uploadErr)
-          }
-        } else {
-          console.warn('Background removal failed:', bgRemovalResult.error)
+        if (!uploadResult.success) {
+          setImages(prev => {
+            const newImages = [...prev]
+            newImages[currentIndex].status = 'error'
+            newImages[currentIndex].error = uploadResult.error || 'Upload failed'
+            return newImages
+          })
+          continue
         }
 
-        // Update with both URLs and mark as completed
+        const originalUrl = uploadResult.imagePaths[0]
+
+        // Step 3: Update UI with uploaded URL
         setImages(prev => {
           const newImages = [...prev]
           newImages[currentIndex].originalUrl = originalUrl
-          newImages[currentIndex].processedUrl = processedUrl
-          newImages[currentIndex].status = 'completed'
+          newImages[currentIndex].status = 'processing'
           return newImages
         })
 
-        // Add to results
-        allImagePaths.push(originalUrl)
-        if (processedUrl) {
-          allImagePaths.push(processedUrl)
-        }
+        // Step 4: Create background job for rembg processing
+        // Convert image to base64 for background processing
+        const base64Image = await fileToBase64(file)
 
+        const job = createJob('rembg', itemId, {
+          originalImageUrl: originalUrl,
+          originalImageBase64: base64Image
+        })
+
+        // Track job ID
+        setImages(prev => {
+          const newImages = [...prev]
+          newImages[currentIndex].jobId = job.id
+          return newImages
+        })
+
+        // Add to results with original URL (processed will be added by background job)
         imagePairs.push({
           original: originalUrl,
-          processed: processedUrl
+          processed: null // Will be updated by background job
         })
       }
 
-      // All images processed, call completion callback
+      // Step 5: Call completion callback with original images immediately
+      // Background processing will update the item later
       if (imagePairs.length > 0) {
         onUploadComplete({
-          imagePaths: allImagePaths,
+          imagePaths: imagePairs.map(p => p.original),
           imagePairs,
-          selectedThumbnailIndex: 0 // Default to first image (processed if available, else original)
+          selectedThumbnailIndex: 0
         })
       } else {
-        onError('No images were successfully processed')
+        onError('No images were successfully uploaded')
       }
 
     } catch (error) {
       onError(`Upload failed: ${error}`)
     } finally {
       setIsProcessing(false)
-      // Clean up object URLs
-      initialImages.forEach(img => {
-        if (img.localPreview.startsWith('blob:')) {
-          URL.revokeObjectURL(img.localPreview)
-        }
-      })
     }
   }
 

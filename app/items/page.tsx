@@ -34,6 +34,7 @@ export default function ItemsPage() {
   const [uploadedImagePairs, setUploadedImagePairs] = useState<ImagePair[]>([])
   const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState(0)
   const [uploadError, setUploadError] = useState('')
+  const [tempItemId, setTempItemId] = useState('')
 
   // Create item form state
   const [newItemName, setNewItemName] = useState('')
@@ -99,6 +100,9 @@ export default function ItemsPage() {
   }
 
   const handleUploadMethodSelect = (method: 'glb' | 'images') => {
+    // Generate a temporary item ID for image uploads
+    const newTempId = `temp-item-${Date.now()}`
+    setTempItemId(newTempId)
     setUploadMethod(method)
     setUploadStep('upload')
   }
@@ -165,6 +169,7 @@ export default function ItemsPage() {
     setUploadMethod(null)
     setUploadStep('choose')
     setUploadError('')
+    setTempItemId('')
     setShowCreateModal(false)
   }
 
@@ -183,6 +188,7 @@ export default function ItemsPage() {
     setUploadMethod(null)
     setUploadStep('choose')
     setUploadError('')
+    setTempItemId('')
     setShowCreateModal(false)
   }
 
@@ -396,6 +402,7 @@ export default function ItemsPage() {
 
                 {uploadMethod === 'images' && (
                   <ImageUpload
+                    itemId={tempItemId}
                     onUploadComplete={handleImageUploadComplete}
                     onError={handleUploadError}
                   />

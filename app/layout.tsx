@@ -13,6 +13,7 @@ import { SelectionProvider } from "@/lib/selection-context";
 import { ResizeModeProvider } from "@/lib/resize-mode-context";
 import { InteractionModeProvider } from "@/lib/interaction-mode-context";
 import { ControlsProvider } from "@/lib/controls-context";
+import { GlobalBackgroundJobManager } from "@/components/GlobalBackgroundJobManager";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -64,6 +65,7 @@ export default function RootLayout({
                       <ResizeModeProvider>
                         <InteractionModeProvider>
                           <ControlsProvider>
+                            <GlobalBackgroundJobManager />
                             <TrellisJobWrapper>
                               {children}
                             </TrellisJobWrapper>
