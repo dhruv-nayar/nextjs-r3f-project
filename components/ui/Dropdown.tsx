@@ -17,6 +17,8 @@ interface DropdownProps {
   className?: string
   buttonClassName?: string
   header?: string
+  /** Option to show at top before the main options list */
+  headerOption?: DropdownOption
   showSeparator?: boolean
   footerOption?: DropdownOption
   /** Always show the label prop instead of the selected option's label */
@@ -31,6 +33,7 @@ export function Dropdown({
   className = '',
   buttonClassName,
   header,
+  headerOption,
   showSeparator = false,
   footerOption,
   alwaysShowLabel = false
@@ -84,6 +87,23 @@ export function Dropdown({
               {header}
             </div>
           )}
+          {/* Header option (e.g., "All Projects") */}
+          {headerOption && (
+            <>
+              <button
+                onClick={() => handleOptionClick(headerOption)}
+                className={`block w-full text-left px-3 py-2 text-sm font-body transition-colors ${
+                  value === headerOption.value
+                    ? 'text-graphite bg-taupe/5'
+                    : 'text-graphite hover:bg-taupe/5'
+                }`}
+              >
+                {headerOption.label}
+              </button>
+              {options.length > 0 && <div className="h-px bg-taupe/10 my-2" />}
+            </>
+          )}
+          {/* Main options list */}
           {options.map((option, i) => (
             <button
               key={i}
@@ -97,6 +117,7 @@ export function Dropdown({
               {option.label}
             </button>
           ))}
+          {/* Footer option (e.g., "Create Project") */}
           {showSeparator && footerOption && (
             <>
               <div className="h-px bg-taupe/10 my-2" />

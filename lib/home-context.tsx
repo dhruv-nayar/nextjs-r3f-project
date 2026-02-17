@@ -46,69 +46,6 @@ interface HomeContextType {
 
 const HomeContext = createContext<HomeContextType | undefined>(undefined)
 
-// Example home based on parsed floorplan (Unit 4A)
-// NEW: Using instances instead of furniture
-const EXAMPLE_HOME: Home = {
-  id: 'example-home',
-  name: 'Example Apartment - Unit 4A',
-  rooms: [
-    {
-      id: 'terrace',
-      name: 'Terrace',
-      homeId: 'example-home',
-      instances: [],
-      cameraPosition: { x: 20, y: 18, z: 35 },
-      cameraTarget: { x: 0, y: 2, z: 17 },
-      lighting: {
-        ambient: { intensity: Math.PI / 2 }
-      }
-    },
-    {
-      id: 'living-dining',
-      name: 'Living/Dining Area',
-      homeId: 'example-home',
-      instances: [
-        {
-          id: 'instance-sofa-1',
-          itemId: 'item-omhu-sofa',  // References item in library
-          roomId: 'living-dining',
-          position: { x: -5, y: 0, z: 0 },
-          rotation: { x: 0, y: 0, z: 0 },
-          scaleMultiplier: { x: 1, y: 1, z: 1 },
-          placedAt: new Date().toISOString()
-        },
-        {
-          id: 'instance-chair-1',
-          itemId: 'item-whiteback-chair',  // References item in library
-          roomId: 'living-dining',
-          position: { x: 5, y: 0, z: 3 },
-          rotation: { x: 0, y: -Math.PI / 2, z: 0 },
-          scaleMultiplier: { x: 1, y: 1, z: 1 },
-          placedAt: new Date().toISOString()
-        }
-      ],
-      cameraPosition: { x: 25, y: 18, z: 20 },
-      cameraTarget: { x: 0, y: 2, z: 5 },
-      lighting: {
-        ambient: { intensity: Math.PI / 2 }
-      }
-    },
-    {
-      id: 'bedroom',
-      name: 'Bedroom',
-      homeId: 'example-home',
-      instances: [],
-      cameraPosition: { x: 18, y: 15, z: 5 },
-      cameraTarget: { x: 0, y: 2, z: -10 },
-      lighting: {
-        ambient: { intensity: Math.PI / 2 }
-      }
-    }
-  ],
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
-}
-
 export function HomeProvider({ children }: { children: ReactNode }) {
   const [homes, setHomes] = useState<Home[]>([])
   const [currentHomeId, setCurrentHomeId] = useState<string>('')
@@ -116,8 +53,8 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 
   // Load homes from localStorage on mount
   useEffect(() => {
-    const loadedHomes = loadFromStorage<Home[]>(STORAGE_KEYS.HOMES, [EXAMPLE_HOME])
-    const loadedCurrentHomeId = loadFromStorage<string>(STORAGE_KEYS.CURRENT_HOME_ID, EXAMPLE_HOME.id)
+    const loadedHomes = loadFromStorage<Home[]>(STORAGE_KEYS.HOMES, [])
+    const loadedCurrentHomeId = loadFromStorage<string>(STORAGE_KEYS.CURRENT_HOME_ID, '')
 
     setHomes(loadedHomes)
     setCurrentHomeId(loadedCurrentHomeId)

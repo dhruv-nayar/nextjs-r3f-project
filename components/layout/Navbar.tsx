@@ -162,21 +162,19 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                   header="Recent Projects"
                   value={undefined}
                   buttonClassName="font-body text-sm text-taupe/70 font-light hover:text-graphite transition-colors flex items-center gap-1"
-                  options={[
-                    {
-                      label: 'All Projects',
-                      value: 'all-projects',
-                      onClick: () => router.push('/homes')
-                    },
-                    ...homes.map(home => ({
-                      label: home.name,
-                      value: home.id,
-                      onClick: () => {
-                        switchHome(home.id)
-                        router.push('/')
-                      }
-                    }))
-                  ]}
+                  headerOption={{
+                    label: 'All Projects',
+                    value: 'all-projects',
+                    onClick: () => router.push('/homes')
+                  }}
+                  options={homes.map(home => ({
+                    label: home.name,
+                    value: home.id,
+                    onClick: () => {
+                      switchHome(home.id)
+                      router.push('/')
+                    }
+                  }))}
                   showSeparator
                   footerOption={{
                     label: '+ Create Project',
@@ -192,21 +190,19 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                     value={currentHomeId || undefined}
                     alwaysShowLabel
                     buttonClassName="font-body text-sm text-graphite font-medium transition-colors flex items-center gap-1"
-                    options={[
-                      {
-                        label: 'All Projects',
-                        value: 'all-projects',
-                        onClick: () => router.push('/homes')
-                      },
-                      ...homes.map(home => ({
-                        label: home.name,
-                        value: home.id,
-                        onClick: () => {
-                          switchHome(home.id)
-                          router.push('/')
-                        }
-                      }))
-                    ]}
+                    headerOption={{
+                      label: 'All Projects',
+                      value: 'all-projects',
+                      onClick: () => router.push('/homes')
+                    }}
+                    options={homes.map(home => ({
+                      label: home.name,
+                      value: home.id,
+                      onClick: () => {
+                        switchHome(home.id)
+                        router.push('/')
+                      }
+                    }))}
                     showSeparator
                     footerOption={{
                       label: '+ Create Project',
