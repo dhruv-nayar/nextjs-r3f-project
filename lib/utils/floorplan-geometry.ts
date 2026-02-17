@@ -12,7 +12,7 @@ import {
   generateId,
   snapToGrid,
 } from '@/types/floorplan-v2'
-import { Room, SharedWall, Vector3 } from '@/types/room'
+import { Room, SharedWall, SharedWallDoor, Vector3 } from '@/types/room'
 
 /**
  * Calculate distance between two points
@@ -903,26 +903,28 @@ function detectSharedWallsV2(
           const wallWidth = overlapMax - overlapMin
 
           // Collect doors from both rooms on the shared wall sides
-          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+          const sharedDoors: SharedWallDoor[] = []
 
           // Room1's north wall doors
           const room1NorthDoors = (room1.doors || []).filter(d => d.wall === 'north')
-          for (const door of room1NorthDoors) {
+          for (let doorIdx = 0; doorIdx < room1NorthDoors.length; doorIdx++) {
+            const door = room1NorthDoors[doorIdx]
             // Convert from room-relative to shared-wall-relative position
             // door.position is -0.5 to 0.5 relative to room width
             const doorWorldX = pos1[0] + door.position * dim1.width
             const doorRelativeX = (doorWorldX - wallCenter) / wallWidth  // -0.5 to 0.5 relative to shared wall
-            sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+            sharedDoors.push({ id: `${room1.id}-north-${doorIdx}`, fromRoomId: room1.id, position: doorRelativeX, width: door.width, height: door.height })
           }
 
           // Room2's south wall doors
           const room2SouthDoors = (room2.doors || []).filter(d => d.wall === 'south')
-          for (const door of room2SouthDoors) {
+          for (let doorIdx = 0; doorIdx < room2SouthDoors.length; doorIdx++) {
+            const door = room2SouthDoors[doorIdx]
             const doorWorldX = pos2[0] + door.position * dim2.width
             const doorRelativeX = (doorWorldX - wallCenter) / wallWidth
             // Only add if not already present (rooms may have same door)
             if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeX) < 0.01)) {
-              sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+              sharedDoors.push({ id: `${room2.id}-south-${doorIdx}`, fromRoomId: room2.id, position: doorRelativeX, width: door.width, height: door.height })
             }
           }
 
@@ -946,23 +948,25 @@ function detectSharedWallsV2(
           const wallCenter = (overlapMin + overlapMax) / 2
           const wallWidth = overlapMax - overlapMin
 
-          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+          const sharedDoors: SharedWallDoor[] = []
 
           // Room1's south wall doors
           const room1SouthDoors = (room1.doors || []).filter(d => d.wall === 'south')
-          for (const door of room1SouthDoors) {
+          for (let doorIdx = 0; doorIdx < room1SouthDoors.length; doorIdx++) {
+            const door = room1SouthDoors[doorIdx]
             const doorWorldX = pos1[0] + door.position * dim1.width
             const doorRelativeX = (doorWorldX - wallCenter) / wallWidth
-            sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+            sharedDoors.push({ id: `${room1.id}-south-${doorIdx}`, fromRoomId: room1.id, position: doorRelativeX, width: door.width, height: door.height })
           }
 
           // Room2's north wall doors
           const room2NorthDoors = (room2.doors || []).filter(d => d.wall === 'north')
-          for (const door of room2NorthDoors) {
+          for (let doorIdx = 0; doorIdx < room2NorthDoors.length; doorIdx++) {
+            const door = room2NorthDoors[doorIdx]
             const doorWorldX = pos2[0] + door.position * dim2.width
             const doorRelativeX = (doorWorldX - wallCenter) / wallWidth
             if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeX) < 0.01)) {
-              sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+              sharedDoors.push({ id: `${room2.id}-north-${doorIdx}`, fromRoomId: room2.id, position: doorRelativeX, width: door.width, height: door.height })
             }
           }
 
@@ -987,24 +991,26 @@ function detectSharedWallsV2(
           const wallCenter = (overlapMin + overlapMax) / 2
           const wallWidth = overlapMax - overlapMin
 
-          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+          const sharedDoors: SharedWallDoor[] = []
 
           // Room1's east wall doors
           const room1EastDoors = (room1.doors || []).filter(d => d.wall === 'east')
-          for (const door of room1EastDoors) {
+          for (let doorIdx = 0; doorIdx < room1EastDoors.length; doorIdx++) {
+            const door = room1EastDoors[doorIdx]
             // For north-south walls, position relates to depth (Z axis)
             const doorWorldZ = pos1[2] + door.position * dim1.depth
             const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
-            sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+            sharedDoors.push({ id: `${room1.id}-east-${doorIdx}`, fromRoomId: room1.id, position: doorRelativeZ, width: door.width, height: door.height })
           }
 
           // Room2's west wall doors
           const room2WestDoors = (room2.doors || []).filter(d => d.wall === 'west')
-          for (const door of room2WestDoors) {
+          for (let doorIdx = 0; doorIdx < room2WestDoors.length; doorIdx++) {
+            const door = room2WestDoors[doorIdx]
             const doorWorldZ = pos2[2] + door.position * dim2.depth
             const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
             if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeZ) < 0.01)) {
-              sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+              sharedDoors.push({ id: `${room2.id}-west-${doorIdx}`, fromRoomId: room2.id, position: doorRelativeZ, width: door.width, height: door.height })
             }
           }
 
@@ -1028,23 +1034,25 @@ function detectSharedWallsV2(
           const wallCenter = (overlapMin + overlapMax) / 2
           const wallWidth = overlapMax - overlapMin
 
-          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+          const sharedDoors: SharedWallDoor[] = []
 
           // Room1's west wall doors
           const room1WestDoors = (room1.doors || []).filter(d => d.wall === 'west')
-          for (const door of room1WestDoors) {
+          for (let doorIdx = 0; doorIdx < room1WestDoors.length; doorIdx++) {
+            const door = room1WestDoors[doorIdx]
             const doorWorldZ = pos1[2] + door.position * dim1.depth
             const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
-            sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+            sharedDoors.push({ id: `${room1.id}-west-${doorIdx}`, fromRoomId: room1.id, position: doorRelativeZ, width: door.width, height: door.height })
           }
 
           // Room2's east wall doors
           const room2EastDoors = (room2.doors || []).filter(d => d.wall === 'east')
-          for (const door of room2EastDoors) {
+          for (let doorIdx = 0; doorIdx < room2EastDoors.length; doorIdx++) {
+            const door = room2EastDoors[doorIdx]
             const doorWorldZ = pos2[2] + door.position * dim2.depth
             const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
             if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeZ) < 0.01)) {
-              sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+              sharedDoors.push({ id: `${room2.id}-east-${doorIdx}`, fromRoomId: room2.id, position: doorRelativeZ, width: door.width, height: door.height })
             }
           }
 
