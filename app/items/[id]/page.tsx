@@ -226,12 +226,21 @@ export default function ItemDetailPage() {
   }
 
   const handleImagesAdd = (newPairs: ImagePair[]) => {
-    setEditImages(prev => [...prev, ...newPairs])
+    const updatedImages = [...editImages, ...newPairs]
+    setEditImages(updatedImages)
+
     // If no thumbnail is set yet, use the first processed or original image
+    let newThumbnail = editThumbnailPath
     if (!editThumbnailPath && newPairs.length > 0) {
-      const firstImage = newPairs[0].processed || newPairs[0].original
-      setEditThumbnailPath(firstImage)
+      newThumbnail = newPairs[0].processed || newPairs[0].original
+      setEditThumbnailPath(newThumbnail)
     }
+
+    // Auto-save images immediately so item persists even if user navigates away
+    updateItem(itemId, {
+      images: updatedImages,
+      thumbnailPath: newThumbnail || undefined
+    })
   }
 
   // Handle model generation completion

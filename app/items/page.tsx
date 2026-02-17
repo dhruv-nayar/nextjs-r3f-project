@@ -49,10 +49,11 @@ export default function ItemsPage() {
 
   // Filter items based on search and category
   const filteredItems = items.filter(item => {
-    // Skip items without valid model paths OR parametric shapes
+    // Show items that have: valid model, parametric shape, OR images (work in progress)
     const hasValidModel = item.modelPath && item.modelPath !== 'placeholder'
     const hasParametricShape = !!item.parametricShape
-    if (!hasValidModel && !hasParametricShape) {
+    const hasImages = item.images && item.images.length > 0
+    if (!hasValidModel && !hasParametricShape && !hasImages) {
       return false
     }
 
