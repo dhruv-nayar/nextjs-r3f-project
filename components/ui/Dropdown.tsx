@@ -82,11 +82,6 @@ export function Dropdown({
 
       {isOpen && (
         <div className="absolute top-full mt-2 right-0 w-48 bg-white rounded-lg shadow-xl border border-taupe/10 py-2 z-50">
-          {header && (
-            <div className="px-3 py-1.5 text-xs font-body uppercase tracking-wide text-taupe/50">
-              {header}
-            </div>
-          )}
           {/* Header option (e.g., "All Projects") */}
           {headerOption && (
             <>
@@ -102,6 +97,12 @@ export function Dropdown({
               </button>
               {options.length > 0 && <div className="h-px bg-taupe/10 my-2" />}
             </>
+          )}
+          {/* Section header for main options (e.g., "Recent Projects") */}
+          {header && options.length > 0 && (
+            <div className="px-3 py-1.5 text-xs font-body uppercase tracking-wide text-taupe/50">
+              {header}
+            </div>
           )}
           {/* Main options list */}
           {options.map((option, i) => (
