@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { ItemLibraryProvider } from "@/lib/item-library-context";
+import { TrellisJobProvider } from "@/lib/trellis-job-context";
+import { TrellisJobWrapper } from "@/components/layout/TrellisJobWrapper";
 import { HomeProvider } from "@/lib/home-context";
 import { RoomProvider } from "@/lib/room-context";
 import { FurnitureHoverProvider } from "@/lib/furniture-hover-context";
@@ -52,7 +54,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${inter.variable} antialiased`}
       >
         <ItemLibraryProvider>
-          <HomeProvider>
+          <TrellisJobProvider>
+            <HomeProvider>
             <RoomProvider>
               <RoomHoverProvider>
                 <FurnitureHoverProvider>
@@ -61,7 +64,9 @@ export default function RootLayout({
                       <ResizeModeProvider>
                         <InteractionModeProvider>
                           <ControlsProvider>
-                            {children}
+                            <TrellisJobWrapper>
+                              {children}
+                            </TrellisJobWrapper>
                           </ControlsProvider>
                         </InteractionModeProvider>
                       </ResizeModeProvider>
@@ -71,6 +76,7 @@ export default function RootLayout({
               </RoomHoverProvider>
             </RoomProvider>
           </HomeProvider>
+          </TrellisJobProvider>
         </ItemLibraryProvider>
       </body>
     </html>

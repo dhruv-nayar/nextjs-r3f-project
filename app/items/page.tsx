@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { ItemCategory, GLBUploadResult, ImageUploadResult, ImagePair } from '@/types/room'
 import { GLBUpload } from '@/components/items/GLBUpload'
@@ -16,6 +17,7 @@ import { CustomItemCreator } from '@/components/items/CustomItemCreator'
 import Image from 'next/image'
 
 export default function ItemsPage() {
+  const router = useRouter()
   const { items, addItem } = useItemLibrary()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
@@ -81,6 +83,20 @@ export default function ItemsPage() {
     ).length
     return acc
   }, {} as Record<string, number>)
+
+  // Quick create: Creates item immediately and redirects to edit mode
+  const handleQuickCreate = () => {
+    const newId = addItem({
+      name: 'New Item',
+      description: '',
+      dimensions: { width: 2, height: 2, depth: 2 },
+      category: 'other',
+      tags: [],
+      isCustom: true
+    })
+    // Redirect to the item detail page in edit mode
+    router.push(`/items/${newId}?edit=true`)
+  }
 
   const handleUploadMethodSelect = (method: 'glb' | 'images') => {
     setUploadMethod(method)
@@ -236,7 +252,7 @@ export default function ItemsPage() {
                   No items in your library yet
                 </p>
                 <button
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={handleQuickCreate}
                   className="px-6 py-3 bg-taupe hover:bg-taupe/90 text-white font-body font-medium rounded-lg transition-colors"
                 >
                   Add Your First Item
@@ -262,7 +278,7 @@ export default function ItemsPage() {
                 ))}
 
                 {/* Add New Item Card */}
-                <AddItemCard onClick={() => setShowCreateModal(true)} />
+                <AddItemCard onClick={handleQuickCreate} />
               </div>
             )}
           </main>
@@ -273,7 +289,7 @@ export default function ItemsPage() {
             selectedCategory={selectedCategory}
             onCategoryChange={setSelectedCategory}
             itemCounts={itemCounts}
-            onAddNewClick={() => setShowCreateModal(true)}
+            onAddNewClick={handleQuickCreate}
             className="hidden lg:block"
           />
         </div>

@@ -13,6 +13,14 @@ interface ImageGalleryProps {
   currentThumbnail?: string
 }
 
+interface PendingImage {
+  localPreview: string
+  originalUrl: string | null
+  processedUrl: string | null
+  status: 'processing' | 'completed' | 'error'
+  error?: string
+}
+
 export function ImageGallery({
   images,
   thumbnailPath,
@@ -21,7 +29,7 @@ export function ImageGallery({
   onImagesAdd,
   currentThumbnail
 }: ImageGalleryProps) {
-  const [isUploading, setIsUploading] = useState(false)
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [uploadError, setUploadError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -37,7 +45,7 @@ export function ImageGallery({
   })
 
   // If no images but we have a thumbnail, show it
-  if (allImages.length === 0 && thumbnailPath) {
+  if (allImages.length === 0 && thumbnailPath && pendingImages.length === 0) {
     allImages.push({ url: thumbnailPath, type: 'thumbnail', pairIndex: -1 })
   }
 
@@ -60,49 +68,75 @@ export function ImageGallery({
       }
     }
 
-    setIsUploading(true)
     setUploadError('')
+
+    // Step 1: Immediately show local previews for all new images
+    const newPendingImages: PendingImage[] = fileArray.map(file => ({
+      localPreview: URL.createObjectURL(file),
+      originalUrl: null,
+      processedUrl: null,
+      status: 'processing' as const
+    }))
+    setPendingImages(prev => [...prev, ...newPendingImages])
+
+    // Force render before starting heavy async work
+    await new Promise(resolve => setTimeout(resolve, 0))
+
     const newPairs: ImagePair[] = []
+    const startIndex = pendingImages.length
 
     try {
-      for (const file of fileArray) {
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i]
+        const pendingIndex = startIndex + i
+
         // Convert to base64
         const base64Image = await fileToBase64(file)
 
-        // Upload original
-        const originalBlob = await base64ToBlob(base64Image)
-        const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
+        // Run original upload and background removal in parallel
+        const [originalUploadResult, bgRemovalResult] = await Promise.all([
+          // Upload original
+          (async () => {
+            const originalBlob = await base64ToBlob(base64Image)
+            const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
 
-        const originalFormData = new FormData()
-        originalFormData.append('files', originalFile)
-        originalFormData.append('itemId', `temp-${Date.now()}-original`)
+            const originalFormData = new FormData()
+            originalFormData.append('files', originalFile)
+            originalFormData.append('itemId', `temp-${Date.now()}-original`)
 
-        const originalUploadRes = await fetch('/api/items/upload-images', {
-          method: 'POST',
-          body: originalFormData
-        })
+            const res = await fetch('/api/items/upload-images', {
+              method: 'POST',
+              body: originalFormData
+            })
+            return res.json()
+          })(),
 
-        const originalUploadResult = await originalUploadRes.json()
+          // Background removal
+          fetch('/api/remove_bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageData: base64Image })
+          }).then(res => res.json()).catch(err => ({ success: false, error: err.message }))
+        ])
 
         if (!originalUploadResult.success) {
-          setUploadError('Failed to upload original image')
+          setPendingImages(prev => {
+            const updated = [...prev]
+            if (updated[pendingIndex]) {
+              updated[pendingIndex].status = 'error'
+              updated[pendingIndex].error = 'Failed to upload original'
+            }
+            return updated
+          })
           continue
         }
 
         const originalUrl = originalUploadResult.imagePaths[0]
         let processedUrl: string | null = null
 
-        // Try background removal
-        try {
-          const bgRemovalRes = await fetch('/api/remove_bg', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageData: base64Image })
-          })
-
-          const bgRemovalResult = await bgRemovalRes.json()
-
-          if (bgRemovalResult.success) {
+        // Upload processed image if background removal succeeded
+        if (bgRemovalResult.success) {
+          try {
             const processedBase64 = bgRemovalResult.processedImageData
             const processedBlob = await base64ToBlob(processedBase64)
             const processedFile = new File([processedBlob], `processed_${file.name.replace(/\.[^/.]+$/, '')}.png`, { type: 'image/png' })
@@ -121,10 +155,21 @@ export function ImageGallery({
             if (processedUploadResult.success) {
               processedUrl = processedUploadResult.imagePaths[0]
             }
+          } catch (uploadErr) {
+            console.warn('Processed image upload error:', uploadErr)
           }
-        } catch (bgError) {
-          console.warn('Background removal error:', bgError)
         }
+
+        // Update pending image status
+        setPendingImages(prev => {
+          const updated = [...prev]
+          if (updated[pendingIndex]) {
+            updated[pendingIndex].originalUrl = originalUrl
+            updated[pendingIndex].processedUrl = processedUrl
+            updated[pendingIndex].status = 'completed'
+          }
+          return updated
+        })
 
         newPairs.push({
           original: originalUrl,
@@ -134,12 +179,19 @@ export function ImageGallery({
 
       if (newPairs.length > 0) {
         onImagesAdd(newPairs)
+        // Clear pending images after they've been added
+        setPendingImages(prev => prev.filter(img => img.status === 'processing'))
       }
 
     } catch (error) {
       setUploadError(`Upload failed: ${error}`)
     } finally {
-      setIsUploading(false)
+      // Clean up object URLs for completed images
+      newPendingImages.forEach(img => {
+        if (img.localPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(img.localPreview)
+        }
+      })
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
@@ -160,7 +212,9 @@ export function ImageGallery({
     return res.blob()
   }
 
-  if (allImages.length === 0 && !isEditing) {
+  const isUploading = pendingImages.some(img => img.status === 'processing')
+
+  if (allImages.length === 0 && pendingImages.length === 0 && !isEditing) {
     return null
   }
 
@@ -176,6 +230,7 @@ export function ImageGallery({
         </div>
       )}
 
+      {/* Existing Images */}
       {allImages.length > 0 && (
         <div className="space-y-4">
           {/* Group images by pair index */}
@@ -234,9 +289,67 @@ export function ImageGallery({
         </div>
       )}
 
+      {/* Pending Images (being uploaded/processed) */}
+      {pendingImages.length > 0 && (
+        <div className="space-y-4">
+          {pendingImages.map((pending, index) => (
+            <div key={`pending-${index}`} className="space-y-2">
+              <div className="text-xs text-taupe/60 font-medium">
+                {pending.status === 'processing' ? 'Processing...' : pending.status === 'error' ? 'Error' : 'Ready'}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Original Image - Show immediately with local preview */}
+                <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-taupe/20">
+                  <div className="absolute inset-0 bg-floral-white" />
+                  <Image
+                    src={pending.originalUrl || pending.localPreview}
+                    alt="Original"
+                    fill
+                    className="object-contain relative"
+                    unoptimized
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-graphite/70 text-white text-xs py-1 text-center">
+                    Original
+                  </div>
+                </div>
+
+                {/* Processed Image - Show skeleton while processing */}
+                <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-taupe/20">
+                  {pending.processedUrl ? (
+                    <>
+                      <div className="absolute inset-0 bg-[url('/checkerboard.svg')] bg-repeat" />
+                      <Image
+                        src={pending.processedUrl}
+                        alt="Processed"
+                        fill
+                        className="object-contain relative"
+                        unoptimized
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 bg-sage/90 text-white text-xs py-1 text-center">
+                        No Background
+                      </div>
+                    </>
+                  ) : pending.status === 'processing' ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
+                      {/* Pulsing skeleton */}
+                      <div className="w-12 h-12 rounded-lg bg-gray-300 animate-pulse mb-2" />
+                      <span className="text-xs text-gray-500 animate-pulse">Removing background...</span>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                      <span className="text-gray-400 text-xs">Failed</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {isEditing && (
         <p className="text-taupe/60 text-xs font-body">
-          {allImages.length > 0 ? 'Click an image to set it as the thumbnail' : 'Add images to this item'}
+          {allImages.length > 0 || pendingImages.length > 0 ? 'Click an image to set it as the thumbnail' : 'Add images to this item'}
         </p>
       )}
 
@@ -266,7 +379,7 @@ export function ImageGallery({
             {isUploading ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="animate-spin w-4 h-4 border-2 border-sage border-t-transparent rounded-full" />
-                Uploading...
+                Processing images...
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">

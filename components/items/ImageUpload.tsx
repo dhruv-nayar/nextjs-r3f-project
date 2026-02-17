@@ -10,9 +10,10 @@ interface ImageUploadProps {
 }
 
 interface ProcessedImage {
-  originalUrl: string
+  localPreview: string // Local preview URL (immediate)
+  originalUrl: string // Blob storage URL (after upload)
   processedUrl: string | null
-  status: 'uploading' | 'processing' | 'completed' | 'error'
+  status: 'processing' | 'completed' | 'error'
   error?: string
 }
 
@@ -44,6 +45,19 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
     }
 
     setIsProcessing(true)
+
+    // Step 1: Immediately show local previews for all images
+    const initialImages: ProcessedImage[] = fileArray.map(file => ({
+      localPreview: URL.createObjectURL(file),
+      originalUrl: '',
+      processedUrl: null,
+      status: 'processing' as const
+    }))
+    setImages(initialImages)
+
+    // Force React to render before starting heavy async work
+    await new Promise(resolve => setTimeout(resolve, 0))
+
     const allImagePaths: string[] = []
     const imagePairs: ImagePair[] = []
 
@@ -51,35 +65,38 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
       // Process each image
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i]
-
-        // Initialize status
-        const imageEntry: ProcessedImage = {
-          originalUrl: '',
-          processedUrl: null,
-          status: 'uploading'
-        }
-
-        setImages(prev => [...prev, imageEntry])
         const currentIndex = i
 
-        // Step 1: Convert image to base64
+        // Step 2: Convert image to base64
         const base64Image = await fileToBase64(file)
 
-        // Step 2: Upload ORIGINAL image first
-        const originalBlob = await base64ToBlob(base64Image)
-        const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
+        // Step 3: Start background removal AND original upload in parallel
+        const [bgRemovalResult, originalUploadResult] = await Promise.all([
+          // Background removal
+          fetch('/api/remove_bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageData: base64Image })
+          }).then(res => res.json()).catch(err => ({ success: false, error: err.message })),
 
-        const originalFormData = new FormData()
-        originalFormData.append('files', originalFile)
-        originalFormData.append('itemId', `temp-${Date.now()}-original`)
+          // Original image upload
+          (async () => {
+            const originalBlob = await base64ToBlob(base64Image)
+            const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
 
-        const originalUploadRes = await fetch('/api/items/upload-images', {
-          method: 'POST',
-          body: originalFormData
-        })
+            const originalFormData = new FormData()
+            originalFormData.append('files', originalFile)
+            originalFormData.append('itemId', `temp-${Date.now()}-original`)
 
-        const originalUploadResult = await originalUploadRes.json()
+            const res = await fetch('/api/items/upload-images', {
+              method: 'POST',
+              body: originalFormData
+            })
+            return res.json()
+          })()
+        ])
 
+        // Handle original upload result
         if (!originalUploadResult.success) {
           setImages(prev => {
             const newImages = [...prev]
@@ -92,28 +109,12 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
 
         const originalUrl = originalUploadResult.imagePaths[0]
 
-        // Update original URL and change status to processing
-        setImages(prev => {
-          const newImages = [...prev]
-          newImages[currentIndex].originalUrl = originalUrl
-          newImages[currentIndex].status = 'processing'
-          return newImages
-        })
-
-        // Step 3: Try to remove background
+        // Handle background removal result
         let processedUrl: string | null = null
 
-        try {
-          const bgRemovalRes = await fetch('/api/remove_bg', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageData: base64Image })
-          })
-
-          const bgRemovalResult = await bgRemovalRes.json()
-
-          if (bgRemovalResult.success) {
-            // Step 4: Upload PROCESSED image
+        if (bgRemovalResult.success) {
+          // Upload processed image
+          try {
             const processedBase64 = bgRemovalResult.processedImageData
             const processedBlob = await base64ToBlob(processedBase64)
             const processedFile = new File([processedBlob], `processed_${file.name.replace(/\.[^/.]+$/, '')}.png`, { type: 'image/png' })
@@ -132,11 +133,11 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
             if (processedUploadResult.success) {
               processedUrl = processedUploadResult.imagePaths[0]
             }
-          } else {
-            console.warn('Background removal failed:', bgRemovalResult.error)
+          } catch (uploadErr) {
+            console.warn('Processed image upload error:', uploadErr)
           }
-        } catch (bgError) {
-          console.warn('Background removal error:', bgError)
+        } else {
+          console.warn('Background removal failed:', bgRemovalResult.error)
         }
 
         // Update with both URLs and mark as completed
@@ -175,6 +176,12 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
       onError(`Upload failed: ${error}`)
     } finally {
       setIsProcessing(false)
+      // Clean up object URLs
+      initialImages.forEach(img => {
+        if (img.localPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(img.localPreview)
+        }
+      })
     }
   }
 
@@ -258,35 +265,31 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
       {images.length > 0 && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Processing {images.length} image{images.length > 1 ? 's' : ''}...
+            {images.every(img => img.status === 'completed')
+              ? `${images.length} image${images.length > 1 ? 's' : ''} ready`
+              : `Processing ${images.length} image${images.length > 1 ? 's' : ''}...`
+            }
           </p>
 
           <div className="space-y-4">
             {images.map((img, index) => (
               <div key={index} className="space-y-2">
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Original Image */}
+                  {/* Original Image - Show immediately with local preview */}
                   <div className="space-y-1">
                     <div className="text-xs text-gray-500 font-medium">Original</div>
                     <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative border border-gray-200">
-                      {img.originalUrl && (
-                        <Image
-                          src={img.originalUrl}
-                          alt={`Original ${index + 1}`}
-                          fill
-                          className="object-contain"
-                          unoptimized
-                        />
-                      )}
-                      {!img.originalUrl && img.status === 'uploading' && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        </div>
-                      )}
+                      <Image
+                        src={img.originalUrl || img.localPreview}
+                        alt={`Original ${index + 1}`}
+                        fill
+                        className="object-contain"
+                        unoptimized
+                      />
                     </div>
                   </div>
 
-                  {/* Processed Image */}
+                  {/* Processed Image - Show skeleton while processing */}
                   <div className="space-y-1">
                     <div className="text-xs text-gray-500 font-medium">Background Removed</div>
                     <div className="aspect-square bg-[url('/checkerboard.svg')] bg-repeat rounded-lg overflow-hidden relative border border-gray-200">
@@ -300,8 +303,10 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
                         />
                       )}
                       {!img.processedUrl && img.status === 'processing' && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80">
-                          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
+                          {/* Pulsing skeleton */}
+                          <div className="w-16 h-16 rounded-lg bg-gray-300 animate-pulse mb-3" />
+                          <span className="text-xs text-gray-500 animate-pulse">Removing background...</span>
                         </div>
                       )}
                       {!img.processedUrl && img.status === 'completed' && (
@@ -314,9 +319,6 @@ export function ImageUpload({ onUploadComplete, onError }: ImageUploadProps) {
                 </div>
 
                 <div className="text-xs text-center">
-                  {img.status === 'uploading' && (
-                    <span className="text-blue-600">Uploading original...</span>
-                  )}
                   {img.status === 'processing' && (
                     <span className="text-blue-600">Removing background...</span>
                   )}

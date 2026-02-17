@@ -15,8 +15,10 @@ import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
 import { PlacementType, MaterialOverride, ImagePair } from '@/types/room'
 import { ImageGallery } from '@/components/items/ImageGallery'
+import { GenerateModelPanel } from '@/components/items/GenerateModelPanel'
 import { MaterialInfo } from '@/lib/material-utils'
 import { MaterialExtractor } from '@/hooks/useMaterialExtraction'
+import { useTrellisJobs } from '@/lib/trellis-job-context'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -26,6 +28,10 @@ export default function ItemDetailPage() {
 
   const { getItem, updateItem, deleteItem } = useItemLibrary()
   const { getInstancesForItem, deleteAllInstancesOfItem, switchHome } = useHome()
+  const { toastMessage: trellisToast, toastType: trellisToastType, clearToast: clearTrellisToast } = useTrellisJobs()
+
+  // Check if we should start in edit mode
+  const startInEditMode = searchParams.get('edit') === 'true'
 
   // Parse return context for "Back to Project" navigation
   const returnToParam = searchParams.get('returnTo')
@@ -50,7 +56,7 @@ export default function ItemDetailPage() {
   const item = getItem(itemId)
   const instances = item ? getInstancesForItem(itemId) : []
 
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditing, setIsEditing] = useState(startInEditMode)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -77,6 +83,9 @@ export default function ItemDetailPage() {
   const [extractedMaterials, setExtractedMaterials] = useState<MaterialInfo[]>([])
   const [editMaterialOverrides, setEditMaterialOverrides] = useState<MaterialOverride[]>(item?.materialOverrides || [])
   const [showMaterialsSection, setShowMaterialsSection] = useState(false)
+
+  // Model path state (for when a model is generated)
+  const [editModelPath, setEditModelPath] = useState(item?.modelPath || '')
 
   // Callback for when materials are extracted
   const handleMaterialsExtracted = useCallback((materials: MaterialInfo[]) => {
@@ -225,6 +234,16 @@ export default function ItemDetailPage() {
     }
   }
 
+  // Handle model generation completion
+  const handleModelGenerated = (modelPath: string) => {
+    setEditModelPath(modelPath)
+    // Also update the item immediately
+    updateItem(itemId, { modelPath })
+    setToastMessage('3D model generated and saved!')
+    setToastType('success')
+    setShowToast(true)
+  }
+
   // Get current color for a material (from override or original)
   const getMaterialColor = (materialName: string, materialIndex: number, originalColor: string): string => {
     const override = editMaterialOverrides.find(
@@ -361,6 +380,15 @@ export default function ItemDetailPage() {
                   onImagesAdd={handleImagesAdd}
                   currentThumbnail={isEditing ? editThumbnailPath : item.thumbnailPath}
                 />
+
+                {/* Generate 3D Model Section - shown when editing and there are images */}
+                {isEditing && editImages.length > 0 && !item.modelPath && (
+                  <GenerateModelPanel
+                    itemId={itemId}
+                    imagePairs={editImages}
+                    onModelGenerated={handleModelGenerated}
+                  />
+                )}
 
                 {/* Metadata Section */}
                 <div>
@@ -770,6 +798,16 @@ export default function ItemDetailPage() {
         show={showToast}
         onClose={() => setShowToast(false)}
       />
+
+      {/* Trellis Job Toast Notification */}
+      {trellisToast && (
+        <Toast
+          message={trellisToast}
+          type={trellisToastType}
+          show={!!trellisToast}
+          onClose={clearTrellisToast}
+        />
+      )}
     </div>
   )
 }
