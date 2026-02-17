@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface DimensionInputProps {
   label: string
@@ -74,7 +74,8 @@ export function DimensionInput({
 }
 
 /**
- * Simple number input for single values (like position)
+ * Simple number input for single values (like position, rotation)
+ * Uses local state pattern to prevent cursor jumping.
  */
 interface NumberInputProps {
   label: string
@@ -99,6 +100,54 @@ export function NumberInput({
   labelWidth = 'w-16',
   suffix,
 }: NumberInputProps) {
+  const [localValue, setLocalValue] = useState(value.toString())
+  const [isFocused, setIsFocused] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sync with external value when not focused
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value.toFixed(2))
+    }
+  }, [value, isFocused])
+
+  const commitValue = () => {
+    const parsed = parseFloat(localValue)
+    if (!isNaN(parsed)) {
+      let finalValue = parsed
+      if (min !== undefined) finalValue = Math.max(min, finalValue)
+      if (max !== undefined) finalValue = Math.min(max, finalValue)
+      onChange(finalValue)
+      setLocalValue(finalValue.toFixed(2))
+    } else {
+      // Revert to last valid value
+      setLocalValue(value.toFixed(2))
+    }
+  }
+
+  const handleBlur = () => {
+    setIsFocused(false)
+    commitValue()
+  }
+
+  const handleFocus = () => {
+    setIsFocused(true)
+    inputRef.current?.select()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitValue()
+      inputRef.current?.blur()
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setLocalValue(value.toFixed(2))
+      inputRef.current?.blur()
+    }
+  }
+
   const inputClassName = `
     flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20
     focus:border-orange-500 focus:outline-none text-sm
@@ -111,12 +160,14 @@ export function NumberInput({
         {label}
       </label>
       <input
-        type="number"
-        value={value.toFixed(2)}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        step={step}
-        min={min}
-        max={max}
+        ref={inputRef}
+        type="text"
+        inputMode="decimal"
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={handleBlur}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
         disabled={readonly}
         className={inputClassName}
       />

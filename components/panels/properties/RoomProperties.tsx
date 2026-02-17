@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Room } from '@/types/room'
 import { useRoom } from '@/lib/room-context'
-import { PropertySection, DimensionInput, PropertyRow } from '../shared'
+import { PropertySection, MeasurementInput, PropertyRow } from '../shared'
 
 interface RoomPropertiesProps {
   room: Room
@@ -73,20 +73,23 @@ export function RoomProperties({ room }: RoomPropertiesProps) {
 
       {/* Dimensions */}
       <PropertySection title="Dimensions">
-        <DimensionInput
+        <MeasurementInput
           label="Width"
           value={dimensions.width}
           onChange={(v) => handleDimensionChange('width', v)}
+          min={1}
         />
-        <DimensionInput
+        <MeasurementInput
           label="Depth"
           value={dimensions.depth}
           onChange={(v) => handleDimensionChange('depth', v)}
+          min={1}
         />
-        <DimensionInput
+        <MeasurementInput
           label="Height"
           value={dimensions.height}
           onChange={(v) => handleDimensionChange('height', v)}
+          min={1}
         />
       </PropertySection>
 

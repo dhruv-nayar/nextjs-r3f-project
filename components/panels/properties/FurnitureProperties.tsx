@@ -6,7 +6,7 @@ import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useResizeMode } from '@/lib/resize-mode-context'
-import { PropertySection, NumberInput, PropertyRow } from '../shared'
+import { PropertySection, NumberInput, MeasurementInput, PropertyRow } from '../shared'
 
 interface FurniturePropertiesProps {
   instance: ItemInstance
@@ -30,14 +30,23 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
   }
 
   const handleRotationYChange = (degrees: number) => {
-    // Convert degrees to radians
-    const radians = (degrees * Math.PI) / 180
+    // Convert degrees to radians, normalize to 0-360 range
+    const normalizedDegrees = ((degrees % 360) + 360) % 360
+    const radians = (normalizedDegrees * Math.PI) / 180
     updateInstance(instance.id, {
       rotation: {
         ...instance.rotation,
         y: radians,
       },
     })
+  }
+
+  const handleRotate90CW = () => {
+    handleRotationYChange(rotationYDegrees + 90)
+  }
+
+  const handleRotate90CCW = () => {
+    handleRotationYChange(rotationYDegrees - 90)
   }
 
   const handleEditItem = () => {
@@ -134,44 +143,86 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
 
       {/* Rotation */}
       <PropertySection title="Rotation">
-        <NumberInput
-          label="Y"
-          value={rotationYDegrees}
-          onChange={handleRotationYChange}
-          step={15}
-          suffix="deg"
-          labelWidth="w-8"
-        />
+        <div className="flex items-center gap-2">
+          {/* Counter-clockwise button */}
+          <button
+            onClick={handleRotate90CCW}
+            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors group"
+            title="Rotate 90° counter-clockwise"
+          >
+            <svg
+              className="w-4 h-4 text-white/70 group-hover:text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 12a9 9 0 1 0 9-9" />
+              <polyline points="3 3 3 9 9 9" />
+            </svg>
+          </button>
+
+          {/* Degree input */}
+          <div className="flex-1">
+            <NumberInput
+              label=""
+              value={Math.round(rotationYDegrees)}
+              onChange={handleRotationYChange}
+              step={15}
+              suffix="°"
+              labelWidth="w-0"
+            />
+          </div>
+
+          {/* Clockwise button */}
+          <button
+            onClick={handleRotate90CW}
+            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors group"
+            title="Rotate 90° clockwise"
+          >
+            <svg
+              className="w-4 h-4 text-white/70 group-hover:text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-9-9" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+          </button>
+        </div>
       </PropertySection>
 
       {/* Dimensions - Editable */}
-      <PropertySection title="Dimensions (feet)" defaultOpen={isResizeMode}>
+      <PropertySection title="Dimensions" defaultOpen={isResizeMode}>
         <div className="mb-2 px-2 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
           <p className="text-amber-400 text-xs">
             Changes affect all instances of this item
           </p>
         </div>
-        <NumberInput
+        <MeasurementInput
           label="W"
           value={item.dimensions.width}
           onChange={(v) => handleDimensionChange('width', v)}
-          step={0.1}
           min={0.1}
           labelWidth="w-8"
         />
-        <NumberInput
+        <MeasurementInput
           label="H"
           value={item.dimensions.height}
           onChange={(v) => handleDimensionChange('height', v)}
-          step={0.1}
           min={0.1}
           labelWidth="w-8"
         />
-        <NumberInput
+        <MeasurementInput
           label="D"
           value={item.dimensions.depth}
           onChange={(v) => handleDimensionChange('depth', v)}
-          step={0.1}
           min={0.1}
           labelWidth="w-8"
         />

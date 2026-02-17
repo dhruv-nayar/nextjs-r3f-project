@@ -1,4 +1,5 @@
 export { PropertySection } from './PropertySection'
 export { PropertyRow } from './PropertyRow'
 export { DimensionInput, NumberInput } from './DimensionInput'
+export { MeasurementInput } from './MeasurementInput'
 export { ToggleSwitch, SelectInput } from './ToggleSwitch'

@@ -127,18 +127,26 @@ export function RoomScene() {
   // Track previous room ID for camera animation
   const prevRoomIdRef = useRef<string | null>(null)
 
+  // Set controls reference - only when controls ref changes
+  useEffect(() => {
+    if (controlsRef.current) {
+      setControls(controlsRef.current)
+    }
+  }, [setControls])
+
+  // Animate camera ONLY when room ID changes - NOT on property updates
+  // Use room ID as sole dependency to prevent re-running on furniture changes
+  const currentRoomId = currentRoom?.id
+
   useEffect(() => {
     if (!controlsRef.current || !currentRoom) return
 
-    // Always set controls reference
-    setControls(controlsRef.current)
-
-    // Only animate camera if room actually changed (not just property updates)
-    if (prevRoomIdRef.current !== currentRoom.id) {
-      prevRoomIdRef.current = currentRoom.id
+    // Only animate camera if room actually changed
+    if (prevRoomIdRef.current !== currentRoomId) {
+      prevRoomIdRef.current = currentRoomId ?? null
 
       const timer = setTimeout(() => {
-        if (controlsRef.current) {
+        if (controlsRef.current && currentRoom) {
           controlsRef.current.setPosition(
             currentRoom.cameraPosition.x,
             currentRoom.cameraPosition.y,
@@ -155,7 +163,8 @@ export function RoomScene() {
       }, 100)
       return () => clearTimeout(timer)
     }
-  }, [setControls, currentRoom])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoomId])
 
   // Camera is ONLY fully enabled when Space is held
   // No mouse interactions with camera otherwise (scroll zoom handled via effect)

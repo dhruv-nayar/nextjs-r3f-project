@@ -9,7 +9,7 @@ import {
   createDefaultRoomGridState,
 } from '@/types/selection'
 import { useRoom } from '@/lib/room-context'
-import { PropertySection, DimensionInput, ToggleSwitch, SelectInput } from '../shared'
+import { PropertySection, MeasurementInput, ToggleSwitch, SelectInput } from '../shared'
 
 interface WallPropertiesProps {
   room: Room
@@ -86,16 +86,17 @@ export function WallProperties({ room, side }: WallPropertiesProps) {
 
       {/* Dimensions */}
       <PropertySection title="Dimensions">
-        <DimensionInput
+        <MeasurementInput
           label="Length"
           value={getWallLength()}
           onChange={() => {}} // Read-only - determined by room
           readonly={true}
         />
-        <DimensionInput
+        <MeasurementInput
           label="Height"
           value={dimensions.height}
           onChange={handleHeightChange}
+          min={1}
         />
         <p className="text-white/40 text-xs mt-1 ml-16">
           Height affects all walls in this room

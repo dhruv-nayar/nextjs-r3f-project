@@ -188,6 +188,7 @@ function FurnitureModel({ item }: FurnitureProps) {
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerMove={handlePointerMove}
+      onClick={(e) => e.stopPropagation()} // Prevent floor click from firing
     >
       <primitive object={clonedScene} castShadow receiveShadow />
 
@@ -584,6 +585,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerMove={handlePointerMove}
+        onClick={(e) => e.stopPropagation()} // Prevent floor click from firing
       >
         <primitive object={clonedScene} castShadow receiveShadow />
 
@@ -926,6 +928,7 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerMove={handlePointerMove}
+        onClick={(e) => e.stopPropagation()} // Prevent floor click from firing
       >
         <mesh
           ref={meshRef}
