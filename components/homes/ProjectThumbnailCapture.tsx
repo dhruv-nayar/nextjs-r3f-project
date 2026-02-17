@@ -65,15 +65,25 @@ export function ProjectThumbnailCapture({ homeId, onCaptureComplete }: ProjectTh
   const getSceneHash = useCallback(() => {
     if (!currentHome) return ''
 
-    // Create a simple hash based on instances across all rooms
-    const instanceData = currentHome.rooms.map(room => {
+    // Create a hash based on room geometry AND instances
+    const roomData = currentHome.rooms.map(room => {
+      // Include room structure (dimensions, polygon, position)
+      const roomGeo = room.polygon
+        ? `poly:${room.polygon.map(p => `${p.x},${p.z}`).join(';')}`
+        : `rect:${room.dimensions?.width || 0},${room.dimensions?.depth || 0}`
+      const roomPos = room.position ? `pos:${room.position.join(',')}` : ''
+      const roomHeight = `h:${room.dimensions?.height || 10}`
+
+      // Include furniture instances
       const instances = room.instances || []
-      return instances.map(inst =>
+      const instanceData = instances.map(inst =>
         `${inst.id}:${inst.position.x},${inst.position.y},${inst.position.z}:${inst.rotation.x},${inst.rotation.y},${inst.rotation.z}`
       ).join('|')
+
+      return `${room.id}[${roomGeo}${roomPos}${roomHeight}]{${instanceData}}`
     }).join('||')
 
-    return instanceData
+    return roomData
   }, [currentHome])
 
   const captureAndUpload = useCallback(async () => {
@@ -118,24 +128,38 @@ export function ProjectThumbnailCapture({ homeId, onCaptureComplete }: ProjectTh
         return
       }
 
-      // Upload to API
+      // Try to upload to API (Vercel Blob)
       const formData = new FormData()
       formData.append('file', blob, 'thumbnail.png')
       formData.append('homeId', homeId)
 
-      const response = await fetch('/api/homes/upload-thumbnail', {
-        method: 'POST',
-        body: formData
-      })
+      let uploaded = false
+      try {
+        const response = await fetch('/api/homes/upload-thumbnail', {
+          method: 'POST',
+          body: formData
+        })
 
-      if (response.ok) {
         const data = await response.json()
         if (data.success && data.thumbnailPath) {
           updateHomeThumbnail(homeId, data.thumbnailPath)
           onCaptureComplete?.(data.thumbnailPath)
+          uploaded = true
         }
-      } else {
-        console.error('Failed to upload thumbnail:', await response.text())
+      } catch (uploadError) {
+        // Network error or parsing error - will use fallback
+      }
+
+      // Fallback: Use data URL for local development (no Vercel Blob token)
+      if (!uploaded) {
+        console.log('Using data URL fallback for thumbnail')
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string
+          updateHomeThumbnail(homeId, dataUrl)
+          onCaptureComplete?.(dataUrl)
+        }
+        reader.readAsDataURL(blob)
       }
     } catch (error) {
       console.error('Error capturing/uploading thumbnail:', error)
