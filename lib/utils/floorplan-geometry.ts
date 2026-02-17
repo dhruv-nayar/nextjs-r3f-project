@@ -6,6 +6,7 @@ import {
   FloorplanVertex,
   FloorplanWallV2,
   FloorplanRoomV2,
+  FloorplanDoorV2,
   SNAP_DISTANCE,
   WALL_SNAP_DISTANCE,
   generateId,
@@ -114,6 +115,56 @@ export function findNearbyWall(
   }
 
   return closest
+}
+
+/**
+ * Find a door near the given point
+ * Returns the door, its wall, and the door's center point
+ */
+export function findNearbyDoor(
+  x: number,
+  y: number,
+  walls: FloorplanWallV2[],
+  vertices: FloorplanVertex[],
+  snapDistance: number = 0.5
+): { wall: FloorplanWallV2; door: FloorplanDoorV2; centerPoint: { x: number; y: number } } | null {
+  let closestResult: { wall: FloorplanWallV2; door: FloorplanDoorV2; centerPoint: { x: number; y: number } } | null = null
+  let closestDistance = Infinity
+
+  for (const wall of walls) {
+    if (!wall.doors || wall.doors.length === 0) continue
+
+    const startV = vertices.find(v => v.id === wall.startVertexId)
+    const endV = vertices.find(v => v.id === wall.endVertexId)
+    if (!startV || !endV) continue
+
+    const dx = endV.x - startV.x
+    const dy = endV.y - startV.y
+    const wallLength = Math.sqrt(dx * dx + dy * dy)
+
+    for (const door of wall.doors) {
+      // Calculate door center position on wall
+      const doorCenterPos = door.position + door.width / 2
+      const doorCenterX = startV.x + (dx / wallLength) * doorCenterPos
+      const doorCenterY = startV.y + (dy / wallLength) * doorCenterPos
+
+      // Distance from click to door center
+      const dist = distance(x, y, doorCenterX, doorCenterY)
+
+      // Check if click is within door opening range (half width on each side + snap distance)
+      const clickableRadius = door.width / 2 + snapDistance
+      if (dist <= clickableRadius && dist < closestDistance) {
+        closestDistance = dist
+        closestResult = {
+          wall,
+          door,
+          centerPoint: { x: doorCenterX, y: doorCenterY }
+        }
+      }
+    }
+  }
+
+  return closestResult
 }
 
 /**
@@ -240,6 +291,232 @@ export function detectRoomFromDrawing(
   }
 
   return roomWallIds
+}
+
+/**
+ * Detect all rooms in the wall network using cycle detection
+ * This finds ALL closed loops, not just the one being drawn
+ *
+ * Uses the "rightmost turn" algorithm:
+ * 1. For each directed edge, trace the boundary by always taking the rightmost turn
+ * 2. Collect all unique cycles
+ * 3. Filter out the outer boundary (largest perimeter)
+ */
+export function detectAllRooms(
+  walls: FloorplanWallV2[],
+  vertices: FloorplanVertex[]
+): string[][] {
+  if (walls.length < 3 || vertices.length < 3) return []
+
+  const vertexMap = new Map(vertices.map((v) => [v.id, v]))
+
+  // Build adjacency map with edges sorted by angle (for rightmost turn)
+  const adjacency = buildSortedAdjacency(walls, vertexMap)
+
+  // Find all cycles by tracing from each directed edge
+  const cycles = new Set<string>() // Store as sorted wall ID strings for deduplication
+
+  for (const wall of walls) {
+    // Try both directions
+    const cycle1 = traceCycle(wall.startVertexId, wall.id, adjacency, walls, vertexMap)
+    const cycle2 = traceCycle(wall.endVertexId, wall.id, adjacency, walls, vertexMap)
+
+    if (cycle1) cycles.add(normalizeCycle(cycle1))
+    if (cycle2) cycles.add(normalizeCycle(cycle2))
+  }
+
+  // Convert back to arrays and filter out outer boundary
+  const allCycles = Array.from(cycles).map(s => s.split(','))
+
+  // Filter: Keep only cycles with >= 3 walls
+  const validCycles = allCycles.filter(cycle => cycle.length >= 3)
+
+  // Remove outer boundary (cycle with largest perimeter)
+  if (validCycles.length > 1) {
+    const perimeters = validCycles.map(cycle => calculateCyclePerimeter(cycle, walls, vertexMap))
+    const maxPerimeter = Math.max(...perimeters)
+    return validCycles.filter((_, i) => perimeters[i] < maxPerimeter - 0.1) // Keep non-outer cycles
+  }
+
+  return validCycles
+}
+
+/**
+ * Build adjacency map with edges sorted by angle for rightmost-turn traversal
+ */
+function buildSortedAdjacency(
+  walls: FloorplanWallV2[],
+  vertexMap: Map<string, FloorplanVertex>
+): Map<string, Array<{ wallId: string; toVertexId: string; angle: number }>> {
+  const adjacency = new Map<string, Array<{ wallId: string; toVertexId: string; angle: number }>>()
+
+  for (const wall of walls) {
+    const startV = vertexMap.get(wall.startVertexId)
+    const endV = vertexMap.get(wall.endVertexId)
+    if (!startV || !endV) continue
+
+    // Edge from start to end
+    const angle1 = Math.atan2(endV.y - startV.y, endV.x - startV.x)
+    if (!adjacency.has(wall.startVertexId)) {
+      adjacency.set(wall.startVertexId, [])
+    }
+    adjacency.get(wall.startVertexId)!.push({
+      wallId: wall.id,
+      toVertexId: wall.endVertexId,
+      angle: angle1
+    })
+
+    // Edge from end to start (walls are bidirectional)
+    const angle2 = Math.atan2(startV.y - endV.y, startV.x - endV.x)
+    if (!adjacency.has(wall.endVertexId)) {
+      adjacency.set(wall.endVertexId, [])
+    }
+    adjacency.get(wall.endVertexId)!.push({
+      wallId: wall.id,
+      toVertexId: wall.startVertexId,
+      angle: angle2
+    })
+  }
+
+  // Sort edges by angle for each vertex (counterclockwise)
+  for (const edges of adjacency.values()) {
+    edges.sort((a, b) => a.angle - b.angle)
+  }
+
+  return adjacency
+}
+
+/**
+ * Trace a cycle starting from a vertex along a wall, always taking the rightmost turn
+ */
+function traceCycle(
+  startVertexId: string,
+  startWallId: string,
+  adjacency: Map<string, Array<{ wallId: string; toVertexId: string; angle: number }>>,
+  walls: FloorplanWallV2[],
+  vertexMap: Map<string, FloorplanVertex>
+): string[] | null {
+  const wallMap = new Map(walls.map(w => [w.id, w]))
+  const visitedWalls: string[] = []
+  const maxSteps = 100 // Prevent infinite loops
+
+  let currentVertexId = startVertexId
+  let currentWallId = startWallId
+  let steps = 0
+
+  while (steps < maxSteps) {
+    visitedWalls.push(currentWallId)
+
+    // Move to the other end of current wall
+    const currentWall = wallMap.get(currentWallId)
+    if (!currentWall) return null
+
+    const nextVertexId = currentWall.startVertexId === currentVertexId
+      ? currentWall.endVertexId
+      : currentWall.startVertexId
+
+    // Check if we've completed the cycle
+    if (nextVertexId === startVertexId && visitedWalls.length >= 3) {
+      return visitedWalls
+    }
+
+    // Find the rightmost turn at this vertex
+    // The rightmost turn is the edge with the smallest angle difference (clockwise)
+    const edges = adjacency.get(nextVertexId)
+    if (!edges || edges.length < 2) return null // Dead end or no choices
+
+    // Calculate the incoming angle (angle we came from, reversed)
+    const currentVertex = vertexMap.get(nextVertexId)
+    const prevVertex = vertexMap.get(currentVertexId)
+    if (!currentVertex || !prevVertex) return null
+
+    const incomingAngle = Math.atan2(
+      prevVertex.y - currentVertex.y,
+      prevVertex.x - currentVertex.x
+    )
+
+    // Find the edge with the smallest positive angle difference (rightmost turn)
+    let bestEdge: { wallId: string; toVertexId: string; angle: number } | null = null
+    let minAngleDiff = Infinity
+
+    for (const edge of edges) {
+      // Skip the wall we came from
+      if (edge.wallId === currentWallId) continue
+
+      // Calculate angle difference (normalized to 0-2π)
+      let angleDiff = edge.angle - incomingAngle
+      while (angleDiff < 0) angleDiff += 2 * Math.PI
+      while (angleDiff > 2 * Math.PI) angleDiff -= 2 * Math.PI
+
+      if (angleDiff < minAngleDiff) {
+        minAngleDiff = angleDiff
+        bestEdge = edge
+      }
+    }
+
+    if (!bestEdge) return null
+
+    // Move to the next wall
+    currentVertexId = nextVertexId
+    currentWallId = bestEdge.wallId
+    steps++
+  }
+
+  return null // Didn't complete a cycle
+}
+
+/**
+ * Normalize a cycle for deduplication (smallest wall ID first, maintain order)
+ */
+function normalizeCycle(wallIds: string[]): string {
+  if (wallIds.length === 0) return ''
+
+  // Find the index of the smallest wall ID
+  let minIndex = 0
+  for (let i = 1; i < wallIds.length; i++) {
+    if (wallIds[i] < wallIds[minIndex]) {
+      minIndex = i
+    }
+  }
+
+  // Rotate array to start with smallest ID
+  const rotated = [...wallIds.slice(minIndex), ...wallIds.slice(0, minIndex)]
+
+  // Also consider the reversed version and pick the lexicographically smaller one
+  const reversed = [rotated[0], ...rotated.slice(1).reverse()]
+
+  const rotatedStr = rotated.join(',')
+  const reversedStr = reversed.join(',')
+
+  return rotatedStr < reversedStr ? rotatedStr : reversedStr
+}
+
+/**
+ * Calculate the perimeter of a cycle (sum of wall lengths)
+ */
+function calculateCyclePerimeter(
+  wallIds: string[],
+  walls: FloorplanWallV2[],
+  vertexMap: Map<string, FloorplanVertex>
+): number {
+  const wallMap = new Map(walls.map(w => [w.id, w]))
+  let perimeter = 0
+
+  for (const wallId of wallIds) {
+    const wall = wallMap.get(wallId)
+    if (!wall) continue
+
+    const startV = vertexMap.get(wall.startVertexId)
+    const endV = vertexMap.get(wall.endVertexId)
+    if (!startV || !endV) continue
+
+    const length = Math.sqrt(
+      (endV.x - startV.x) ** 2 + (endV.y - startV.y) ** 2
+    )
+    perimeter += length
+  }
+
+  return perimeter
 }
 
 /**
@@ -441,8 +718,81 @@ export function convertV2To3D(
     }))
 
     // Get wall height from V2 data (use first wall's height or default to 10)
-    const roomWalls = room.wallIds.map(id => walls.find(w => w.id === id)).filter(Boolean)
+    const roomWalls = room.wallIds.map(id => walls.find(w => w.id === id)).filter(Boolean) as FloorplanWallV2[]
     const wallHeight = roomWalls[0]?.height ?? 10
+
+    // Convert doors from V2 walls to 3D room doors
+    const doors3D: Array<{ wall: 'north' | 'south' | 'east' | 'west'; position: number; width: number; height: number }> = []
+
+    console.log(`[convertV2To3D] Converting doors for room ${room.name}:`, roomWalls.filter(w => w.doors && w.doors.length > 0).length, 'walls with doors')
+
+    for (const wall of roomWalls) {
+      if (!wall.doors || wall.doors.length === 0) continue
+
+      console.log(`[convertV2To3D] Wall ${wall.id} has ${wall.doors.length} doors`)
+
+      const startV = vertices.find(v => v.id === wall.startVertexId)
+      const endV = vertices.find(v => v.id === wall.endVertexId)
+      if (!startV || !endV) continue
+
+      // Calculate wall vector and length
+      const wallDx = endV.x - startV.x
+      const wallDy = endV.y - startV.y
+      const wallLength = Math.sqrt(wallDx * wallDx + wallDy * wallDy)
+
+      // Determine which edge of the bounding box this wall is closest to
+      const wallMidX = (startV.x + endV.x) / 2
+      const wallMidY = (startV.y + endV.y) / 2
+
+      // Calculate distances to each edge
+      // NOTE: Coordinates are negated when converting to 3D (lines 707-710),
+      // so we need to swap east/west and north/south to match 3D orientation
+      const distToNorth = Math.abs(wallMidY - bounds.minY)  // minY → north after negation
+      const distToSouth = Math.abs(wallMidY - bounds.maxY)  // maxY → south after negation
+      const distToEast = Math.abs(wallMidX - bounds.minX)   // minX → east after negation
+      const distToWest = Math.abs(wallMidX - bounds.maxX)   // maxX → west after negation
+
+      const minDist = Math.min(distToNorth, distToSouth, distToEast, distToWest)
+      let wallSide: 'north' | 'south' | 'east' | 'west'
+      let edgeLength: number
+
+      if (minDist === distToNorth) {
+        wallSide = 'north'
+        edgeLength = bounds.width
+      } else if (minDist === distToSouth) {
+        wallSide = 'south'
+        edgeLength = bounds.width
+      } else if (minDist === distToEast) {
+        wallSide = 'east'
+        edgeLength = bounds.depth
+      } else {
+        wallSide = 'west'
+        edgeLength = bounds.depth
+      }
+
+      // Convert each door on this wall
+      for (const door of wall.doors) {
+        // Door position in V2 is feet from wall start
+        // In 3D, position is -0.5 to 0.5 where 0 is center
+        const doorCenterPos = door.position + door.width / 2
+        const positionRatio = doorCenterPos / wallLength
+
+        // Map to approximate position on the bounding box edge
+        // This is simplified - assumes the wall roughly aligns with the edge
+        const position3D = (positionRatio - 0.5) * (wallLength / edgeLength)
+
+        const door3D = {
+          wall: wallSide,
+          position: Math.max(-0.5, Math.min(0.5, position3D)), // Clamp to valid range
+          width: door.width,
+          height: door.height,
+        }
+        console.log(`[convertV2To3D] Adding door to ${wallSide} wall:`, JSON.stringify(door3D))
+        doors3D.push(door3D)
+      }
+    }
+
+    console.log(`[convertV2To3D] Total doors converted for room ${room.name}:`, doors3D.length)
 
     // Calculate camera position
     const maxDimension = Math.max(bounds.width, bounds.depth)
@@ -465,7 +815,7 @@ export function convertV2To3D(
       },
       position: position3D,
       polygon: polygon3D,  // Include polygon vertices for arbitrary shape rendering
-      doors: [],  // V2 doesn't have doors yet
+      doors: doors3D,
       instances: [],
       cameraPosition,
       cameraTarget: {
@@ -478,64 +828,30 @@ export function convertV2To3D(
       },
     }
 
+    console.log(`[convertV2To3D] Final 3D room for ${room.name}:`, {
+      dimensions: room3D.dimensions,
+      doors: room3D.doors,
+      doorCount: room3D.doors?.length || 0
+    })
+
     rooms3D.push(room3D)
   }
 
-  // In the wall-first architecture, walls are already shared
-  // We don't need to create separate SharedWall objects for V2
-  // The Room component will render walls based on dimensions
-  // Shared walls are implicitly handled by the single-wall data model
+  // In the wall-first V2 architecture, walls are single entities shared between rooms
+  // PolygonRooms render walls directly from polygon vertices using V2 wall data
+  //
+  // IMPORTANT: We do NOT create SharedWall components for V2 floorplans because:
+  // 1. SharedWall calculations use bounding boxes (room.dimensions.width/depth)
+  // 2. PolygonRoom calculations use actual polygon edge geometry
+  // 3. When both render the same wall, door holes DON'T ALIGN due to different calculations
+  // 4. This causes visible misalignment where holes appear narrower or offset
+  //
+  // V2 architecture handles sharing at the data level: adjacent rooms reference the same
+  // wall IDs. Each wall edge is rendered once by the PolygonRoom that owns it.
+  const sharedWalls: SharedWall[] = []
 
-  // For now, detect which walls should be excluded to prevent double-rendering
-  // This is similar to the existing SharedWall detection but simplified
-  const sharedWalls: SharedWall[] = detectSharedWallsV2(rooms, walls, vertices, rooms3D, centerX, centerY)
-
-  // Mark rooms to exclude shared walls
-  for (const sharedWall of sharedWalls) {
-    const room1 = rooms3D.find(r => r.id === sharedWall.room1Id)
-    const room2 = rooms3D.find(r => r.id === sharedWall.room2Id)
-
-    if (room1) {
-      room1.excludedWalls = room1.excludedWalls || {}
-      // Determine which wall to exclude based on orientation and position
-      if (sharedWall.orientation === 'east-west') {
-        // Horizontal wall - could be north or south
-        const room1Pos = room1.position || [0, 0, 0]
-        if (sharedWall.position[2] > room1Pos[2]) {
-          room1.excludedWalls.north = true
-        } else {
-          room1.excludedWalls.south = true
-        }
-      } else {
-        // Vertical wall - could be east or west
-        const room1Pos = room1.position || [0, 0, 0]
-        if (sharedWall.position[0] > room1Pos[0]) {
-          room1.excludedWalls.east = true
-        } else {
-          room1.excludedWalls.west = true
-        }
-      }
-    }
-
-    if (room2) {
-      room2.excludedWalls = room2.excludedWalls || {}
-      if (sharedWall.orientation === 'east-west') {
-        const room2Pos = room2.position || [0, 0, 0]
-        if (sharedWall.position[2] > room2Pos[2]) {
-          room2.excludedWalls.north = true
-        } else {
-          room2.excludedWalls.south = true
-        }
-      } else {
-        const room2Pos = room2.position || [0, 0, 0]
-        if (sharedWall.position[0] > room2Pos[0]) {
-          room2.excludedWalls.east = true
-        } else {
-          room2.excludedWalls.west = true
-        }
-      }
-    }
-  }
+  // DISABLED: SharedWall detection causes double-rendering and door misalignment for V2
+  // const sharedWalls: SharedWall[] = detectSharedWallsV2(rooms, walls, vertices, rooms3D, centerX, centerY)
 
   return { rooms: rooms3D, sharedWalls }
 }
@@ -583,15 +899,42 @@ function detectSharedWallsV2(
         const overlapMin = Math.max(room1West, room2West)
         const overlapMax = Math.min(room1East, room2East)
         if (overlapMax > overlapMin) {
+          const wallCenter = (overlapMin + overlapMax) / 2
+          const wallWidth = overlapMax - overlapMin
+
+          // Collect doors from both rooms on the shared wall sides
+          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+
+          // Room1's north wall doors
+          const room1NorthDoors = (room1.doors || []).filter(d => d.wall === 'north')
+          for (const door of room1NorthDoors) {
+            // Convert from room-relative to shared-wall-relative position
+            // door.position is -0.5 to 0.5 relative to room width
+            const doorWorldX = pos1[0] + door.position * dim1.width
+            const doorRelativeX = (doorWorldX - wallCenter) / wallWidth  // -0.5 to 0.5 relative to shared wall
+            sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+          }
+
+          // Room2's south wall doors
+          const room2SouthDoors = (room2.doors || []).filter(d => d.wall === 'south')
+          for (const door of room2SouthDoors) {
+            const doorWorldX = pos2[0] + door.position * dim2.width
+            const doorRelativeX = (doorWorldX - wallCenter) / wallWidth
+            // Only add if not already present (rooms may have same door)
+            if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeX) < 0.01)) {
+              sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+            }
+          }
+
           sharedWalls.push({
             id: `shared-${room1.id}-${room2.id}`,
             room1Id: room1.id,
             room2Id: room2.id,
-            position: [(overlapMin + overlapMax) / 2, 0, (room1North + room2South) / 2],
-            width: overlapMax - overlapMin,
+            position: [wallCenter, 0, (room1North + room2South) / 2],
+            width: wallWidth,
             height: Math.max(dim1.height, dim2.height),
             orientation: 'east-west',
-            doors: [],
+            doors: sharedDoors,
           })
         }
       }
@@ -600,15 +943,38 @@ function detectSharedWallsV2(
         const overlapMin = Math.max(room1West, room2West)
         const overlapMax = Math.min(room1East, room2East)
         if (overlapMax > overlapMin) {
+          const wallCenter = (overlapMin + overlapMax) / 2
+          const wallWidth = overlapMax - overlapMin
+
+          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+
+          // Room1's south wall doors
+          const room1SouthDoors = (room1.doors || []).filter(d => d.wall === 'south')
+          for (const door of room1SouthDoors) {
+            const doorWorldX = pos1[0] + door.position * dim1.width
+            const doorRelativeX = (doorWorldX - wallCenter) / wallWidth
+            sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+          }
+
+          // Room2's north wall doors
+          const room2NorthDoors = (room2.doors || []).filter(d => d.wall === 'north')
+          for (const door of room2NorthDoors) {
+            const doorWorldX = pos2[0] + door.position * dim2.width
+            const doorRelativeX = (doorWorldX - wallCenter) / wallWidth
+            if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeX) < 0.01)) {
+              sharedDoors.push({ position: doorRelativeX, width: door.width, height: door.height })
+            }
+          }
+
           sharedWalls.push({
             id: `shared-${room1.id}-${room2.id}`,
             room1Id: room1.id,
             room2Id: room2.id,
-            position: [(overlapMin + overlapMax) / 2, 0, (room1South + room2North) / 2],
-            width: overlapMax - overlapMin,
+            position: [wallCenter, 0, (room1South + room2North) / 2],
+            width: wallWidth,
             height: Math.max(dim1.height, dim2.height),
             orientation: 'east-west',
-            doors: [],
+            doors: sharedDoors,
           })
         }
       }
@@ -618,15 +984,39 @@ function detectSharedWallsV2(
         const overlapMin = Math.max(room1South, room2South)
         const overlapMax = Math.min(room1North, room2North)
         if (overlapMax > overlapMin) {
+          const wallCenter = (overlapMin + overlapMax) / 2
+          const wallWidth = overlapMax - overlapMin
+
+          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+
+          // Room1's east wall doors
+          const room1EastDoors = (room1.doors || []).filter(d => d.wall === 'east')
+          for (const door of room1EastDoors) {
+            // For north-south walls, position relates to depth (Z axis)
+            const doorWorldZ = pos1[2] + door.position * dim1.depth
+            const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
+            sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+          }
+
+          // Room2's west wall doors
+          const room2WestDoors = (room2.doors || []).filter(d => d.wall === 'west')
+          for (const door of room2WestDoors) {
+            const doorWorldZ = pos2[2] + door.position * dim2.depth
+            const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
+            if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeZ) < 0.01)) {
+              sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+            }
+          }
+
           sharedWalls.push({
             id: `shared-${room1.id}-${room2.id}`,
             room1Id: room1.id,
             room2Id: room2.id,
-            position: [(room1East + room2West) / 2, 0, (overlapMin + overlapMax) / 2],
-            width: overlapMax - overlapMin,
+            position: [(room1East + room2West) / 2, 0, wallCenter],
+            width: wallWidth,
             height: Math.max(dim1.height, dim2.height),
             orientation: 'north-south',
-            doors: [],
+            doors: sharedDoors,
           })
         }
       }
@@ -635,15 +1025,38 @@ function detectSharedWallsV2(
         const overlapMin = Math.max(room1South, room2South)
         const overlapMax = Math.min(room1North, room2North)
         if (overlapMax > overlapMin) {
+          const wallCenter = (overlapMin + overlapMax) / 2
+          const wallWidth = overlapMax - overlapMin
+
+          const sharedDoors: Array<{ position: number; width: number; height: number }> = []
+
+          // Room1's west wall doors
+          const room1WestDoors = (room1.doors || []).filter(d => d.wall === 'west')
+          for (const door of room1WestDoors) {
+            const doorWorldZ = pos1[2] + door.position * dim1.depth
+            const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
+            sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+          }
+
+          // Room2's east wall doors
+          const room2EastDoors = (room2.doors || []).filter(d => d.wall === 'east')
+          for (const door of room2EastDoors) {
+            const doorWorldZ = pos2[2] + door.position * dim2.depth
+            const doorRelativeZ = (doorWorldZ - wallCenter) / wallWidth
+            if (!sharedDoors.some(d => Math.abs(d.position - doorRelativeZ) < 0.01)) {
+              sharedDoors.push({ position: doorRelativeZ, width: door.width, height: door.height })
+            }
+          }
+
           sharedWalls.push({
             id: `shared-${room1.id}-${room2.id}`,
             room1Id: room1.id,
             room2Id: room2.id,
-            position: [(room1West + room2East) / 2, 0, (overlapMin + overlapMax) / 2],
-            width: overlapMax - overlapMin,
+            position: [(room1West + room2East) / 2, 0, wallCenter],
+            width: wallWidth,
             height: Math.max(dim1.height, dim2.height),
             orientation: 'north-south',
-            doors: [],
+            doors: sharedDoors,
           })
         }
       }

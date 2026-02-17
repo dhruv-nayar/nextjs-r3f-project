@@ -212,9 +212,14 @@ function FloorplanV2PageWrapper({ homeId }: { homeId: string }) {
           </div>
         </div>
 
-        {/* Sidebar with instructions */}
+        {/* Sidebar with tools */}
         <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
-          <h2 className="font-semibold text-gray-900 mb-4">How to Draw</h2>
+          <h2 className="font-semibold text-gray-900 mb-4">Tools</h2>
+
+          {/* Tools will be injected here by FloorplanCanvasV2 */}
+          <div id="floorplan-toolbar-container" className="mb-6"></div>
+
+          <h2 className="font-semibold text-gray-900 mb-4 mt-8">How to Draw</h2>
 
           <div className="space-y-4 text-sm text-gray-600">
             <div>

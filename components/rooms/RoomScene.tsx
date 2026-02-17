@@ -295,6 +295,7 @@ export function RoomScene() {
                 height={roomHeight}
                 position={roomPosition}
                 roomId={room.id}
+                doors={roomDoors}
               />
             ) : (
               <Room

@@ -7,11 +7,26 @@
  * - Rooms are computed from closed wall loops
  */
 
+// Editor interaction modes
+export enum EditorMode {
+  SELECT = 'SELECT',
+  DRAW_WALLS = 'DRAW_WALLS',
+  PLACE_DOORS = 'PLACE_DOORS'
+}
+
 // A point in 2D space (shared corner)
 export interface FloorplanVertex {
   id: string
   x: number  // feet from canvas origin
   y: number  // feet from canvas origin
+}
+
+// A door opening in a wall
+export interface FloorplanDoorV2 {
+  id: string
+  position: number  // feet from start vertex (left edge of door)
+  width: number     // feet (default 3)
+  height: number    // feet (default 7)
 }
 
 // A wall segment connecting two vertices
@@ -20,6 +35,7 @@ export interface FloorplanWallV2 {
   startVertexId: string
   endVertexId: string
   height?: number  // wall height in feet (default: 10)
+  doors?: FloorplanDoorV2[]  // door openings in this wall
 }
 
 // A room is a closed loop of walls
@@ -46,9 +62,12 @@ export const ROOM_COLORS = [
 export const CANVAS_WIDTH = 900   // pixels
 export const CANVAS_HEIGHT = 600  // pixels
 export const PIXELS_PER_FOOT = 30 // 30 px = 1 ft
+export const PIXELS_PER_INCH = PIXELS_PER_FOOT / 12 // 2.5 px = 1 inch
 export const SNAP_DISTANCE = 0.5  // feet - snap radius for vertices
 export const WALL_SNAP_DISTANCE = 0.3 // feet - snap radius for walls
 export const GRID_SPACING = 2     // feet - grid line spacing
+export const GRID_DOT_RADIUS = 0.5 // pixels - radius for inch dots
+export const GRID_LINE_DASH = [2, 3] // dash pattern for foot lines
 
 // Convert canvas pixels to feet
 export function pixelsToFeet(px: number): number {

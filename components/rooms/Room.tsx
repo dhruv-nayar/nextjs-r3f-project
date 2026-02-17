@@ -46,34 +46,71 @@ function createWallWithDoors(
   wallHeight: number,
   doors: Array<{ width: number; height: number; position: number }>
 ) {
+  console.log('[Room createWallWithDoors]', { wallWidth, wallHeight, doorCount: doors.length })
+
   const shape = new THREE.Shape()
 
-  // Create outer rectangle (wall)
-  shape.moveTo(-wallWidth / 2, 0)
-  shape.lineTo(wallWidth / 2, 0)
-  shape.lineTo(wallWidth / 2, wallHeight)
-  shape.lineTo(-wallWidth / 2, wallHeight)
-  shape.lineTo(-wallWidth / 2, 0)
+  // Create outer rectangle (wall) centered vertically at origin - CCW winding
+  shape.moveTo(-wallWidth / 2, -wallHeight / 2)
+  shape.lineTo(wallWidth / 2, -wallHeight / 2)
+  shape.lineTo(wallWidth / 2, wallHeight / 2)
+  shape.lineTo(-wallWidth / 2, wallHeight / 2)
+  shape.closePath()
 
-  // Create hole for each door
-  doors.forEach(door => {
-    const hole = new THREE.Path()
+  // Create hole for each door - CW winding (OPPOSITE of outer shape)
+  doors.forEach((door, index) => {
     const doorX = door.position * wallWidth
-    const doorY = 0
+    const doorLeft = doorX - door.width / 2
+    const doorRight = doorX + door.width / 2
+    const doorBottom = -wallHeight / 2
+    const doorTop = doorBottom + door.height
 
-    hole.moveTo(doorX - door.width / 2, doorY)
-    hole.lineTo(doorX + door.width / 2, doorY)
-    hole.lineTo(doorX + door.width / 2, doorY + door.height)
-    hole.lineTo(doorX - door.width / 2, doorY + door.height)
-    hole.lineTo(doorX - door.width / 2, doorY)
+    console.log(`[Room] Door ${index}:`, {
+      position: door.position,
+      width: door.width,
+      height: door.height,
+      doorX,
+      doorLeft,
+      doorRight,
+      wallRange: [-wallWidth / 2, wallWidth / 2],
+      doorBottom,
+      doorTop
+    })
+
+    // Validate door is within wall bounds with margin
+    const MARGIN = 0.05 // 0.05 feet margin from edges
+    if (doorLeft < -wallWidth / 2 + MARGIN || doorRight > wallWidth / 2 - MARGIN) {
+      console.warn(`[Room] Door ${index} is too close to wall bounds, skipping`)
+      return
+    }
+
+    // Add small inset to ensure hole doesn't touch outer boundary (critical for triangulation)
+    const INSET = 0.01
+    const insetLeft = doorLeft + INSET
+    const insetRight = doorRight - INSET
+    const insetBottom = doorBottom + INSET
+    const insetTop = doorTop - INSET
+
+    // Create hole with CW winding (opposite of outer shape) - required by THREE.js
+    const hole = new THREE.Path()
+    hole.moveTo(insetLeft, insetBottom)
+    hole.lineTo(insetLeft, insetTop)      // Go up
+    hole.lineTo(insetRight, insetTop)     // Go right
+    hole.lineTo(insetRight, insetBottom)  // Go down
+    hole.closePath()
 
     shape.holes.push(hole)
   })
 
-  return new THREE.ShapeGeometry(shape)
+  const geometry = new THREE.ShapeGeometry(shape)
+  console.log('[Room] Created geometry, vertices:', geometry.attributes.position.count)
+
+  return geometry
 }
 
 export function Room({ width, height, depth, position = [0, 0, 0], doors = [], roomId, excludedWalls, wallHeights, gridSettings }: RoomProps) {
+  console.log(`[Room] Rendering room ${roomId} with doors:`, doors)
+
   // Get individual wall heights
   const northHeight = getWallHeight('north', height, wallHeights)
   const southHeight = getWallHeight('south', height, wallHeights)
@@ -298,7 +335,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {southWallGeometry ? (
             <mesh
               ref={southWallRef}
-              position={[0, 0, -depth / 2]}
+              position={[0, southHeight / 2, -depth / 2]}
               receiveShadow
               onClick={(e) => handleWallClick('south', e)}
               onPointerOver={(e) => handleWallHover('south', true, e)}
@@ -356,7 +393,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {northWallGeometry ? (
             <mesh
               ref={northWallRef}
-              position={[0, 0, depth / 2]}
+              position={[0, northHeight / 2, depth / 2]}
               receiveShadow
               onClick={(e) => handleWallClick('north', e)}
               onPointerOver={(e) => handleWallHover('north', true, e)}
@@ -414,7 +451,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {westWallGeometry ? (
             <mesh
               ref={westWallRef}
-              position={[-width / 2, 0, 0]}
+              position={[-width / 2, westHeight / 2, 0]}
               rotation={[0, Math.PI / 2, 0]}
               receiveShadow
               onClick={(e) => handleWallClick('west', e)}
@@ -474,7 +511,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
           {eastWallGeometry ? (
             <mesh
               ref={eastWallRef}
-              position={[width / 2, 0, 0]}
+              position={[width / 2, eastHeight / 2, 0]}
               rotation={[0, -Math.PI / 2, 0]}
               receiveShadow
               onClick={(e) => handleWallClick('east', e)}

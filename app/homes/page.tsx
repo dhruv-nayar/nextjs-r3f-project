@@ -16,7 +16,6 @@ export default function HomesPage() {
   // Create home form state
   const [newHomeName, setNewHomeName] = useState('')
   const [newHomeDescription, setNewHomeDescription] = useState('')
-  const [newRoomName, setNewRoomName] = useState('Living Room')
 
   const handleCreateHome = () => {
     if (!newHomeName.trim()) {
@@ -24,25 +23,16 @@ export default function HomesPage() {
       return
     }
 
-    const firstRoom = {
-      id: `room-${Date.now()}`,
-      name: newRoomName.trim() || 'Living Room',
-      homeId: '',
-      instances: [],
-      cameraPosition: { x: 20, y: 15, z: 30 },
-      cameraTarget: { x: 0, y: 2, z: 0 },
-      lighting: {
-        ambient: { intensity: Math.PI / 2 }
-      }
-    }
-
-    createHome(newHomeName.trim(), [firstRoom])
+    // Create home with no rooms initially
+    const homeId = createHome(newHomeName.trim(), [])
 
     // Reset form
     setNewHomeName('')
     setNewHomeDescription('')
-    setNewRoomName('Living Room')
     setShowCreateModal(false)
+
+    // Navigate to floorplan editor
+    router.push(`/floorplan?homeId=${homeId}&mode=new`)
   }
 
   const handleDeleteHome = (homeId: string) => {
@@ -148,20 +138,6 @@ export default function HomesPage() {
                   placeholder="2 bedroom apartment in downtown"
                   rows={2}
                   className="w-full px-4 py-2.5 bg-porcelain border border-taupe/20 rounded-lg text-graphite placeholder:text-taupe/40 focus:outline-none focus:border-sage font-body resize-none"
-                />
-              </div>
-
-              {/* First Room Name */}
-              <div>
-                <label className="block text-graphite/80 text-sm font-medium font-body mb-2">
-                  First Room Name
-                </label>
-                <input
-                  type="text"
-                  value={newRoomName}
-                  onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="Living Room"
-                  className="w-full px-4 py-2.5 bg-porcelain border border-taupe/20 rounded-lg text-graphite placeholder:text-taupe/40 focus:outline-none focus:border-sage font-body"
                 />
               </div>
 

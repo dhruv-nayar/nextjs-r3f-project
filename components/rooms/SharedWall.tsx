@@ -6,42 +6,74 @@ import { SharedWall as SharedWallType } from '@/types/room'
 
 /**
  * Create wall geometry with holes for multiple doors
- * Similar to createWallWithDoor in Room.tsx, but supports multiple doors
+ * Shape is centered vertically (from -height/2 to +height/2)
  */
 function createWallWithDoors(
   wallWidth: number,
   wallHeight: number,
   doors: Array<{ position: number; width: number; height: number }>
 ): THREE.ShapeGeometry {
+  console.log('[SharedWall createWallWithDoors]', { wallWidth, wallHeight, doorCount: doors.length })
+
   const shape = new THREE.Shape()
 
-  // Create outer rectangle (wall)
-  shape.moveTo(-wallWidth / 2, 0)
-  shape.lineTo(wallWidth / 2, 0)
-  shape.lineTo(wallWidth / 2, wallHeight)
-  shape.lineTo(-wallWidth / 2, wallHeight)
-  shape.lineTo(-wallWidth / 2, 0)
+  // Create outer rectangle (wall) centered vertically at origin - CCW winding
+  shape.moveTo(-wallWidth / 2, -wallHeight / 2)
+  shape.lineTo(wallWidth / 2, -wallHeight / 2)
+  shape.lineTo(wallWidth / 2, wallHeight / 2)
+  shape.lineTo(-wallWidth / 2, wallHeight / 2)
+  shape.closePath()
 
-  // Create hole for each door
-  doors.forEach(door => {
+  // Create hole for each door - CW winding (OPPOSITE of outer shape)
+  doors.forEach((door, index) => {
+    // door.position is in range -0.5 to 0.5 where 0 is center
+    const doorX = door.position * wallWidth
+    const doorLeft = doorX - door.width / 2
+    const doorRight = doorX + door.width / 2
+    const doorBottom = -wallHeight / 2
+    const doorTop = doorBottom + door.height
+
+    console.log(`[SharedWall] Door ${index}:`, {
+      position: door.position,
+      width: door.width,
+      height: door.height,
+      doorX,
+      doorLeft,
+      doorRight,
+      wallRange: [-wallWidth / 2, wallWidth / 2],
+      doorBottom,
+      doorTop
+    })
+
+    // Validate door is within wall bounds with margin
+    const MARGIN = 0.05 // 0.05 feet margin from edges
+    if (doorLeft < -wallWidth / 2 + MARGIN || doorRight > wallWidth / 2 - MARGIN) {
+      console.warn(`[SharedWall] Door ${index} is too close to wall bounds, skipping`)
+      return
+    }
+
+    // Add small inset to ensure hole doesn't touch outer boundary (critical for triangulation)
+    const INSET = 0.01
+    const insetLeft = doorLeft + INSET
+    const insetRight = doorRight - INSET
+    const insetBottom = doorBottom + INSET
+    const insetTop = doorTop - INSET
+
+    // Create hole with CW winding (opposite of outer shape) - required by THREE.js
     const hole = new THREE.Path()
-
-    // Convert door position from wall-relative to centered coordinates
-    // door.position is the door's CENTER in feet from left edge of wall
-    const doorCenterX = -wallWidth / 2 + door.position
-    const doorY = 0
-
-    // Create hole centered at doorCenterX (same as Room.tsx)
-    hole.moveTo(doorCenterX - door.width / 2, doorY)
-    hole.lineTo(doorCenterX + door.width / 2, doorY)
-    hole.lineTo(doorCenterX + door.width / 2, doorY + door.height)
-    hole.lineTo(doorCenterX - door.width / 2, doorY + door.height)
-    hole.lineTo(doorCenterX - door.width / 2, doorY)
+    hole.moveTo(insetLeft, insetBottom)
+    hole.lineTo(insetLeft, insetTop)      // Go up
+    hole.lineTo(insetRight, insetTop)     // Go right
+    hole.lineTo(insetRight, insetBottom)  // Go down
+    hole.closePath()
 
     shape.holes.push(hole)
   })
 
-  return new THREE.ShapeGeometry(shape)
+  const geometry = new THREE.ShapeGeometry(shape)
+  console.log('[SharedWall] Created geometry, vertices:', geometry.attributes.position.count)
+
+  return geometry
 }
 
 /**
@@ -79,9 +111,6 @@ export function SharedWall({ wall }: { wall: SharedWallType }) {
     return createWallWithDoors(wall.width, wall.height, wall.doors)
   }, [wall.width, wall.height, wall.doors])
 
-  // Grid texture
-  const gridTexture = useMemo(() => createGridTexture(), [])
-
   // Determine rotation based on orientation
   // For east-west: wall runs along X axis, faces +Z/-Z, no rotation
   // For north-south: wall runs along Z axis, faces +X/-X, rotate 90° around Y
@@ -89,15 +118,22 @@ export function SharedWall({ wall }: { wall: SharedWallType }) {
     ? [0, Math.PI / 2, 0]
     : [0, 0, 0]
 
+  console.log('[SharedWall render]', {
+    id: wall.id,
+    position: wall.position,
+    width: wall.width,
+    height: wall.height,
+    orientation: wall.orientation,
+    doorCount: wall.doors.length
+  })
+
   return (
     <group position={wall.position}>
-      <mesh rotation={rotation} receiveShadow>
+      <mesh rotation={rotation} position={[0, wall.height / 2, 0]} receiveShadow castShadow>
         <primitive object={geometry} />
         <meshStandardMaterial
-          map={gridTexture}
-          map-repeat={[wall.width, wall.height]}
+          color="#e8e8e8"
           side={THREE.DoubleSide}
-          color="#ffffff"  // White to match other walls
         />
       </mesh>
     </group>
