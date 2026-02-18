@@ -1,7 +1,11 @@
 'use client'
 
 import * as THREE from 'three'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
+import { ThreeEvent } from '@react-three/fiber'
+import { useSelection } from '@/lib/selection-context'
+import { useFurnitureSelection } from '@/lib/furniture-selection-context'
+import { useRoomHover } from '@/lib/room-hover-context'
 
 interface Door {
   wall: 'north' | 'south' | 'east' | 'west'  // Which wall (north=+Z, south=-Z, east=+X, west=-X)
@@ -96,6 +100,47 @@ function createWallWithDoors(
  */
 export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doors = [] }: PolygonRoomProps) {
   console.log(`[PolygonRoom] Rendering ${roomId} with ${doors.length} doors`)
+
+  // Selection and hover state
+  const { selectFloor, isFloorSelected, hoveredItem, setHoveredItem } = useSelection()
+  const { setSelectedFurnitureId } = useFurnitureSelection()
+  const { hoveredRoomId, setHoveredRoomId } = useRoomHover()
+
+  const isFloorSelectedHere = roomId ? isFloorSelected(roomId) : false
+  const isFloorHovered = hoveredItem?.type === 'floor' && hoveredItem.roomId === roomId
+  const isHovered = roomId && hoveredRoomId === roomId
+
+  // Click handler for floor
+  const handleFloorClick = useCallback((e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation()
+    if (roomId) {
+      setSelectedFurnitureId(null) // Clear furniture selection
+      selectFloor(roomId)
+    }
+  }, [roomId, selectFloor, setSelectedFurnitureId])
+
+  // Hover handlers for floor
+  const handleFloorPointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    if (roomId) {
+      setHoveredItem({ type: 'floor', roomId })
+      setHoveredRoomId(roomId)
+      document.body.style.cursor = 'pointer'
+    }
+  }, [roomId, setHoveredItem, setHoveredRoomId])
+
+  const handleFloorPointerOut = useCallback(() => {
+    setHoveredItem(null)
+    setHoveredRoomId(null)
+    document.body.style.cursor = 'default'
+  }, [setHoveredItem, setHoveredRoomId])
+
+  // Get floor material color based on state
+  const getFloorColor = () => {
+    if (isFloorSelectedHere) return '#ffe4b5' // Light orange when selected
+    if (isFloorHovered || isHovered) return '#e0ffff' // Light cyan when hovered
+    return '#f5f5f5'
+  }
   // Create floor geometry from polygon
   const floorGeometry = useMemo(() => {
     if (polygon.length < 3) return null
@@ -223,9 +268,16 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
   return (
     <group position={position}>
       {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0, 0]}
+        receiveShadow
+        onClick={handleFloorClick}
+        onPointerOver={handleFloorPointerOver}
+        onPointerOut={handleFloorPointerOut}
+      >
         <primitive object={floorGeometry} attach="geometry" />
-        <meshStandardMaterial color="#f5f5f5" side={THREE.DoubleSide} />
+        <meshStandardMaterial color={getFloorColor()} side={THREE.DoubleSide} />
       </mesh>
 
       {/* Floor outline */}
