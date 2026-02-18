@@ -23,7 +23,7 @@ import { getStorageInfo, clearAllStorage } from '@/lib/storage'
 
 interface NavbarProps {
   /** Active navigation tab */
-  activeTab?: 'inventory' | 'projects'
+  activeTab?: 'inventory' | 'assets' | 'projects'
   /** Additional CSS classes */
   className?: string
   /** Breadcrumb text to show after the active tab */
@@ -154,6 +154,18 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                   </>
                 )}
               </div>
+
+              <Link
+                href="/assets"
+                className={cn(
+                  'font-body font-medium text-sm transition-colors',
+                  activeTab === 'assets'
+                    ? 'text-graphite border-b-2 border-graphite'
+                    : 'text-taupe/70 hover:text-graphite'
+                )}
+              >
+                Assets
+              </Link>
 
               {/* Projects Navigation - Show as dropdown on inventory page, breadcrumb on projects page */}
               {activeTab === 'inventory' ? (

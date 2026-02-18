@@ -67,6 +67,21 @@ export function TrellisJobProvider({ children }: { children: ReactNode }) {
     setToastMessage(null)
   }, [])
 
+  // Poll for job updates as fallback when webhooks fail
+  const pollJobs = useCallback(async () => {
+    try {
+      const response = await fetch('/api/trellis/poll-jobs', { method: 'POST' })
+      if (response.ok) {
+        const result = await response.json()
+        if (result.updated > 0) {
+          console.log(`[TrellisJobContext] Polling updated ${result.updated} jobs`)
+        }
+      }
+    } catch (err) {
+      console.error('[TrellisJobContext] Polling error:', err)
+    }
+  }, [])
+
   // Load jobs from Supabase and subscribe to realtime updates
   useEffect(() => {
     const supabase = createClient()
@@ -148,6 +163,23 @@ export function TrellisJobProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel)
     }
   }, [showToast])
+
+  // Poll for updates when there are active jobs (fallback for failed webhooks)
+  useEffect(() => {
+    const activeJobs = jobs.filter(j => j.status === 'pending' || j.status === 'processing')
+
+    if (activeJobs.length === 0) return
+
+    // Poll every 10 seconds when there are active jobs
+    const pollInterval = setInterval(() => {
+      pollJobs()
+    }, 10000)
+
+    // Also poll immediately
+    pollJobs()
+
+    return () => clearInterval(pollInterval)
+  }, [jobs, pollJobs])
 
   // Add job - optimistically add to local state (job is created by API route)
   const addJob = useCallback((jobData: {
