@@ -29,7 +29,7 @@ export default function ItemDetailPage() {
   const searchParams = useSearchParams()
   const itemId = params.id as string
 
-  const { getItem, updateItem, deleteItem } = useItemLibrary()
+  const { items, getItem, updateItem, deleteItem } = useItemLibrary()
   const { getInstancesForItem, deleteAllInstancesOfItem, switchHome } = useHome()
   const { toastMessage: trellisToast, toastType: trellisToastType, clearToast: clearTrellisToast } = useTrellisJobs()
 
@@ -79,6 +79,7 @@ export default function ItemDetailPage() {
   // Model action menu state
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [showRegenerateModal, setShowRegenerateModal] = useState(false)
+  const [showAssetModal, setShowAssetModal] = useState(false)
 
   // Dimension state (feet and inches)
   const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
@@ -561,6 +562,22 @@ export default function ItemDetailPage() {
                   shape={item.parametricShape}
                   dimensions={item.dimensions}
                 />
+              ) : item.generationStatus?.isGenerating ? (
+                // Loading state while model is generating
+                <div className="w-full h-full flex items-center justify-center relative">
+                  <div className="text-center">
+                    <div className="mb-6">
+                      <div className="w-20 h-20 mx-auto relative">
+                        <div className="absolute inset-0 border-4 border-sage/20 rounded-full" />
+                        <div className="absolute inset-0 border-4 border-sage border-t-transparent rounded-full animate-spin" />
+                        <div className="absolute inset-3 border-4 border-taupe/10 rounded-full" />
+                        <div className="absolute inset-3 border-4 border-taupe/30 border-t-transparent rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                      </div>
+                    </div>
+                    <p className="text-graphite font-body font-medium mb-2">Generating 3D Model</p>
+                    <p className="text-taupe/50 font-body text-sm">This usually takes 1-3 minutes...</p>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center relative">
                   <div className="text-center">
@@ -626,13 +643,11 @@ export default function ItemDetailPage() {
                             <button
                               onClick={() => {
                                 setShowModelMenu(false)
-                                setToastMessage('Asset library coming soon!')
-                                setToastType('info')
-                                setShowToast(true)
+                                setShowAssetModal(true)
                               }}
-                              className="w-full px-4 py-2 text-left text-sm font-body text-taupe/50 hover:bg-porcelain flex items-center gap-3"
+                              className="w-full px-4 py-2 text-left text-sm font-body text-graphite hover:bg-porcelain flex items-center gap-3"
                             >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <svg className="w-4 h-4 text-taupe" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                               </svg>
                               Select from assets
@@ -887,44 +902,6 @@ export default function ItemDetailPage() {
                     rows={3}
                   />
                 </div>
-
-                {/* Images Section - Upload only (gallery is in floating bar at bottom of viewer) */}
-                <ImageGallery
-                  images={editImages}
-                  thumbnailPath={item.thumbnailPath}
-                  isEditing={true}
-                  onThumbnailChange={setEditThumbnailPath}
-                  onImagesAdd={handleImagesAdd}
-                  onImageUpdate={handleImageUpdate}
-                  onImageDelete={(pairIndex) => {
-                    const deletedImage = editImages[pairIndex]
-                    setEditImages(prev => prev.filter((_, i) => i !== pairIndex))
-                    // If the deleted image was the thumbnail, clear the thumbnail
-                    if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
-                      setEditThumbnailPath('')
-                    }
-                    // Reset viewer if viewing deleted image
-                    if (selectedViewerType === pairIndex) {
-                      setSelectedViewerType('model')
-                    } else if (typeof selectedViewerType === 'number' && selectedViewerType > pairIndex) {
-                      setSelectedViewerType(selectedViewerType - 1)
-                    }
-                  }}
-                  currentThumbnail={editThumbnailPath}
-                  uploadOnly
-                  triggerUploadRef={triggerUploadRef}
-                />
-
-                {/* Generate 3D Model Section - shown when there are images, or if generation was interrupted */}
-                {(editImages.length > 0 || item.generationStatus?.isGenerating) && !item.modelPath && (
-                  <GenerateModelPanel
-                    itemId={itemId}
-                    imagePairs={editImages}
-                    onModelGenerated={handleModelGenerated}
-                    onGenerationStart={handleGenerationStart}
-                    generationStatus={item.generationStatus}
-                  />
-                )}
 
                 {/* Metadata Section */}
                 <div>
@@ -1252,6 +1229,85 @@ export default function ItemDetailPage() {
                 disabled={editImages.filter(img => img.processed).length === 0}
               >
                 Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asset Selection Modal */}
+      {showAssetModal && (
+        <div className="fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-porcelain rounded-3xl p-8 max-w-2xl w-full shadow-2xl border border-sage/20 max-h-[80vh] flex flex-col">
+            <h3 className="text-2xl font-display font-semibold text-graphite mb-2">
+              Select from Assets
+            </h3>
+            <p className="text-taupe/60 font-body text-sm mb-6">
+              Choose an existing model from your inventory to use for this item.
+            </p>
+
+            {/* Asset Grid */}
+            <div className="flex-1 overflow-y-auto mb-6">
+              <div className="grid grid-cols-3 gap-4">
+                {items
+                  .filter(i => i.modelPath && i.id !== itemId)
+                  .map((assetItem) => (
+                    <button
+                      key={assetItem.id}
+                      onClick={() => {
+                        // Copy the model path to this item
+                        updateItem(itemId, { modelPath: assetItem.modelPath })
+                        setEditModelPath(assetItem.modelPath || '')
+                        setShowAssetModal(false)
+                        setToastMessage(`Model copied from "${assetItem.name}"`)
+                        setToastType('success')
+                        setShowToast(true)
+                      }}
+                      className="group relative aspect-square rounded-xl overflow-hidden border-2 border-taupe/10 hover:border-sage transition-all bg-white"
+                    >
+                      {assetItem.thumbnailPath ? (
+                        <Image
+                          src={assetItem.thumbnailPath}
+                          alt={assetItem.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-taupe/5">
+                          <svg className="w-8 h-8 text-taupe/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-graphite/80 to-transparent p-3">
+                        <p className="text-white text-sm font-body truncate">{assetItem.name}</p>
+                        <p className="text-white/60 text-xs font-body capitalize">{assetItem.category}</p>
+                      </div>
+                      <div className="absolute inset-0 bg-sage/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))}
+              </div>
+
+              {items.filter(i => i.modelPath && i.id !== itemId).length === 0 && (
+                <div className="text-center py-12">
+                  <svg className="w-12 h-12 mx-auto text-taupe/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                  </svg>
+                  <p className="text-taupe/50 font-body">No other items with 3D models available</p>
+                  <p className="text-taupe/40 font-body text-sm mt-1">Generate or upload models to see them here</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-shrink-0">
+              <Button
+                variant="secondary"
+                onClick={() => setShowAssetModal(false)}
+                size="lg"
+                fullWidth
+              >
+                Cancel
               </Button>
             </div>
           </div>
