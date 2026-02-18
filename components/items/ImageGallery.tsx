@@ -12,6 +12,8 @@ interface ImageGalleryProps {
   onImagesAdd?: (newPairs: ImagePair[]) => void
   onImageUpdate?: (originalUrl: string, processedUrl: string) => void
   onImageDelete?: (pairIndex: number) => void
+  /** Callback when user wants to correct the mask for an image pair */
+  onCorrectMask?: (pairIndex: number) => void
   currentThumbnail?: string
   /** When true, only shows the upload button without the image gallery display */
   uploadOnly?: boolean
@@ -35,6 +37,7 @@ export function ImageGallery({
   onImagesAdd,
   onImageUpdate,
   onImageDelete,
+  onCorrectMask,
   currentThumbnail,
   uploadOnly = false,
   triggerUploadRef
@@ -477,6 +480,25 @@ export function ImageGallery({
                       {selectedThumbnail === img.url && (
                         <div className="absolute top-2 right-2 w-6 h-6 bg-sage rounded-full flex items-center justify-center">
                           <span className="text-white text-xs">✓</span>
+                        </div>
+                      )}
+                      {/* Correct Mask button - shows on hover for processed images */}
+                      {img.type === 'processed' && isEditing && onCorrectMask && hoveredPairIndex === pairIndex && (
+                        <div
+                          className="absolute top-2 left-2 z-10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onCorrectMask(pairIndex)
+                          }}
+                        >
+                          <div
+                            className="p-1.5 bg-white/90 hover:bg-sage hover:text-white rounded-lg shadow-sm transition-colors cursor-pointer"
+                            title="Correct mask"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                            </svg>
+                          </div>
                         </div>
                       )}
                     </button>

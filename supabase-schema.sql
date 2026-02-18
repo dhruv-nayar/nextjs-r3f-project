@@ -52,3 +52,40 @@ CREATE TRIGGER trellis_jobs_updated_at
   BEFORE UPDATE ON trellis_jobs
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
+
+-- ============================================
+-- Mask Corrections table (for training data)
+-- ============================================
+
+-- Create the mask_corrections table
+CREATE TABLE mask_corrections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  item_id TEXT NOT NULL,
+  image_index INTEGER NOT NULL,
+  original_url TEXT NOT NULL,
+  original_mask_url TEXT,           -- Alpha extracted from auto-processed image
+  corrected_mask_url TEXT NOT NULL,
+  corrected_processed_url TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB,                    -- Brush sizes, tools used, duration, etc.
+  training_label TEXT CHECK (training_label IN ('approved', 'rejected', 'needs_review')),
+  reviewed_at TIMESTAMPTZ
+);
+
+-- Create indexes for mask_corrections
+CREATE INDEX idx_mask_corrections_item ON mask_corrections(item_id);
+CREATE INDEX idx_mask_corrections_label ON mask_corrections(training_label);
+CREATE INDEX idx_mask_corrections_created ON mask_corrections(created_at);
+
+-- Enable Row Level Security
+ALTER TABLE mask_corrections ENABLE ROW LEVEL SECURITY;
+
+-- Allow all operations (adjust if you add auth later)
+CREATE POLICY "Allow all operations" ON mask_corrections FOR ALL USING (true);
+
+-- Auto-update updated_at timestamp
+CREATE TRIGGER mask_corrections_updated_at
+  BEFORE UPDATE ON mask_corrections
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();

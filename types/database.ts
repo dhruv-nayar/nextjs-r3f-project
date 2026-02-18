@@ -97,3 +97,39 @@ export type ItemInsert = Partial<Omit<ItemRow, 'created_at' | 'updated_at'>> & {
 }
 
 export type ItemUpdate = Partial<Omit<ItemRow, 'id' | 'created_at'>>
+
+// ============================================
+// Mask Corrections table types (for training data)
+// ============================================
+
+export interface MaskCorrectionRow {
+  id: string
+  item_id: string
+  image_index: number
+  original_url: string
+  original_mask_url: string | null   // Extracted from auto-processed image
+  corrected_mask_url: string
+  corrected_processed_url: string
+  created_at: string
+  updated_at: string
+  metadata: {
+    brushSizes?: number[]
+    toolsUsed?: string[]
+    correctionDuration?: number
+    pixelsModified?: number
+    imageWidth?: number
+    imageHeight?: number
+  } | null
+  training_label: 'approved' | 'rejected' | 'needs_review' | null
+  reviewed_at: string | null
+}
+
+export type MaskCorrectionInsert = Partial<Omit<MaskCorrectionRow, 'id' | 'created_at' | 'updated_at'>> & {
+  item_id: string
+  image_index: number
+  original_url: string
+  corrected_mask_url: string
+  corrected_processed_url: string
+}
+
+export type MaskCorrectionUpdate = Partial<Omit<MaskCorrectionRow, 'id' | 'created_at'>>

@@ -16,6 +16,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
 import { PlacementType, MaterialOverride, ImagePair } from '@/types/room'
 import { ImageGallery } from '@/components/items/ImageGallery'
+import { MaskCorrectionModal } from '@/components/items/MaskCorrectionModal'
 import { GenerateModelPanel } from '@/components/items/GenerateModelPanel'
 import { RotationControls } from '@/components/items/RotationControls'
 import { ThumbnailGenerator } from '@/components/items/ThumbnailGenerator'
@@ -80,6 +81,13 @@ export default function ItemDetailPage() {
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [showRegenerateModal, setShowRegenerateModal] = useState(false)
   const [showAssetModal, setShowAssetModal] = useState(false)
+  const [selectedRegenImages, setSelectedRegenImages] = useState<Set<number>>(new Set())
+  const [isGeneratingModel, setIsGeneratingModel] = useState(false)
+
+  // Mask correction modal state
+  const [showMaskCorrection, setShowMaskCorrection] = useState(false)
+  const [maskCorrectionIndex, setMaskCorrectionIndex] = useState<number | null>(null)
+  const [maskCorrectionKey, setMaskCorrectionKey] = useState(0) // Key to force remount
 
   // Dimension state (feet and inches)
   const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
@@ -332,6 +340,35 @@ export default function ItemDetailPage() {
     })
   }, [itemId, getItem, updateItem])
 
+  // Handle mask correction saved - update the image pair with new processed URL
+  // IMPORTANT: This must be defined before the early return to maintain hook order
+  const handleMaskCorrectionSaved = useCallback((newProcessedUrl: string) => {
+    if (maskCorrectionIndex === null) return
+
+    const updatedImages = editImages.map((pair, index) =>
+      index === maskCorrectionIndex
+        ? { ...pair, processed: newProcessedUrl }
+        : pair
+    )
+    setEditImages(updatedImages)
+
+    // Update thumbnail if it was pointing to the old processed URL
+    const oldProcessed = editImages[maskCorrectionIndex]?.processed
+    if (oldProcessed && editThumbnailPath === oldProcessed) {
+      setEditThumbnailPath(newProcessedUrl)
+      updateItem(itemId, { images: updatedImages, thumbnailPath: newProcessedUrl })
+    } else {
+      updateItem(itemId, { images: updatedImages })
+    }
+
+    setShowMaskCorrection(false)
+    setMaskCorrectionIndex(null)
+
+    setToastMessage('Mask correction saved!')
+    setToastType('success')
+    setShowToast(true)
+  }, [editImages, maskCorrectionIndex, editThumbnailPath, itemId, updateItem])
+
   if (!item) {
     return (
       <div className="min-h-screen bg-porcelain flex items-center justify-center p-8">
@@ -413,6 +450,13 @@ export default function ItemDetailPage() {
       images: updatedImages,
       thumbnailPath: newThumbnail || undefined
     })
+  }
+
+  // Handle mask correction - open modal for a specific image pair
+  const handleCorrectMask = (pairIndex: number) => {
+    setMaskCorrectionIndex(pairIndex)
+    setMaskCorrectionKey(prev => prev + 1) // Force remount
+    setShowMaskCorrection(true)
   }
 
   // Handle paste from clipboard
@@ -765,6 +809,21 @@ export default function ItemDetailPage() {
                         />
                       </div>
                     </button>
+                    {/* Correct mask button on hover - only for images with processed version */}
+                    {pair.processed && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCorrectMask(index)
+                        }}
+                        className="absolute -top-1 -left-1 w-5 h-5 bg-sage rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                        title="Correct mask"
+                      >
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                        </svg>
+                      </button>
+                    )}
                     {/* Delete button on hover */}
                     <button
                       onClick={(e) => {
@@ -1177,13 +1236,22 @@ export default function ItemDetailPage() {
                 <button
                   key={index}
                   onClick={() => {
-                    // Toggle selection using a data attribute approach
-                    const btn = document.querySelector(`[data-regen-img="${index}"]`)
-                    btn?.classList.toggle('ring-2')
-                    btn?.classList.toggle('ring-sage')
+                    setSelectedRegenImages(prev => {
+                      const newSet = new Set(prev)
+                      if (newSet.has(index)) {
+                        newSet.delete(index)
+                      } else {
+                        newSet.add(index)
+                      }
+                      return newSet
+                    })
                   }}
-                  data-regen-img={index}
-                  className="relative aspect-square rounded-xl overflow-hidden border-2 border-taupe/10 hover:border-sage/50 transition-all"
+                  className={cn(
+                    "relative aspect-square rounded-xl overflow-hidden border-2 transition-all",
+                    selectedRegenImages.has(index)
+                      ? "border-sage ring-2 ring-sage/30"
+                      : "border-taupe/10 hover:border-sage/50"
+                  )}
                 >
                   <Image
                     src={pair.processed || pair.original}
@@ -1192,6 +1260,13 @@ export default function ItemDetailPage() {
                     className="object-cover"
                     unoptimized
                   />
+                  {selectedRegenImages.has(index) && (
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-sage rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -1205,30 +1280,93 @@ export default function ItemDetailPage() {
             <div className="flex gap-3">
               <Button
                 variant="secondary"
-                onClick={() => setShowRegenerateModal(false)}
+                onClick={() => {
+                  setShowRegenerateModal(false)
+                  setSelectedRegenImages(new Set())
+                }}
                 size="lg"
                 fullWidth
+                disabled={isGeneratingModel}
               >
                 Cancel
               </Button>
               <Button
                 variant="primary"
-                onClick={() => {
-                  setShowRegenerateModal(false)
-                  // Scroll to the generate panel in sidebar
-                  const generatePanel = document.querySelector('[data-generate-panel]')
-                  if (generatePanel) {
-                    generatePanel.scrollIntoView({ behavior: 'smooth' })
+                onClick={async () => {
+                  if (selectedRegenImages.size === 0) {
+                    setToastMessage('Please select at least one image')
+                    setToastType('error')
+                    setShowToast(true)
+                    return
                   }
-                  setToastMessage('Select images in the sidebar and click Generate to create a new model')
-                  setToastType('info')
-                  setShowToast(true)
+
+                  setIsGeneratingModel(true)
+
+                  // Get processed image URLs for selected indices
+                  const processedImages = editImages.filter(img => img.processed)
+                  const selectedUrls = Array.from(selectedRegenImages).map(
+                    index => processedImages[index].processed!
+                  )
+
+                  // Notify that generation is starting
+                  handleGenerationStart(selectedUrls)
+
+                  try {
+                    const formData = new FormData()
+                    formData.append('itemId', itemId)
+                    for (const url of selectedUrls) {
+                      formData.append('imageUrls', url)
+                    }
+                    formData.append('seed', '1')
+                    formData.append('textureSize', '2048')
+
+                    const response = await fetch('/api/trellis/generate-glb', {
+                      method: 'POST',
+                      body: formData,
+                    })
+
+                    if (!response.ok) {
+                      const errorData = await response.json()
+                      throw new Error(errorData.error || 'Failed to start model generation')
+                    }
+
+                    const data = await response.json()
+
+                    // Check if API returned GLB directly
+                    if (data.type === 'direct' && data.glbUrl) {
+                      handleModelGenerated(data.glbUrl)
+                    }
+
+                    setShowRegenerateModal(false)
+                    setSelectedRegenImages(new Set())
+                    setToastMessage('Model generation started! This typically takes 1-3 minutes.')
+                    setToastType('success')
+                    setShowToast(true)
+
+                  } catch (err) {
+                    setToastMessage(err instanceof Error ? err.message : 'Failed to start generation')
+                    setToastType('error')
+                    setShowToast(true)
+                    // Clear generation status on error
+                    updateItem(itemId, { generationStatus: undefined })
+                  } finally {
+                    setIsGeneratingModel(false)
+                  }
                 }}
                 size="lg"
                 fullWidth
-                disabled={editImages.filter(img => img.processed).length === 0}
+                disabled={selectedRegenImages.size === 0 || isGeneratingModel}
               >
-                Continue
+                {isGeneratingModel ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Starting...
+                  </span>
+                ) : selectedRegenImages.size > 0 ? (
+                  `Generate from ${selectedRegenImages.size} image${selectedRegenImages.size > 1 ? 's' : ''}`
+                ) : (
+                  'Select images'
+                )}
               </Button>
             </div>
           </div>
@@ -1362,6 +1500,22 @@ export default function ItemDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mask Correction Modal */}
+      {showMaskCorrection && maskCorrectionIndex !== null && editImages[maskCorrectionIndex] && (
+        <MaskCorrectionModal
+          key={maskCorrectionKey}
+          isOpen={showMaskCorrection}
+          onClose={() => {
+            setShowMaskCorrection(false)
+            setMaskCorrectionIndex(null)
+          }}
+          imagePair={editImages[maskCorrectionIndex]}
+          itemId={itemId}
+          imageIndex={maskCorrectionIndex}
+          onCorrectionSaved={handleMaskCorrectionSaved}
+        />
       )}
 
       {/* Toast Notification */}
