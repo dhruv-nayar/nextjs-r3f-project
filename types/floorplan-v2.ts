@@ -69,6 +69,23 @@ export const GRID_SPACING = 2     // feet - grid line spacing
 export const GRID_DOT_RADIUS = 0.5 // pixels - radius for inch dots
 export const GRID_LINE_DASH = [2, 3] // dash pattern for foot lines
 
+// Viewport state for infinite canvas with pan/zoom
+export interface ViewportState {
+  offsetX: number  // center X in world coords (feet)
+  offsetY: number  // center Y in world coords (feet)
+  scale: number    // zoom level (1.0 = default)
+}
+
+export const DEFAULT_VIEWPORT: ViewportState = {
+  offsetX: 15,  // Center on typical floor plan area
+  offsetY: 10,
+  scale: 1.0
+}
+
+export const MIN_SCALE = 0.25
+export const MAX_SCALE = 4.0
+export const ZOOM_SENSITIVITY = 0.001
+
 // Convert canvas pixels to feet
 export function pixelsToFeet(px: number): number {
   return px / PIXELS_PER_FOOT

@@ -16,6 +16,7 @@ import { cn } from '@/lib/design-system'
 import { PlacementType, MaterialOverride, ImagePair } from '@/types/room'
 import { ImageGallery } from '@/components/items/ImageGallery'
 import { GenerateModelPanel } from '@/components/items/GenerateModelPanel'
+import { RotationControls } from '@/components/items/RotationControls'
 import { MaterialInfo } from '@/lib/material-utils'
 import { MaterialExtractor } from '@/hooks/useMaterialExtraction'
 import { useTrellisJobs } from '@/lib/trellis-job-context'
@@ -79,6 +80,14 @@ export default function ItemDetailPage() {
   const [depthFeet, setDepthFeet] = useState(Math.floor(item?.dimensions?.depth || 0))
   const [depthInches, setDepthInches] = useState(((item?.dimensions?.depth || 0) % 1) * 12)
 
+  // Rotation state (steps: 0, 1, 2, 3 representing 0, 90, 180, 270 degrees)
+  const [editRotationXStep, setEditRotationXStep] = useState(
+    Math.round((item?.defaultRotation?.x || 0) / (Math.PI / 2)) % 4
+  )
+  const [editRotationZStep, setEditRotationZStep] = useState(
+    Math.round((item?.defaultRotation?.z || 0) / (Math.PI / 2)) % 4
+  )
+
   // Materials state
   const [extractedMaterials, setExtractedMaterials] = useState<MaterialInfo[]>([])
   const [editMaterialOverrides, setEditMaterialOverrides] = useState<MaterialOverride[]>(item?.materialOverrides || [])
@@ -111,6 +120,10 @@ export default function ItemDetailPage() {
       setHeightInches(((item.dimensions?.height || 0) % 1) * 12)
       setDepthFeet(Math.floor(item.dimensions?.depth || 0))
       setDepthInches(((item.dimensions?.depth || 0) % 1) * 12)
+
+      // Update rotation state
+      setEditRotationXStep(Math.round((item.defaultRotation?.x || 0) / (Math.PI / 2)) % 4)
+      setEditRotationZStep(Math.round((item.defaultRotation?.z || 0) / (Math.PI / 2)) % 4)
     }
   }, [item])
 
@@ -133,6 +146,10 @@ export default function ItemDetailPage() {
     const totalHeight = heightFeet + heightInches / 12
     const totalDepth = depthFeet + depthInches / 12
 
+    // Calculate rotation in radians from steps
+    const rotationX = (editRotationXStep * Math.PI) / 2
+    const rotationZ = (editRotationZStep * Math.PI) / 2
+
     updateItem(itemId, {
       name: editName,
       description: editDescription,
@@ -146,7 +163,10 @@ export default function ItemDetailPage() {
         width: totalWidth,
         height: totalHeight,
         depth: totalDepth
-      }
+      },
+      defaultRotation: (rotationX !== 0 || rotationZ !== 0)
+        ? { x: rotationX, z: rotationZ }
+        : undefined
     })
     setIsEditing(false)
     setToastMessage('Item updated successfully!')
@@ -172,6 +192,10 @@ export default function ItemDetailPage() {
       setHeightInches(((item.dimensions?.height || 0) % 1) * 12)
       setDepthFeet(Math.floor(item.dimensions?.depth || 0))
       setDepthInches(((item.dimensions?.depth || 0) % 1) * 12)
+
+      // Reset rotation state
+      setEditRotationXStep(Math.round((item.defaultRotation?.x || 0) / (Math.PI / 2)) % 4)
+      setEditRotationZStep(Math.round((item.defaultRotation?.z || 0) / (Math.PI / 2)) % 4)
     }
     setIsEditing(false)
   }
@@ -401,6 +425,14 @@ export default function ItemDetailPage() {
                   isEditing={isEditing}
                   onThumbnailChange={setEditThumbnailPath}
                   onImagesAdd={handleImagesAdd}
+                  onImageDelete={(pairIndex) => {
+                    const deletedImage = editImages[pairIndex]
+                    setEditImages(prev => prev.filter((_, i) => i !== pairIndex))
+                    // If the deleted image was the thumbnail, clear the thumbnail
+                    if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
+                      setEditThumbnailPath('')
+                    }
+                  }}
                   currentThumbnail={isEditing ? editThumbnailPath : item.thumbnailPath}
                 />
 
@@ -583,6 +615,55 @@ export default function ItemDetailPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Default Rotation Section */}
+                {isEditing && (
+                  <div>
+                    <h3 className="font-display font-semibold text-graphite mb-3">
+                      Default Rotation
+                    </h3>
+                    <p className="text-xs text-taupe/50 font-body mb-3">
+                      Set the default orientation for new placements (90° increments)
+                    </p>
+                    <div className="space-y-3">
+                      <RotationControls
+                        label="Tilt Forward/Back"
+                        axis="X"
+                        step={editRotationXStep}
+                        onChange={setEditRotationXStep}
+                      />
+                      <RotationControls
+                        label="Roll Left/Right"
+                        axis="Z"
+                        step={editRotationZStep}
+                        onChange={setEditRotationZStep}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Display rotation when not editing (if set) */}
+                {!isEditing && item.defaultRotation && (
+                  <div>
+                    <h3 className="font-display font-semibold text-graphite mb-3">
+                      Default Rotation
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-1">X-Axis (Tilt)</p>
+                        <p className="text-sm font-body font-medium text-graphite">
+                          {Math.round((item.defaultRotation.x * 180) / Math.PI)}°
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                        <p className="text-xs text-taupe/50 font-body mb-1">Z-Axis (Roll)</p>
+                        <p className="text-sm font-body font-medium text-graphite">
+                          {Math.round((item.defaultRotation.z * 180) / Math.PI)}°
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Materials & Colors Section */}
                 {extractedMaterials.length > 0 && (

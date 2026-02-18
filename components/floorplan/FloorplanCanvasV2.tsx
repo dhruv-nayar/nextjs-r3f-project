@@ -21,6 +21,11 @@ import {
   feetToPixels,
   snapToGrid,
   generateId,
+  ViewportState,
+  DEFAULT_VIEWPORT,
+  MIN_SCALE,
+  MAX_SCALE,
+  ZOOM_SENSITIVITY,
 } from '@/types/floorplan-v2'
 import {
   findNearbyVertex,
@@ -99,6 +104,19 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
   // Track shift key state for 45-degree snapping
   const [shiftHeld, setShiftHeld] = useState(false)
 
+  // Viewport state for infinite canvas pan/zoom
+  const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
+  const viewportRef = useRef<ViewportState>(DEFAULT_VIEWPORT) // Ref for smooth zoom
+  const [isPanMode, setIsPanMode] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const [viewportStart, setViewportStart] = useState({ x: 0, y: 0 })
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    viewportRef.current = viewport
+  }, [viewport])
+
   // Initialize from initialData when it changes
   useEffect(() => {
     if (initialData && !isInitializedRef.current) {
@@ -118,13 +136,29 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     }
   }, [initialData])
 
-  // Track shift key
+  // Track shift key and space key (for pan mode)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') setShiftHeld(true)
+
+      // Space key activates pan mode (Figma-style)
+      if (e.code === 'Space' && !e.repeat) {
+        // Don't capture if user is typing in an input
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          return
+        }
+        e.preventDefault() // Prevent page scroll
+        setIsPanMode(true)
+      }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') setShiftHeld(false)
+
+      // Release pan mode when space is released
+      if (e.code === 'Space') {
+        setIsPanMode(false)
+        setIsPanning(false)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
@@ -134,27 +168,138 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     }
   }, [])
 
+  // Convert screen pixels to world coordinates (feet)
+  const screenToWorld = useCallback((screenX: number, screenY: number): { x: number; y: number } => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+
+    const rect = canvas.getBoundingClientRect()
+    const canvasCenterX = canvas.width / 2
+    const canvasCenterY = canvas.height / 2
+
+    // Account for any scaling between CSS size and canvas internal size
+    const cssScaleX = canvas.width / rect.width
+    const cssScaleY = canvas.height / rect.height
+
+    // Screen position relative to canvas center (in canvas pixels)
+    const relX = (screenX - rect.left) * cssScaleX - canvasCenterX
+    const relY = (screenY - rect.top) * cssScaleY - canvasCenterY
+
+    // Convert to world coordinates (feet)
+    // Apply inverse scale and add viewport offset
+    const worldX = (relX / (PIXELS_PER_FOOT * viewport.scale)) + viewport.offsetX
+    const worldY = (relY / (PIXELS_PER_FOOT * viewport.scale)) + viewport.offsetY
+
+    return { x: worldX, y: worldY }
+  }, [viewport])
+
+  // Convert world coordinates (feet) to screen pixels
+  const worldToScreen = useCallback((worldX: number, worldY: number): { x: number; y: number } => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+
+    const canvasCenterX = canvas.width / 2
+    const canvasCenterY = canvas.height / 2
+
+    // Subtract viewport offset to get relative position
+    const relX = worldX - viewport.offsetX
+    const relY = worldY - viewport.offsetY
+
+    // Apply scale and translate to screen center
+    const screenX = (relX * PIXELS_PER_FOOT * viewport.scale) + canvasCenterX
+    const screenY = (relY * PIXELS_PER_FOOT * viewport.scale) + canvasCenterY
+
+    return { x: screenX, y: screenY }
+  }, [viewport])
+
+  // Get visible world bounds (in feet)
+  const getVisibleBounds = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return { minX: 0, maxX: 30, minY: 0, maxY: 20 }
+
+    const halfWidth = (canvas.width / 2) / (PIXELS_PER_FOOT * viewport.scale)
+    const halfHeight = (canvas.height / 2) / (PIXELS_PER_FOOT * viewport.scale)
+
+    return {
+      minX: viewport.offsetX - halfWidth,
+      maxX: viewport.offsetX + halfWidth,
+      minY: viewport.offsetY - halfHeight,
+      maxY: viewport.offsetY + halfHeight
+    }
+  }, [viewport])
+
+  // Handle scroll wheel zoom - uses refs to avoid jittery updates from rapid trackpad events
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    let rafId: number | null = null
+    let pendingZoom: { scale: number; offsetX: number; offsetY: number } | null = null
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+
+      const currentViewport = viewportRef.current
+      const rect = canvas.getBoundingClientRect()
+      const canvasCenterX = canvas.width / 2
+      const canvasCenterY = canvas.height / 2
+
+      const cssScaleX = canvas.width / rect.width
+      const cssScaleY = canvas.height / rect.height
+
+      // Screen position relative to canvas center (in canvas pixels)
+      const relX = (e.clientX - rect.left) * cssScaleX - canvasCenterX
+      const relY = (e.clientY - rect.top) * cssScaleY - canvasCenterY
+
+      // Get mouse position in world coords BEFORE zoom (using current viewport from ref)
+      const mouseWorldX = (relX / (PIXELS_PER_FOOT * currentViewport.scale)) + currentViewport.offsetX
+      const mouseWorldY = (relY / (PIXELS_PER_FOOT * currentViewport.scale)) + currentViewport.offsetY
+
+      // Calculate new scale with reduced sensitivity for trackpad
+      const zoomDelta = -e.deltaY * ZOOM_SENSITIVITY
+      const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, currentViewport.scale * (1 + zoomDelta)))
+
+      // New offset to keep mouseWorld under cursor
+      const newOffsetX = mouseWorldX - (relX / (PIXELS_PER_FOOT * newScale))
+      const newOffsetY = mouseWorldY - (relY / (PIXELS_PER_FOOT * newScale))
+
+      // Store pending zoom to batch with requestAnimationFrame
+      pendingZoom = {
+        scale: newScale,
+        offsetX: newOffsetX,
+        offsetY: newOffsetY
+      }
+
+      // Update ref immediately for next event calculation
+      viewportRef.current = pendingZoom
+
+      // Batch state updates with requestAnimationFrame
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          if (pendingZoom) {
+            setViewport(pendingZoom)
+          }
+          rafId = null
+        })
+      }
+    }
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel)
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+    }
+  }, []) // No dependencies - uses refs for current values
+
   // Get canvas coordinates from mouse event (in feet)
-  // Accounts for CSS scaling vs canvas internal resolution
+  // Now uses viewport-aware transformation
   const getCanvasCoords = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
-      const canvas = canvasRef.current
-      if (!canvas) return { x: 0, y: 0 }
-
-      const rect = canvas.getBoundingClientRect()
-      // Account for any scaling between CSS size and canvas internal size
-      const scaleX = canvas.width / rect.width
-      const scaleY = canvas.height / rect.height
-
-      const px = (e.clientX - rect.left) * scaleX
-      const py = (e.clientY - rect.top) * scaleY
-
-      return {
-        x: pixelsToFeet(px),
-        y: pixelsToFeet(py),
-      }
+      return screenToWorld(e.clientX, e.clientY)
     },
-    []
+    [screenToWorld]
   )
 
   // Snap point to nearest 45-degree angle from origin point
@@ -572,6 +717,9 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
   // Handle canvas click - route to appropriate mode handler
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Ignore clicks when panning
+      if (isPanMode || isPanning) return
+
       const { x, y } = getCanvasCoords(e)
 
       switch (editorMode) {
@@ -586,12 +734,21 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
           break
       }
     },
-    [editorMode, getCanvasCoords, handleSelectClick, handleDrawWallsClick, handlePlaceDoorsClick]
+    [isPanMode, isPanning, editorMode, getCanvasCoords, handleSelectClick, handleDrawWallsClick, handlePlaceDoorsClick]
   )
 
-  // Handle mouse down (for dragging in SELECT mode)
+  // Handle mouse down (for dragging in SELECT mode or panning)
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Pan mode takes priority
+      if (isPanMode) {
+        setIsPanning(true)
+        setPanStart({ x: e.clientX, y: e.clientY })
+        setViewportStart({ x: viewport.offsetX, y: viewport.offsetY })
+        e.preventDefault()
+        return
+      }
+
       // Only handle dragging in SELECT mode
       if (editorMode !== EditorMode.SELECT) return
 
@@ -606,12 +763,28 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         e.preventDefault()
       }
     },
-    [editorMode, getCanvasCoords, vertices]
+    [isPanMode, viewport, editorMode, getCanvasCoords, vertices]
   )
 
   // Handle mouse move
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Handle panning - use ref for smoother updates
+      if (isPanning && isPanMode) {
+        const currentScale = viewportRef.current.scale
+        const dx = (e.clientX - panStart.x) / (PIXELS_PER_FOOT * currentScale)
+        const dy = (e.clientY - panStart.y) / (PIXELS_PER_FOOT * currentScale)
+
+        const newViewport = {
+          scale: currentScale,
+          offsetX: viewportStart.x - dx,
+          offsetY: viewportStart.y - dy
+        }
+        viewportRef.current = newViewport
+        setViewport(newViewport)
+        return
+      }
+
       let { x, y } = getCanvasCoords(e)
 
       // Apply 45-degree snapping for preview if shift is held while drawing
@@ -651,16 +824,20 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         setHoverDoor(null)
       }
     },
-    [getCanvasCoords, isDragging, selectedVertexId, moveVertex, vertices, walls, shiftHeld, editorMode, drawingVertexIds, snapTo45Degrees]
+    [isPanning, isPanMode, panStart, viewportStart, getCanvasCoords, isDragging, selectedVertexId, moveVertex, vertices, walls, shiftHeld, editorMode, drawingVertexIds, snapTo45Degrees]
   )
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
+    if (isPanning) {
+      setIsPanning(false)
+    }
     setIsDragging(false)
-  }, [])
+  }, [isPanning])
 
   // Handle mouse leave canvas
   const handleMouseLeave = useCallback(() => {
+    setIsPanning(false)
     setIsDragging(false)
     setHoverVertex(null)
     setHoverWall(null)
@@ -670,6 +847,9 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
   // Handle key press for mode switching and actions
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't process shortcuts when in pan mode (Space held)
+      if (isPanMode) return
+
       // Mode switching shortcuts (work in all modes)
       if (e.key === 'v' || e.key === 'V') {
         e.preventDefault()
@@ -758,7 +938,7 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editorMode, selectedVertexId, selectedWallId, walls, deleteWall])
+  }, [isPanMode, editorMode, selectedVertexId, selectedWallId, walls, deleteWall])
 
   // Notify parent of data changes
   useEffect(() => {
@@ -767,7 +947,7 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     }
   }, [vertices, walls, rooms, onChange])
 
-  // Canvas rendering
+  // Canvas rendering with viewport transforms
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -775,57 +955,77 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Clear canvas
+    // Clear entire canvas
     ctx.fillStyle = '#FAFAFA'
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Draw grid - dots at every inch
-    ctx.fillStyle = '#D0D0D0' // Light gray dots
-    for (let x = 0; x <= CANVAS_WIDTH; x += PIXELS_PER_INCH) {
-      for (let y = 0; y <= CANVAS_HEIGHT; y += PIXELS_PER_INCH) {
-        ctx.beginPath()
-        ctx.arc(x, y, GRID_DOT_RADIUS, 0, Math.PI * 2)
-        ctx.fill()
+    // Calculate visible bounds (in feet)
+    const bounds = getVisibleBounds()
+
+    // Apply viewport transformation
+    ctx.save()
+    ctx.translate(canvas.width / 2, canvas.height / 2)
+    ctx.scale(viewport.scale, viewport.scale)
+    ctx.translate(-viewport.offsetX * PIXELS_PER_FOOT, -viewport.offsetY * PIXELS_PER_FOOT)
+
+    // Determine grid density based on zoom level
+    const showInchDots = viewport.scale >= 0.5
+
+    // Draw grid dots at every inch (only when zoomed in enough)
+    if (showInchDots) {
+      ctx.fillStyle = '#D0D0D0'
+      const inchStep = 1 / 12 // feet
+      const startX = Math.floor(bounds.minX * 12) / 12
+      const startY = Math.floor(bounds.minY * 12) / 12
+
+      for (let x = startX; x <= bounds.maxX; x += inchStep) {
+        for (let y = startY; y <= bounds.maxY; y += inchStep) {
+          ctx.beginPath()
+          ctx.arc(x * PIXELS_PER_FOOT, y * PIXELS_PER_FOOT, GRID_DOT_RADIUS / viewport.scale, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
     }
 
-    // Draw fine lines at every foot (dashed)
-    ctx.strokeStyle = '#A0A0A0' // Darker gray
-    ctx.lineWidth = 1
-    ctx.setLineDash(GRID_LINE_DASH)
+    // Draw foot lines (dashed)
+    ctx.strokeStyle = '#A0A0A0'
+    ctx.lineWidth = 1 / viewport.scale
+    ctx.setLineDash(GRID_LINE_DASH.map(v => v / viewport.scale))
+
+    const startFootX = Math.floor(bounds.minX)
+    const startFootY = Math.floor(bounds.minY)
 
     // Vertical foot lines
-    for (let x = 0; x <= CANVAS_WIDTH; x += PIXELS_PER_FOOT) {
+    for (let x = startFootX; x <= bounds.maxX + 1; x++) {
       ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, CANVAS_HEIGHT)
+      ctx.moveTo(x * PIXELS_PER_FOOT, bounds.minY * PIXELS_PER_FOOT)
+      ctx.lineTo(x * PIXELS_PER_FOOT, bounds.maxY * PIXELS_PER_FOOT)
       ctx.stroke()
     }
 
     // Horizontal foot lines
-    for (let y = 0; y <= CANVAS_HEIGHT; y += PIXELS_PER_FOOT) {
+    for (let y = startFootY; y <= bounds.maxY + 1; y++) {
       ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(CANVAS_WIDTH, y)
+      ctx.moveTo(bounds.minX * PIXELS_PER_FOOT, y * PIXELS_PER_FOOT)
+      ctx.lineTo(bounds.maxX * PIXELS_PER_FOOT, y * PIXELS_PER_FOOT)
       ctx.stroke()
     }
 
-    ctx.setLineDash([]) // Reset dash
+    ctx.setLineDash([])
 
-    // Draw grid labels (every foot)
+    // Draw grid labels (at appropriate density based on zoom)
+    const labelStep = viewport.scale < 0.5 ? 5 : viewport.scale < 1 ? 2 : 1
     ctx.fillStyle = '#999'
-    ctx.font = '10px sans-serif'
-    for (let ft = 0; ft <= pixelsToFeet(CANVAS_WIDTH); ft += 1) {
-      const px = feetToPixels(ft)
-      if (ft % 2 === 0) { // Only label even feet to avoid clutter
-        ctx.fillText(`${ft}`, px + 2, 12)
-      }
+    ctx.font = `${10 / viewport.scale}px sans-serif`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+
+    for (let ft = Math.ceil(bounds.minX / labelStep) * labelStep; ft <= bounds.maxX; ft += labelStep) {
+      ctx.fillText(`${ft}`, ft * PIXELS_PER_FOOT + 2, bounds.minY * PIXELS_PER_FOOT + 2)
     }
-    for (let ft = 1; ft <= pixelsToFeet(CANVAS_HEIGHT); ft += 1) {
-      const py = feetToPixels(ft)
-      if (ft % 2 === 0) { // Only label even feet to avoid clutter
-        ctx.fillText(`${ft}`, 2, py - 2)
-      }
+    ctx.textBaseline = 'bottom'
+    for (let ft = Math.ceil(bounds.minY / labelStep) * labelStep; ft <= bounds.maxY; ft += labelStep) {
+      ctx.fillText(`${ft}`, bounds.minX * PIXELS_PER_FOOT + 2, ft * PIXELS_PER_FOOT - 2)
     }
 
     // Helper: Calculate polygon area using shoelace formula
@@ -866,20 +1066,20 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
 
-        // Room name (larger font)
-        ctx.font = 'bold 13px sans-serif'
-        ctx.fillText(room.name, feetToPixels(centerX), feetToPixels(centerY) - 8)
+        // Room name (larger font) - scaled for zoom
+        ctx.font = `bold ${13 / viewport.scale}px sans-serif`
+        ctx.fillText(room.name, feetToPixels(centerX), feetToPixels(centerY) - 8 / viewport.scale)
 
-        // Room dimensions (smaller, lighter font)
-        ctx.font = '11px sans-serif'
+        // Room dimensions (smaller, lighter font) - scaled for zoom
+        ctx.font = `${11 / viewport.scale}px sans-serif`
         ctx.fillStyle = '#666'
-        ctx.fillText(`${areaSquareFeet.toFixed(0)} sq ft`, feetToPixels(centerX), feetToPixels(centerY) + 6)
+        ctx.fillText(`${areaSquareFeet.toFixed(0)} sq ft`, feetToPixels(centerX), feetToPixels(centerY) + 6 / viewport.scale)
       }
     }
 
     // Draw walls (with door gaps if present)
     ctx.strokeStyle = '#333'
-    ctx.lineWidth = 2
+    ctx.lineWidth = 2 / viewport.scale
     for (const wall of walls) {
       const start = vertexMap.get(wall.startVertexId)
       const end = vertexMap.get(wall.endVertexId)
@@ -890,15 +1090,15 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
       const dy = end.y - start.y
       const wallLength = Math.sqrt(dx * dx + dy * dy)
 
-      // Determine wall color
+      // Determine wall color (line widths scaled for zoom)
       let strokeColor = '#333'
-      let lineWidth = 2
+      let lineWidth = 2 / viewport.scale
       if (selectedWallId === wall.id) {
         strokeColor = '#FF6B35'
-        lineWidth = 4
+        lineWidth = 4 / viewport.scale
       } else if (hoverWall?.wall.id === wall.id) {
         strokeColor = '#FF9800'
-        lineWidth = 4
+        lineWidth = 4 / viewport.scale
       }
 
       if (doors.length === 0) {
@@ -944,22 +1144,22 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
           const perpX = -dy / wallLength
           const perpY = dx / wallLength
 
-          // Determine door colors based on selection and hover
+          // Determine door colors based on selection and hover (line widths scaled for zoom)
           let doorSwingColor = 'rgba(76, 175, 80, 0.4)'  // Default: semi-transparent green
           let doorLeafColor = '#4CAF50'                   // Default: solid green
-          let doorSwingLineWidth = 1
-          let doorLeafLineWidth = 2
+          let doorSwingLineWidth = 1 / viewport.scale
+          let doorLeafLineWidth = 2 / viewport.scale
 
           if (selectedDoorId === door.id && selectedDoorWallId === wall.id) {
             doorSwingColor = 'rgba(255, 107, 53, 0.6)'   // Selected: semi-transparent orange
             doorLeafColor = '#FF6B35'                      // Selected: solid orange
-            doorSwingLineWidth = 2
-            doorLeafLineWidth = 3
+            doorSwingLineWidth = 2 / viewport.scale
+            doorLeafLineWidth = 3 / viewport.scale
           } else if (hoverDoor?.door.id === door.id && hoverDoor?.wall.id === wall.id) {
             doorSwingColor = 'rgba(255, 152, 0, 0.5)'    // Hover: semi-transparent orange
             doorLeafColor = '#FF9800'                      // Hover: orange
-            doorSwingLineWidth = 1.5
-            doorLeafLineWidth = 2.5
+            doorSwingLineWidth = 1.5 / viewport.scale
+            doorLeafLineWidth = 2.5 / viewport.scale
           }
 
           // Draw door swing arc (90 degrees)
@@ -1026,50 +1226,47 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         const dy = previewY - lastVertex.y
         const lengthFeet = Math.sqrt(dx * dx + dy * dy)
 
-        // Draw preview line
+        // Draw preview line (scaled for zoom)
         ctx.strokeStyle = '#2196F3'
-        ctx.lineWidth = 2
-        ctx.setLineDash([5, 5])
+        ctx.lineWidth = 2 / viewport.scale
+        ctx.setLineDash([5 / viewport.scale, 5 / viewport.scale])
         ctx.beginPath()
         ctx.moveTo(feetToPixels(lastVertex.x), feetToPixels(lastVertex.y))
         ctx.lineTo(feetToPixels(previewX), feetToPixels(previewY))
         ctx.stroke()
         ctx.setLineDash([])
 
-        // Draw length label at midpoint
+        // Draw length label at midpoint (scaled for zoom)
         if (lengthFeet > 0.5) { // Only show label if line is long enough
           const midX = (lastVertex.x + previewX) / 2
           const midY = (lastVertex.y + previewY) / 2
           const label = formatFeetInches(lengthFeet)
 
-          ctx.save()
-          ctx.font = 'bold 14px sans-serif'
+          ctx.font = `bold ${14 / viewport.scale}px sans-serif`
           const metrics = ctx.measureText(label)
-          const padding = 6
+          const padding = 6 / viewport.scale
           const labelX = feetToPixels(midX)
-          const labelY = feetToPixels(midY) - 10
+          const labelY = feetToPixels(midY) - 10 / viewport.scale
 
           // Background box
           ctx.fillStyle = '#2196F3'
           ctx.fillRect(
             labelX - metrics.width / 2 - padding,
-            labelY - 16,
+            labelY - 16 / viewport.scale,
             metrics.width + padding * 2,
-            24
+            24 / viewport.scale
           )
 
           // Text
           ctx.fillStyle = '#FFFFFF'
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
-          ctx.fillText(label, labelX, labelY - 4)
-
-          ctx.restore()
+          ctx.fillText(label, labelX, labelY - 4 / viewport.scale)
         }
       }
     }
 
-    // Draw wall length badge on hover
+    // Draw wall length badge on hover (scaled for zoom)
     if (hoverWall && editorMode === EditorMode.SELECT) {
       const wall = hoverWall.wall
       const start = vertexMap.get(wall.startVertexId)
@@ -1086,46 +1283,43 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         const midY = (start.y + end.y) / 2
         const label = formatFeetInches(lengthFeet)
 
-        ctx.save()
-        ctx.font = 'bold 14px sans-serif'
+        ctx.font = `bold ${14 / viewport.scale}px sans-serif`
         const metrics = ctx.measureText(label)
-        const padding = 6
+        const padding = 6 / viewport.scale
         const labelX = feetToPixels(midX)
-        const labelY = feetToPixels(midY) - 10
+        const labelY = feetToPixels(midY) - 10 / viewport.scale
 
         // Background box
         ctx.fillStyle = '#FF9800' // Orange for hover
         ctx.fillRect(
           labelX - metrics.width / 2 - padding,
-          labelY - 16,
+          labelY - 16 / viewport.scale,
           metrics.width + padding * 2,
-          24
+          24 / viewport.scale
         )
 
         // Text
         ctx.fillStyle = '#FFFFFF'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(label, labelX, labelY - 4)
-
-        ctx.restore()
+        ctx.fillText(label, labelX, labelY - 4 / viewport.scale)
       }
     }
 
-    // Draw vertices
+    // Draw vertices (scaled for zoom)
     for (const vertex of vertices) {
       const px = feetToPixels(vertex.x)
       const py = feetToPixels(vertex.y)
 
-      // Determine vertex color
+      // Determine vertex color (radii scaled for zoom)
       let color = '#333'
-      let radius = 4
+      let radius = 4 / viewport.scale
       if (selectedVertexId === vertex.id) {
         color = '#FF5722'
-        radius = 6
+        radius = 6 / viewport.scale
       } else if (hoverVertex?.id === vertex.id) {
         color = '#2196F3'
-        radius = 5
+        radius = 5 / viewport.scale
       } else if (drawingVertexIds.includes(vertex.id)) {
         color = '#4CAF50'
       }
@@ -1137,7 +1331,7 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
 
       // White border for visibility
       ctx.strokeStyle = '#FFF'
-      ctx.lineWidth = 1
+      ctx.lineWidth = 1 / viewport.scale
       ctx.stroke()
     }
 
@@ -1148,13 +1342,18 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
       ctx.arc(
         feetToPixels(hoverWall.point.x),
         feetToPixels(hoverWall.point.y),
-        5,
+        5 / viewport.scale,
         0,
         Math.PI * 2
       )
       ctx.fill()
     }
+
+    // Restore canvas state (undo viewport transform)
+    ctx.restore()
   }, [
+    viewport,
+    getVisibleBounds,
     vertices,
     walls,
     rooms,
@@ -1216,6 +1415,14 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         <div className="px-3 py-1 rounded bg-blue-100 text-blue-800">
           {getStatusMessage()}
         </div>
+        <div className="px-2 py-1 bg-gray-100 text-gray-600 rounded">
+          {Math.round(viewport.scale * 100)}%
+        </div>
+        {isPanMode && (
+          <div className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded">
+            Pan mode (Space)
+          </div>
+        )}
         {shiftHeld && editorMode === EditorMode.DRAW_WALLS && (
           <div className="px-2 py-1 bg-purple-100 text-purple-800 rounded">
             45° snap
@@ -1239,7 +1446,11 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         onMouseLeave={handleMouseLeave}
         className="border border-gray-300 rounded"
         style={{
-          cursor: isDragging
+          cursor: isPanning
+            ? 'grabbing'
+            : isPanMode
+            ? 'grab'
+            : isDragging
             ? 'grabbing'
             : editorMode === EditorMode.DRAW_WALLS || editorMode === EditorMode.PLACE_DOORS
             ? 'crosshair'
@@ -1267,6 +1478,7 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
       {/* Instructions */}
       <div className="text-sm text-gray-500 space-y-1">
         <p><strong>Keyboard Shortcuts:</strong> V = Select, W = Draw Walls, D = Place Doors, Escape = Cancel/Return to Select</p>
+        <p><strong>Navigation:</strong> Mouse wheel to zoom (25%-400%). Hold Space + drag to pan.</p>
 
         {editorMode === EditorMode.SELECT && (
           <>

@@ -79,6 +79,14 @@ export interface Item {
     depth: number               // feet (Z axis)
   }
 
+  // Default rotation for placed instances (in radians)
+  // X = pitch (tilt forward/back), Z = roll (tilt left/right)
+  // Y rotation is handled at instance level for furniture orientation
+  defaultRotation?: {
+    x: number                   // 0, PI/2, PI, or 3*PI/2 (90° increments)
+    z: number                   // 0, PI/2, PI, or 3*PI/2 (90° increments)
+  }
+
   // Organization
   category: ItemCategory
   tags: string[]                // ["office", "modern", "mesh"]

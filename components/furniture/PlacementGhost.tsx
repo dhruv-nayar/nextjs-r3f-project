@@ -152,11 +152,18 @@ function GhostModel({ itemId }: { itemId: string }) {
       // Use the current ref position and rotation for placement
       const instanceId = addInstanceToRoom(currentRoom.id, itemId, positionRef.current)
 
-      // If rotation is set (wall/ceiling placement), update the instance rotation
-      if (rotationRef.current.x !== 0 || rotationRef.current.y !== 0 || rotationRef.current.z !== 0) {
+      // Combine placement rotation with item's default rotation
+      const finalRotation = {
+        x: rotationRef.current.x + (item?.defaultRotation?.x || 0),
+        y: rotationRef.current.y, // Y from wall/surface orientation
+        z: rotationRef.current.z + (item?.defaultRotation?.z || 0)
+      }
+
+      // If rotation is set (from placement or item default), update the instance rotation
+      if (finalRotation.x !== 0 || finalRotation.y !== 0 || finalRotation.z !== 0) {
         // Small delay to ensure instance is created
         setTimeout(() => {
-          updateInstance(instanceId, { rotation: rotationRef.current })
+          updateInstance(instanceId, { rotation: finalRotation })
         }, 0)
       }
     }

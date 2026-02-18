@@ -10,6 +10,7 @@ interface ImageGalleryProps {
   isEditing: boolean
   onThumbnailChange?: (url: string) => void
   onImagesAdd?: (newPairs: ImagePair[]) => void
+  onImageDelete?: (pairIndex: number) => void
   currentThumbnail?: string
 }
 
@@ -27,8 +28,10 @@ export function ImageGallery({
   isEditing,
   onThumbnailChange,
   onImagesAdd,
+  onImageDelete,
   currentThumbnail
 }: ImageGalleryProps) {
+  const [hoveredPairIndex, setHoveredPairIndex] = useState<number | null>(null)
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [uploadError, setUploadError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -239,10 +242,63 @@ export function ImageGallery({
             const hasBothVersions = pairImages.length > 1
 
             return (
-              <div key={pairIndex} className="space-y-2">
+              <div
+                key={pairIndex}
+                className="space-y-2 relative"
+                onMouseEnter={() => setHoveredPairIndex(pairIndex)}
+                onMouseLeave={() => setHoveredPairIndex(null)}
+              >
                 {images.length > 1 && pairIndex >= 0 && (
-                  <div className="text-xs text-taupe/60 font-medium">
-                    Image {pairIndex + 1}
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-taupe/60 font-medium">
+                      Image {pairIndex + 1}
+                    </div>
+                    {/* Delete button - shows on hover in edit mode */}
+                    {isEditing && onImageDelete && hoveredPairIndex === pairIndex && pairIndex >= 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onImageDelete(pairIndex)
+                        }}
+                        className="p-1 bg-scarlet/10 hover:bg-scarlet/20 rounded-lg transition-colors group"
+                        title="Delete this image"
+                      >
+                        <svg
+                          className="w-4 h-4 text-scarlet"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Delete button for single image (no header) */}
+                {images.length === 1 && isEditing && onImageDelete && hoveredPairIndex === pairIndex && pairIndex >= 0 && (
+                  <div className="flex justify-end mb-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onImageDelete(pairIndex)
+                      }}
+                      className="p-1 bg-scarlet/10 hover:bg-scarlet/20 rounded-lg transition-colors group"
+                      title="Delete this image"
+                    >
+                      <svg
+                        className="w-4 h-4 text-scarlet"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 )}
                 <div className={`grid ${hasBothVersions ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
