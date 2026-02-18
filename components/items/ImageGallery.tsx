@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { ImagePair } from '@/types/room'
 
@@ -10,6 +10,7 @@ interface ImageGalleryProps {
   isEditing: boolean
   onThumbnailChange?: (url: string) => void
   onImagesAdd?: (newPairs: ImagePair[]) => void
+  onImageUpdate?: (originalUrl: string, processedUrl: string) => void
   onImageDelete?: (pairIndex: number) => void
   currentThumbnail?: string
 }
@@ -28,13 +29,24 @@ export function ImageGallery({
   isEditing,
   onThumbnailChange,
   onImagesAdd,
+  onImageUpdate,
   onImageDelete,
   currentThumbnail
 }: ImageGalleryProps) {
   const [hoveredPairIndex, setHoveredPairIndex] = useState<number | null>(null)
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [uploadError, setUploadError] = useState('')
+  const [processingOriginals, setProcessingOriginals] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Use refs to always have the latest callbacks available in async code
+  const onImageUpdateRef = useRef(onImageUpdate)
+  const onImagesAddRef = useRef(onImagesAdd)
+
+  useEffect(() => {
+    onImageUpdateRef.current = onImageUpdate
+    onImagesAddRef.current = onImagesAdd
+  }, [onImageUpdate, onImagesAdd])
 
   // Combine thumbnailPath with images for display
   const allImages: Array<{ url: string; type: 'original' | 'processed' | 'thumbnail'; pairIndex: number }> = []
@@ -96,31 +108,19 @@ export function ImageGallery({
         // Convert to base64
         const base64Image = await fileToBase64(file)
 
-        // Run original upload and background removal in parallel
-        const [originalUploadResult, bgRemovalResult] = await Promise.all([
-          // Upload original
-          (async () => {
-            const originalBlob = await base64ToBlob(base64Image)
-            const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
+        // Step 1: Upload original image FIRST (don't wait for rembg)
+        const originalBlob = await base64ToBlob(base64Image)
+        const originalFile = new File([originalBlob], `original_${file.name}`, { type: file.type || 'image/png' })
 
-            const originalFormData = new FormData()
-            originalFormData.append('files', originalFile)
-            originalFormData.append('itemId', `temp-${Date.now()}-original`)
+        const originalFormData = new FormData()
+        originalFormData.append('files', originalFile)
+        originalFormData.append('itemId', `temp-${Date.now()}-original`)
 
-            const res = await fetch('/api/items/upload-images', {
-              method: 'POST',
-              body: originalFormData
-            })
-            return res.json()
-          })(),
-
-          // Background removal
-          fetch('/api/remove_bg', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageData: base64Image })
-          }).then(res => res.json()).catch(err => ({ success: false, error: err.message }))
-        ])
+        const originalRes = await fetch('/api/items/upload-images', {
+          method: 'POST',
+          body: originalFormData
+        })
+        const originalUploadResult = await originalRes.json()
 
         if (!originalUploadResult.success) {
           setPendingImages(prev => {
@@ -135,56 +135,105 @@ export function ImageGallery({
         }
 
         const originalUrl = originalUploadResult.imagePaths[0]
-        let processedUrl: string | null = null
+        console.log('[ImageGallery] Original uploaded:', originalUrl)
 
-        // Upload processed image if background removal succeeded
-        if (bgRemovalResult.success) {
-          try {
-            const processedBase64 = bgRemovalResult.processedImageData
-            const processedBlob = await base64ToBlob(processedBase64)
-            const processedFile = new File([processedBlob], `processed_${file.name.replace(/\.[^/.]+$/, '')}.png`, { type: 'image/png' })
+        // Step 2: IMMEDIATELY save original image (before starting rembg)
+        // This ensures image persists even if user navigates away
+        console.log('[ImageGallery] Calling onImagesAdd with:', { original: originalUrl, processed: null })
+        // Use ref to call the latest callback
+        onImagesAddRef.current?.([{ original: originalUrl, processed: null }])
 
-            const processedFormData = new FormData()
-            processedFormData.append('files', processedFile)
-            processedFormData.append('itemId', `temp-${Date.now()}-processed`)
+        // Track that this original is being processed
+        setProcessingOriginals(prev => new Set(prev).add(originalUrl))
 
-            const processedUploadRes = await fetch('/api/items/upload-images', {
-              method: 'POST',
-              body: processedFormData
-            })
-
-            const processedUploadResult = await processedUploadRes.json()
-
-            if (processedUploadResult.success) {
-              processedUrl = processedUploadResult.imagePaths[0]
-            }
-          } catch (uploadErr) {
-            console.warn('Processed image upload error:', uploadErr)
-          }
-        }
-
-        // Update pending image status
+        // Update pending status to show original is uploaded
         setPendingImages(prev => {
           const updated = [...prev]
           if (updated[pendingIndex]) {
             updated[pendingIndex].originalUrl = originalUrl
-            updated[pendingIndex].processedUrl = processedUrl
-            updated[pendingIndex].status = 'completed'
           }
           return updated
         })
 
-        newPairs.push({
-          original: originalUrl,
-          processed: processedUrl
+        // Step 3: Start background removal (don't await - let it run async)
+        // This runs in background and updates when complete
+        fetch('/api/remove_bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageData: base64Image })
         })
+          .then(res => res.json())
+          .then(async (bgRemovalResult) => {
+            if (!bgRemovalResult.success) {
+              console.warn('Background removal failed:', bgRemovalResult.error)
+              // Remove from processing set
+              setProcessingOriginals(prev => {
+                const next = new Set(prev)
+                next.delete(originalUrl)
+                return next
+              })
+              return
+            }
+
+            // Upload processed image
+            try {
+              const processedBase64 = bgRemovalResult.processedImageData
+              const processedBlob = await base64ToBlob(processedBase64)
+              const processedFile = new File([processedBlob], `processed_${file.name.replace(/\.[^/.]+$/, '')}.png`, { type: 'image/png' })
+
+              const processedFormData = new FormData()
+              processedFormData.append('files', processedFile)
+              processedFormData.append('itemId', `temp-${Date.now()}-processed`)
+
+              const processedUploadRes = await fetch('/api/items/upload-images', {
+                method: 'POST',
+                body: processedFormData
+              })
+
+              const processedUploadResult = await processedUploadRes.json()
+
+              if (processedUploadResult.success) {
+                const processedUrl = processedUploadResult.imagePaths[0]
+                console.log('[ImageGallery] Processed image uploaded:', processedUrl)
+
+                // Update the existing image pair with processed URL
+                // Use ref to call the latest callback (avoids stale closure)
+                if (onImageUpdateRef.current) {
+                  console.log('[ImageGallery] Calling onImageUpdate via ref')
+                  onImageUpdateRef.current(originalUrl, processedUrl)
+                }
+              }
+
+              // Remove from processing set (success or not)
+              setProcessingOriginals(prev => {
+                const next = new Set(prev)
+                next.delete(originalUrl)
+                return next
+              })
+            } catch (uploadErr) {
+              console.warn('Processed image upload error:', uploadErr)
+              // Remove from processing set on error
+              setProcessingOriginals(prev => {
+                const next = new Set(prev)
+                next.delete(originalUrl)
+                return next
+              })
+            }
+          })
+          .catch(err => {
+            console.warn('Background removal error:', err)
+            // Remove from processing set on error
+            setProcessingOriginals(prev => {
+              const next = new Set(prev)
+              next.delete(originalUrl)
+              return next
+            })
+          })
       }
 
-      if (newPairs.length > 0) {
-        onImagesAdd(newPairs)
-        // Clear pending images after they've been added
-        setPendingImages(prev => prev.filter(img => img.status === 'processing'))
-      }
+      // Note: We don't clear pending images here anymore
+      // They will be filtered out in the render based on whether
+      // the URL exists in the actual images prop (see pendingToShow below)
 
     } catch (error) {
       setUploadError(`Upload failed: ${error}`)
@@ -215,9 +264,13 @@ export function ImageGallery({
     return res.blob()
   }
 
-  const isUploading = pendingImages.some(img => img.status === 'processing')
+  // Filter pending images to only show ones not yet in the actual images prop
+  const existingOriginalUrls = new Set(images.map(img => img.original))
+  const pendingToShow = pendingImages.filter(img => !img.originalUrl || !existingOriginalUrls.has(img.originalUrl))
 
-  if (allImages.length === 0 && pendingImages.length === 0 && !isEditing) {
+  const isUploading = pendingToShow.some(img => img.status === 'processing')
+
+  if (allImages.length === 0 && pendingToShow.length === 0 && !isEditing) {
     return null
   }
 
@@ -248,6 +301,16 @@ export function ImageGallery({
                 onMouseEnter={() => setHoveredPairIndex(pairIndex)}
                 onMouseLeave={() => setHoveredPairIndex(null)}
               >
+                {/* Processing indicator - shows when image has original but no processed yet */}
+                {pairIndex >= 0 && images[pairIndex] && images[pairIndex].original && !images[pairIndex].processed && (
+                  <div className="flex items-center gap-2 text-xs text-sage mb-1">
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                    <span>Removing background...</span>
+                  </div>
+                )}
                 {images.length > 1 && pairIndex >= 0 && (
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-taupe/60 font-medium">
@@ -346,9 +409,9 @@ export function ImageGallery({
       )}
 
       {/* Pending Images (being uploaded/processed) */}
-      {pendingImages.length > 0 && (
+      {pendingToShow.length > 0 && (
         <div className="space-y-4">
-          {pendingImages.map((pending, index) => (
+          {pendingToShow.map((pending, index) => (
             <div key={`pending-${index}`} className="space-y-2">
               <div className="text-xs text-taupe/60 font-medium">
                 {pending.status === 'processing' ? 'Processing...' : pending.status === 'error' ? 'Error' : 'Ready'}
@@ -405,7 +468,7 @@ export function ImageGallery({
 
       {isEditing && (
         <p className="text-taupe/60 text-xs font-body">
-          {allImages.length > 0 || pendingImages.length > 0 ? 'Click an image to set it as the thumbnail' : 'Add images to this item'}
+          {allImages.length > 0 || pendingToShow.length > 0 ? 'Click an image to set it as the thumbnail' : 'Add images to this item'}
         </p>
       )}
 

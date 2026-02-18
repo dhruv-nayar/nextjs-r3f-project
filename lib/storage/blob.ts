@@ -15,6 +15,7 @@ export async function uploadGLB(
   const blob = await put(`items/${itemId}/${filename}`, file, {
     access: 'public',
     token: process.env.BLOB_READ_WRITE_TOKEN,
+    allowOverwrite: true,
   })
   return blob.url
 }
@@ -29,6 +30,7 @@ export async function uploadImage(
   const blob = await put(`items/${itemId}/images/${filename}`, file, {
     access: 'public',
     token: process.env.BLOB_READ_WRITE_TOKEN,
+    allowOverwrite: true,
   })
   return blob.url
 }

@@ -127,6 +127,47 @@ export default function ItemDetailPage() {
     }
   }, [item])
 
+  // Handle processed image update (when background removal completes)
+  // IMPORTANT: This must be defined before the early return to maintain hook order
+  const handleImageUpdate = useCallback((originalUrl: string, processedUrl: string) => {
+    console.log('[ItemPage] handleImageUpdate called:', { originalUrl, processedUrl })
+
+    // Get current item from context (fresh, not from closure)
+    const currentItem = getItem(itemId)
+    const currentImages = currentItem?.images || []
+    console.log('[ItemPage] Current item images:', currentImages)
+
+    // Check if the original URL exists in the current images
+    const imageExists = currentImages.some(pair => pair.original === originalUrl)
+    if (!imageExists) {
+      console.warn('[ItemPage] Original URL not found in current images, skipping update')
+      return
+    }
+
+    const updatedImages = currentImages.map(pair =>
+      pair.original === originalUrl
+        ? { ...pair, processed: processedUrl }
+        : pair
+    )
+    console.log('[ItemPage] Updated images:', updatedImages)
+    setEditImages(updatedImages)
+
+    // Update thumbnail if it was the original and we now have processed
+    const currentThumbnail = currentItem?.thumbnailPath || ''
+    let newThumbnail = currentThumbnail
+    if (currentThumbnail === originalUrl) {
+      newThumbnail = processedUrl
+      setEditThumbnailPath(newThumbnail)
+    }
+
+    // Auto-save the update
+    console.log('[ItemPage] Saving updated images to item')
+    updateItem(itemId, {
+      images: updatedImages,
+      thumbnailPath: newThumbnail || undefined
+    })
+  }, [itemId, getItem, updateItem])
+
   if (!item) {
     return (
       <div className="min-h-screen bg-porcelain flex items-center justify-center p-8">
@@ -250,7 +291,9 @@ export default function ItemDetailPage() {
   }
 
   const handleImagesAdd = (newPairs: ImagePair[]) => {
+    console.log('[ItemPage] handleImagesAdd called with:', newPairs)
     const updatedImages = [...editImages, ...newPairs]
+    console.log('[ItemPage] Updated images array:', updatedImages)
     setEditImages(updatedImages)
 
     // If no thumbnail is set yet, use the first processed or original image
@@ -261,6 +304,7 @@ export default function ItemDetailPage() {
     }
 
     // Auto-save images immediately so item persists even if user navigates away
+    console.log('[ItemPage] Saving to item:', itemId, { images: updatedImages, thumbnailPath: newThumbnail })
     updateItem(itemId, {
       images: updatedImages,
       thumbnailPath: newThumbnail || undefined
@@ -437,6 +481,7 @@ export default function ItemDetailPage() {
                   isEditing={isEditing}
                   onThumbnailChange={setEditThumbnailPath}
                   onImagesAdd={handleImagesAdd}
+                  onImageUpdate={handleImageUpdate}
                   onImageDelete={(pairIndex) => {
                     const deletedImage = editImages[pairIndex]
                     setEditImages(prev => prev.filter((_, i) => i !== pairIndex))

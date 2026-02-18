@@ -118,9 +118,6 @@ export function GenerateModelPanel({
           jobId: data.job_id,
           itemId,
           type: 'trellis',
-          status: 'pending',
-          progress: 0,
-          message: 'Starting model generation...',
           inputImageUrls: urlsToUse,
         })
       }

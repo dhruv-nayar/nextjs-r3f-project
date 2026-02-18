@@ -224,6 +224,37 @@ export function ItemLibraryProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeoutId)
   }, [items, isLoaded])
 
+  // Listen for GLB generation completion and auto-update items
+  useEffect(() => {
+    const handleGlbComplete = (event: CustomEvent<{
+      itemId: string
+      modelPath: string
+      jobId: string
+    }>) => {
+      const { itemId, modelPath } = event.detail
+      if (!modelPath) return
+
+      // Update the item with the new model path
+      setItems(prev => prev.map(item => {
+        if (item.id !== itemId) return item
+
+        return {
+          ...item,
+          modelPath,
+          generationStatus: undefined, // Clear generation status
+          updatedAt: new Date().toISOString(),
+        }
+      }))
+
+      console.log(`[ItemLibrary] Auto-updated item ${itemId} with model: ${modelPath}`)
+    }
+
+    window.addEventListener('trellis-glb-complete', handleGlbComplete as EventListener)
+    return () => {
+      window.removeEventListener('trellis-glb-complete', handleGlbComplete as EventListener)
+    }
+  }, [])
+
   const addItem = useCallback((itemData: Omit<Item, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newItem: Item = {
       ...itemData,

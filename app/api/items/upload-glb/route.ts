@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     const blob = await put(`items/${itemId}/${filename}`, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      allowOverwrite: true,
     })
 
     // Return URL

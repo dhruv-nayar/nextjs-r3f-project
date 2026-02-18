@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
       contentType,
+      allowOverwrite: true,
     })
 
     return NextResponse.json({

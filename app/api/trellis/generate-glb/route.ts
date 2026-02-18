@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put } from '@vercel/blob'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 const TRELLIS_API_URL = process.env.TRELLIS_API_URL || 'https://nayardhruv0--trellis-api-fastapi-app.modal.run'
 const TRELLIS_API_KEY = process.env.TRELLIS_API_KEY || ''
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,6 +25,10 @@ export async function POST(request: NextRequest) {
     const trellisFormData = new FormData()
     trellisFormData.append('seed', seed)
     trellisFormData.append('texture_size', textureSize)
+
+    // Add callback URL for webhook notification when job completes
+    const callbackUrl = `${APP_URL}/api/webhooks/trellis`
+    trellisFormData.append('callback_url', callbackUrl)
 
     // If files are provided directly, use them
     if (files && files.length > 0) {
@@ -50,10 +55,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('[generate-glb] Submitting to Trellis API...')
+    console.log('[generate-glb] Submitting to Trellis async API...')
 
-    // Forward to Trellis API
-    const response = await fetch(`${TRELLIS_API_URL}/api/v1/trellis/`, {
+    // Call ASYNC endpoint (with callback_url for webhook)
+    const response = await fetch(`${TRELLIS_API_URL}/api/v1/trellis/async/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${TRELLIS_API_KEY}`,
@@ -70,34 +75,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check content type - API may return GLB directly or job JSON
-    const contentType = response.headers.get('content-type') || ''
-    console.log('[generate-glb] Response content-type:', contentType)
+    const data = await response.json()
+    console.log('[generate-glb] Async job submitted:', data.job_id)
 
-    // If response is a GLB file (returned directly), upload to blob storage
-    if (contentType.includes('model/gltf-binary') || contentType.includes('application/octet-stream')) {
-      console.log('[generate-glb] API returned GLB directly, uploading to blob storage...')
-      const glbBuffer = await response.arrayBuffer()
-
-      // Upload to Vercel Blob with unique path (Vercel adds random suffix by default)
-      const blob = await put(`items/${itemId}/model.glb`, glbBuffer, {
-        access: 'public',
-        contentType: 'model/gltf-binary',
+    // Store job in Supabase for persistence
+    const { error: insertError } = await supabaseAdmin
+      .from('trellis_jobs')
+      .insert({
+        job_id: data.job_id,
+        item_id: itemId,
+        type: 'trellis',
+        status: 'pending',
+        progress: 0,
+        message: 'Job submitted',
+        input_image_urls: imageUrls.length > 0 ? imageUrls : null,
+        seed: parseInt(seed),
+        texture_size: parseInt(textureSize),
+        callback_url: callbackUrl,
       })
 
-      console.log('[generate-glb] GLB uploaded to:', blob.url)
-
-      return NextResponse.json({
-        success: true,
-        glbUrl: blob.url,
-        type: 'direct'
-      })
+    if (insertError) {
+      console.error('[generate-glb] Failed to store job in Supabase:', insertError)
+      // Continue anyway - webhook will still work, just won't have persistence
     }
 
-    // Otherwise, handle as async job response
-    const data = await response.json()
-    console.log('[generate-glb] Job submitted:', data.job_id)
-    return NextResponse.json(data)
+    return NextResponse.json({
+      job_id: data.job_id,
+      status: 'pending',
+      item_id: itemId,
+    })
 
   } catch (error) {
     console.error('[generate-glb] Error:', error)
