@@ -322,6 +322,18 @@ export default function ItemDetailPage() {
                 modelPath={item.modelPath}
                 category={item.category}
                 materialOverrides={isEditing ? editMaterialOverrides : item.materialOverrides}
+                defaultRotation={isEditing
+                  ? { x: (editRotationXStep * Math.PI) / 2, z: (editRotationZStep * Math.PI) / 2 }
+                  : item.defaultRotation
+                }
+                dimensions={isEditing
+                  ? {
+                      width: widthFeet + widthInches / 12,
+                      height: heightFeet + heightInches / 12,
+                      depth: depthFeet + depthInches / 12
+                    }
+                  : item.dimensions
+                }
               />
             ) : item.parametricShape ? (
               <ParametricShapePreview

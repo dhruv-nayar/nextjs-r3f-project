@@ -11,25 +11,57 @@ interface ItemPreviewProps {
   modelPath: string
   category: string
   materialOverrides?: MaterialOverride[]
+  defaultRotation?: { x: number; z: number }
+  dimensions?: { width: number; height: number; depth: number }
 }
 
-function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; materialOverrides?: MaterialOverride[] }) {
+function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimensions }: { modelPath: string; materialOverrides?: MaterialOverride[]; defaultRotation?: { x: number; z: number }; dimensions?: { width: number; height: number; depth: number } }) {
   const { scene } = useGLTF(modelPath)
-  const groupRef = useRef<THREE.Group>(null)
+  const autoRotateRef = useRef<THREE.Group>(null) // Outermost: Y auto-rotation for preview
+  const dimensionScaleRef = useRef<THREE.Group>(null) // World-space dimension scaling (after tilt)
+  const tiltRef = useRef<THREE.Group>(null) // Tilt rotation (X, Z)
   const { invalidate } = useThree()
 
-  // Calculate centering and scaling ONCE based on original scene
+  // Serialize dimensions for stable dependency tracking
+  const dimensionsKey = dimensions ? JSON.stringify(dimensions) : 'none'
+
+  // Calculate centering and scaling based on original scene
+  // Separate: uniform fit (applied before rotation) vs dimension proportions (applied after rotation)
   const sceneTransform = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene)
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z)
 
-    return {
-      position: new THREE.Vector3(-center.x, -box.min.y, -center.z),
-      scale: 2 / maxDim
+    // Uniform scale to fit model in preview (applied before rotation)
+    const uniformScale = 2 / maxDim
+
+    // If dimensions provided, calculate world-space dimension proportions
+    // These are applied AFTER rotation so width=X, height=Y, depth=Z in world space
+    if (dimensions && dimensions.width > 0 && dimensions.height > 0 && dimensions.depth > 0) {
+      const maxTargetDim = Math.max(dimensions.width, dimensions.height, dimensions.depth)
+
+      // Dimension proportions normalized so max = 1
+      const dimensionScale = new THREE.Vector3(
+        dimensions.width / maxTargetDim,
+        dimensions.height / maxTargetDim,
+        dimensions.depth / maxTargetDim
+      )
+
+      return {
+        position: new THREE.Vector3(-center.x, -center.y, -center.z),
+        uniformScale,
+        dimensionScale
+      }
     }
-  }, [scene])
+
+    // Default: no dimension adjustment
+    return {
+      position: new THREE.Vector3(-center.x, -center.y, -center.z),
+      uniformScale,
+      dimensionScale: new THREE.Vector3(1, 1, 1)
+    }
+  }, [scene, dimensionsKey])
 
   // Serialize materialOverrides for stable dependency tracking
   const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
@@ -49,25 +81,46 @@ function ModelPreview({ modelPath, materialOverrides }: { modelPath: string; mat
     return freshClone
   }, [scene, sceneTransform, overridesKey])
 
-  // Apply scale to group (only once)
+  // Apply uniform scale to tilt group (fits model to preview, before rotation)
   useEffect(() => {
-    if (groupRef.current) {
-      groupRef.current.scale.setScalar(sceneTransform.scale)
+    if (tiltRef.current) {
+      tiltRef.current.scale.setScalar(sceneTransform.uniformScale)
       invalidate()
     }
-  }, [sceneTransform.scale, invalidate])
+  }, [sceneTransform.uniformScale, invalidate])
 
-  // Rotate the model slowly
+  // Apply dimension scale to dimension group (world-space, after rotation)
+  useEffect(() => {
+    if (dimensionScaleRef.current) {
+      dimensionScaleRef.current.scale.copy(sceneTransform.dimensionScale)
+      invalidate()
+    }
+  }, [sceneTransform.dimensionScale, invalidate])
+
+  // Apply default rotation to tilt group
+  useEffect(() => {
+    if (tiltRef.current) {
+      tiltRef.current.rotation.x = defaultRotation?.x || 0
+      tiltRef.current.rotation.z = defaultRotation?.z || 0
+      invalidate()
+    }
+  }, [defaultRotation?.x, defaultRotation?.z, invalidate])
+
+  // Auto-rotate on world Y axis (outer group) - doesn't affect the tilt
   useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y = state.clock.elapsedTime * 0.3
-      invalidate()  // Manually trigger render for each frame
+    if (autoRotateRef.current) {
+      autoRotateRef.current.rotation.y = state.clock.elapsedTime * 0.3
+      invalidate()
     }
   })
 
   return (
-    <group ref={groupRef}>
-      <primitive object={clonedScene} />
+    <group ref={autoRotateRef}>
+      <group ref={dimensionScaleRef}>
+        <group ref={tiltRef}>
+          <primitive object={clonedScene} />
+        </group>
+      </group>
     </group>
   )
 }
@@ -88,7 +141,7 @@ function Placeholder({ category }: { category: string }) {
   )
 }
 
-export function ItemPreview({ modelPath, category, materialOverrides }: ItemPreviewProps) {
+export function ItemPreview({ modelPath, category, materialOverrides, defaultRotation, dimensions }: ItemPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -140,7 +193,7 @@ export function ItemPreview({ modelPath, category, materialOverrides }: ItemPrev
           <directionalLight position={[-5, 3, -5]} intensity={0.5} />
 
           {/* Model switches dynamically without Canvas remount */}
-          <ModelPreview key={modelPath} modelPath={modelPath} materialOverrides={materialOverrides} />
+          <ModelPreview key={modelPath} modelPath={modelPath} materialOverrides={materialOverrides} defaultRotation={defaultRotation} dimensions={dimensions} />
 
           {/* Environment */}
           <Environment preset="city" />
