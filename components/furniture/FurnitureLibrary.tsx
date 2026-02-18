@@ -348,7 +348,9 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const { isResizeMode, setResizeMode } = useResizeMode()
   const { mode, setMode } = useInteractionMode()
   const { camera, gl } = useThree()
-  const isHovered = hoveredFurnitureId === instance.id
+  // Check both old hover context and new selection context hover
+  const isHovered = hoveredFurnitureId === instance.id ||
+    (hoveredItem?.type === 'furniture' && hoveredItem.instanceId === instance.id)
   // Check both old and new selection systems
   const isSelected = selectedFurnitureId === instance.id || isFurnitureSelected(instance.id)
   const [isDragging, setIsDragging] = useState(false)
@@ -695,13 +697,15 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const { hoveredFurnitureId, setHoveredFurnitureId } = useFurnitureHover()
   const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
-  const { selectFurniture, isFurnitureSelected, setHoveredItem } = useSelection()
+  const { selectFurniture, isFurnitureSelected, hoveredItem, setHoveredItem } = useSelection()
   const { updateInstance, currentRoom } = useRoom()
   const { updateItem } = useItemLibrary()
   const { isResizeMode, setResizeMode } = useResizeMode()
   const { mode, setMode } = useInteractionMode()
   const { camera, gl } = useThree()
-  const isHovered = hoveredFurnitureId === instance.id
+  // Check both old hover context and new selection context hover
+  const isHovered = hoveredFurnitureId === instance.id ||
+    (hoveredItem?.type === 'furniture' && hoveredItem.instanceId === instance.id)
   const isSelected = selectedFurnitureId === instance.id || isFurnitureSelected(instance.id)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisuallyDragging, setIsVisuallyDragging] = useState(false)

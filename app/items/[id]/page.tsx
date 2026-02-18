@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useItemLibrary } from '@/lib/item-library-context'
@@ -31,9 +31,6 @@ export default function ItemDetailPage() {
   const { getInstancesForItem, deleteAllInstancesOfItem, switchHome } = useHome()
   const { toastMessage: trellisToast, toastType: trellisToastType, clearToast: clearTrellisToast } = useTrellisJobs()
 
-  // Check if we should start in edit mode
-  const startInEditMode = searchParams.get('edit') === 'true'
-
   // Parse return context for "Back to Project" navigation
   const returnToParam = searchParams.get('returnTo')
   const returnContext = returnToParam ? (() => {
@@ -57,7 +54,6 @@ export default function ItemDetailPage() {
   const item = getItem(itemId)
   const instances = item ? getInstancesForItem(itemId) : []
 
-  const [isEditing, setIsEditing] = useState(startInEditMode)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -93,17 +89,98 @@ export default function ItemDetailPage() {
   const [editMaterialOverrides, setEditMaterialOverrides] = useState<MaterialOverride[]>(item?.materialOverrides || [])
   const [showMaterialsSection, setShowMaterialsSection] = useState(false)
 
+  // Helper to round to 1 decimal place (matches left side panel)
+  const round = (v: number) => Math.round(v * 10) / 10
+
   // Model path state (for when a model is generated)
   const [editModelPath, setEditModelPath] = useState(item?.modelPath || '')
+
+  // Autosave debounce timer ref
+  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isInitializedRef = useRef(false)
+
+  // Saving indicator state for navbar
+  const [isSaving, setIsSaving] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+
+  // Autosave function - debounced save
+  const triggerAutosave = useCallback(() => {
+    if (!isInitializedRef.current) return // Don't save during initial load
+
+    // Clear any existing timer
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+    }
+
+    // Show saving indicator
+    setIsSaving(true)
+
+    // Set new debounced save
+    autosaveTimerRef.current = setTimeout(() => {
+      // Calculate total feet from feet + inches
+      const totalWidth = widthFeet + widthInches / 12
+      const totalHeight = heightFeet + heightInches / 12
+      const totalDepth = depthFeet + depthInches / 12
+
+      // Calculate rotation in radians from steps
+      const rotationX = (editRotationXStep * Math.PI) / 2
+      const rotationZ = (editRotationZStep * Math.PI) / 2
+
+      updateItem(itemId, {
+        name: editName,
+        description: editDescription,
+        tags: editTags.split(',').map(t => t.trim()).filter(t => t.length > 0),
+        productUrl: editProductUrl,
+        placementType: editPlacementType,
+        materialOverrides: editMaterialOverrides.length > 0 ? editMaterialOverrides : undefined,
+        thumbnailPath: editThumbnailPath || undefined,
+        images: editImages.length > 0 ? editImages : undefined,
+        dimensions: {
+          width: totalWidth,
+          height: totalHeight,
+          depth: totalDepth
+        },
+        defaultRotation: (rotationX !== 0 || rotationZ !== 0)
+          ? { x: rotationX, z: rotationZ }
+          : undefined
+      })
+
+      // Update saving indicator
+      setIsSaving(false)
+      setLastSavedAt(new Date())
+    }, 500) // 500ms debounce
+  }, [
+    itemId, editName, editDescription, editTags, editProductUrl, editPlacementType,
+    editMaterialOverrides, editThumbnailPath, editImages, widthFeet, widthInches,
+    heightFeet, heightInches, depthFeet, depthInches, editRotationXStep, editRotationZStep, updateItem
+  ])
+
+  // Trigger autosave when form values change (except images which are saved immediately)
+  useEffect(() => {
+    triggerAutosave()
+  }, [
+    editName, editDescription, editTags, editProductUrl, editPlacementType,
+    editMaterialOverrides, widthFeet, widthInches, heightFeet, heightInches,
+    depthFeet, depthInches, editRotationXStep, editRotationZStep
+  ])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+      }
+    }
+  }, [])
 
   // Callback for when materials are extracted
   const handleMaterialsExtracted = useCallback((materials: MaterialInfo[]) => {
     setExtractedMaterials(materials)
   }, [])
 
-  // Sync edit state with item when it changes
+  // Sync edit state with item when it changes (initial load only)
   useEffect(() => {
-    if (item) {
+    if (item && !isInitializedRef.current) {
       setEditName(item.name)
       setEditDescription(item.description || '')
       setEditTags(item.tags.join(', '))
@@ -124,6 +201,11 @@ export default function ItemDetailPage() {
       // Update rotation state
       setEditRotationXStep(Math.round((item.defaultRotation?.x || 0) / (Math.PI / 2)) % 4)
       setEditRotationZStep(Math.round((item.defaultRotation?.z || 0) / (Math.PI / 2)) % 4)
+
+      // Mark as initialized after a short delay to let state settle
+      setTimeout(() => {
+        isInitializedRef.current = true
+      }, 100)
     }
   }, [item])
 
@@ -179,66 +261,6 @@ export default function ItemDetailPage() {
         </div>
       </div>
     )
-  }
-
-  const handleSave = () => {
-    // Calculate total feet from feet + inches
-    const totalWidth = widthFeet + widthInches / 12
-    const totalHeight = heightFeet + heightInches / 12
-    const totalDepth = depthFeet + depthInches / 12
-
-    // Calculate rotation in radians from steps
-    const rotationX = (editRotationXStep * Math.PI) / 2
-    const rotationZ = (editRotationZStep * Math.PI) / 2
-
-    updateItem(itemId, {
-      name: editName,
-      description: editDescription,
-      tags: editTags.split(',').map(t => t.trim()).filter(t => t.length > 0),
-      productUrl: editProductUrl,
-      placementType: editPlacementType,
-      materialOverrides: editMaterialOverrides.length > 0 ? editMaterialOverrides : undefined,
-      thumbnailPath: editThumbnailPath || undefined,
-      images: editImages.length > 0 ? editImages : undefined,
-      dimensions: {
-        width: totalWidth,
-        height: totalHeight,
-        depth: totalDepth
-      },
-      defaultRotation: (rotationX !== 0 || rotationZ !== 0)
-        ? { x: rotationX, z: rotationZ }
-        : undefined
-    })
-    setIsEditing(false)
-    setToastMessage('Item updated successfully!')
-    setToastType('success')
-    setShowToast(true)
-  }
-
-  const handleCancel = () => {
-    // Reset to current item values
-    if (item) {
-      setEditName(item.name)
-      setEditDescription(item.description || '')
-      setEditTags(item.tags.join(', '))
-      setEditProductUrl(item.productUrl || '')
-      setEditPlacementType(item.placementType)
-      setEditMaterialOverrides(item.materialOverrides || [])
-      setEditThumbnailPath(item.thumbnailPath || '')
-      setEditImages(item.images || [])
-
-      setWidthFeet(Math.floor(item.dimensions?.width || 0))
-      setWidthInches(((item.dimensions?.width || 0) % 1) * 12)
-      setHeightFeet(Math.floor(item.dimensions?.height || 0))
-      setHeightInches(((item.dimensions?.height || 0) % 1) * 12)
-      setDepthFeet(Math.floor(item.dimensions?.depth || 0))
-      setDepthInches(((item.dimensions?.depth || 0) % 1) * 12)
-
-      // Reset rotation state
-      setEditRotationXStep(Math.round((item.defaultRotation?.x || 0) / (Math.PI / 2)) % 4)
-      setEditRotationZStep(Math.round((item.defaultRotation?.z || 0) / (Math.PI / 2)) % 4)
-    }
-    setIsEditing(false)
   }
 
   const handleDelete = () => {
@@ -354,7 +376,7 @@ export default function ItemDetailPage() {
       )}
 
       {/* Navigation Bar */}
-      <Navbar activeTab="inventory" breadcrumb={item.name} />
+      <Navbar activeTab="inventory" breadcrumb={item.name} isSaving={isSaving} lastSavedAt={lastSavedAt} />
 
       {/* Main Content Layout */}
       <div className="flex">
@@ -365,19 +387,13 @@ export default function ItemDetailPage() {
               <ItemPreview
                 modelPath={item.modelPath}
                 category={item.category}
-                materialOverrides={isEditing ? editMaterialOverrides : item.materialOverrides}
-                defaultRotation={isEditing
-                  ? { x: (editRotationXStep * Math.PI) / 2, z: (editRotationZStep * Math.PI) / 2 }
-                  : item.defaultRotation
-                }
-                dimensions={isEditing
-                  ? {
-                      width: widthFeet + widthInches / 12,
-                      height: heightFeet + heightInches / 12,
-                      depth: depthFeet + depthInches / 12
-                    }
-                  : item.dimensions
-                }
+                materialOverrides={editMaterialOverrides}
+                defaultRotation={{ x: (editRotationXStep * Math.PI) / 2, z: (editRotationZStep * Math.PI) / 2 }}
+                dimensions={{
+                  width: widthFeet + widthInches / 12,
+                  height: heightFeet + heightInches / 12,
+                  depth: depthFeet + depthInches / 12
+                }}
               />
             ) : item.parametricShape ? (
               <ParametricShapePreview
@@ -441,18 +457,12 @@ export default function ItemDetailPage() {
                   </div>
 
                   {/* Item Name */}
-                  {isEditing ? (
-                    <Input
-                      type="text"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="text-3xl font-display font-semibold text-graphite mb-6"
-                    />
-                  ) : (
-                    <h1 className="text-3xl font-display font-semibold text-graphite mb-6">
-                      {item.name}
-                    </h1>
-                  )}
+                  <Input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="text-3xl font-display font-semibold text-graphite mb-6"
+                  />
                 </div>
 
                 {/* Description Section */}
@@ -460,25 +470,20 @@ export default function ItemDetailPage() {
                   <h3 className="font-display font-semibold text-graphite mb-3">
                     Description
                   </h3>
-                  {isEditing ? (
-                    <textarea
-                      value={editDescription}
-                      onChange={(e) => setEditDescription(e.target.value)}
-                      className="w-full px-4 py-3 bg-white text-graphite font-body text-sm rounded-xl border border-taupe/10 focus:outline-none focus:border-taupe/30 transition-colors resize-none"
-                      rows={4}
-                    />
-                  ) : (
-                    <p className="text-sm text-taupe/80 font-body leading-relaxed">
-                      {item.description || 'No description provided.'}
-                    </p>
-                  )}
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Add a description..."
+                    className="w-full px-4 py-3 bg-white text-graphite font-body text-sm rounded-xl border border-taupe/10 focus:outline-none focus:border-taupe/30 transition-colors resize-none"
+                    rows={4}
+                  />
                 </div>
 
                 {/* Images Section */}
                 <ImageGallery
-                  images={isEditing ? editImages : (item.images || [])}
+                  images={editImages}
                   thumbnailPath={item.thumbnailPath}
-                  isEditing={isEditing}
+                  isEditing={true}
                   onThumbnailChange={setEditThumbnailPath}
                   onImagesAdd={handleImagesAdd}
                   onImageUpdate={handleImageUpdate}
@@ -490,11 +495,11 @@ export default function ItemDetailPage() {
                       setEditThumbnailPath('')
                     }
                   }}
-                  currentThumbnail={isEditing ? editThumbnailPath : item.thumbnailPath}
+                  currentThumbnail={editThumbnailPath}
                 />
 
-                {/* Generate 3D Model Section - shown when editing and there are images, or if generation was interrupted */}
-                {isEditing && (editImages.length > 0 || item.generationStatus?.isGenerating) && !item.modelPath && (
+                {/* Generate 3D Model Section - shown when there are images, or if generation was interrupted */}
+                {(editImages.length > 0 || item.generationStatus?.isGenerating) && !item.modelPath && (
                   <GenerateModelPanel
                     itemId={itemId}
                     imagePairs={editImages}
@@ -513,56 +518,28 @@ export default function ItemDetailPage() {
                     {/* Placement Type */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-taupe/70 font-body">Placement:</span>
-                      {isEditing ? (
-                        <Dropdown
-                          label="Select Placement"
-                          value={editPlacementType || 'floor'}
-                          onChange={(value) => setEditPlacementType(value as PlacementType)}
-                          options={[
-                            { label: '🔽 Floor', value: 'floor' },
-                            { label: '◼️ Wall', value: 'wall' },
-                            { label: '🔼 Ceiling', value: 'ceiling' }
-                          ]}
-                        />
-                      ) : (
-                        item.placementType ? (
-                          <span className="px-3 py-1 bg-white text-graphite text-xs font-body rounded-full border border-taupe/10">
-                            {item.placementType === 'floor' && '🔽 Floor'}
-                            {item.placementType === 'wall' && '◼️ Wall'}
-                            {item.placementType === 'ceiling' && '🔼 Ceiling'}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-taupe/40 font-body">Floor</span>
-                        )
-                      )}
+                      <Dropdown
+                        label="Select Placement"
+                        value={editPlacementType || 'floor'}
+                        onChange={(value) => setEditPlacementType(value as PlacementType)}
+                        options={[
+                          { label: '🔽 Floor', value: 'floor' },
+                          { label: '◼️ Wall', value: 'wall' },
+                          { label: '🔼 Ceiling', value: 'ceiling' }
+                        ]}
+                      />
                     </div>
 
                     {/* Product URL */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-taupe/70 font-body">Product:</span>
-                      {isEditing ? (
-                        <Input
-                          type="url"
-                          value={editProductUrl}
-                          onChange={(e) => setEditProductUrl(e.target.value)}
-                          placeholder="https://..."
-                          className="flex-1 ml-3"
-                        />
-                      ) : item.productUrl ? (
-                        <a
-                          href={item.productUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-sage hover:text-sage/80 font-body flex items-center gap-1 transition-colors"
-                        >
-                          View Product
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                      ) : (
-                        <span className="text-sm text-taupe/40 font-body">No URL</span>
-                      )}
+                      <Input
+                        type="url"
+                        value={editProductUrl}
+                        onChange={(e) => setEditProductUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="flex-1 ml-3"
+                      />
                     </div>
                   </div>
                 </div>
@@ -572,152 +549,104 @@ export default function ItemDetailPage() {
                   <h3 className="font-display font-semibold text-graphite mb-3">
                     Dimensions
                   </h3>
-                  {isEditing ? (
-                    <div className="space-y-3">
-                      {/* Width */}
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-2">Width</p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={widthFeet || ''}
-                            onChange={(e) => setWidthFeet(parseInt(e.target.value) || 0)}
-                            placeholder="0"
-                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
-                          />
-                          <span className="text-taupe/50 text-xs font-body">ft</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={widthInches || ''}
-                            onChange={(e) => setWidthInches(parseFloat(e.target.value) || 0)}
-                            placeholder="0"
-                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
-                          />
-                          <span className="text-taupe/50 text-xs font-body">in</span>
-                        </div>
-                      </div>
-
-                      {/* Height */}
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-2">Height</p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={heightFeet || ''}
-                            onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
-                            placeholder="0"
-                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
-                          />
-                          <span className="text-taupe/50 text-xs font-body">ft</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={heightInches || ''}
-                            onChange={(e) => setHeightInches(parseFloat(e.target.value) || 0)}
-                            placeholder="0"
-                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
-                          />
-                          <span className="text-taupe/50 text-xs font-body">in</span>
-                        </div>
-                      </div>
-
-                      {/* Depth */}
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-2">Depth</p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={depthFeet || ''}
-                            onChange={(e) => setDepthFeet(parseInt(e.target.value) || 0)}
-                            placeholder="0"
-                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
-                          />
-                          <span className="text-taupe/50 text-xs font-body">ft</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={depthInches || ''}
-                            onChange={(e) => setDepthInches(parseFloat(e.target.value) || 0)}
-                            placeholder="0"
-                            className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
-                          />
-                          <span className="text-taupe/50 text-xs font-body">in</span>
-                        </div>
+                  <div className="space-y-3">
+                    {/* Width */}
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                      <p className="text-xs text-taupe/50 font-body mb-2">Width</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={widthFeet || ''}
+                          onChange={(e) => setWidthFeet(parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                        />
+                        <span className="text-taupe/50 text-xs font-body">ft</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={round(widthInches) || ''}
+                          onChange={(e) => setWidthInches(parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                        />
+                        <span className="text-taupe/50 text-xs font-body">in</span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-1">Width</p>
-                        <p className="text-sm font-body font-medium text-graphite">
-                          {Math.floor(item.dimensions?.width || 0)}' {(((item.dimensions?.width || 0) % 1) * 12).toFixed(1)}"
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-1">Height</p>
-                        <p className="text-sm font-body font-medium text-graphite">
-                          {Math.floor(item.dimensions?.height || 0)}' {(((item.dimensions?.height || 0) % 1) * 12).toFixed(1)}"
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-1">Depth</p>
-                        <p className="text-sm font-body font-medium text-graphite">
-                          {Math.floor(item.dimensions?.depth || 0)}' {(((item.dimensions?.depth || 0) % 1) * 12).toFixed(1)}"
-                        </p>
+
+                    {/* Height */}
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                      <p className="text-xs text-taupe/50 font-body mb-2">Height</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={heightFeet || ''}
+                          onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                        />
+                        <span className="text-taupe/50 text-xs font-body">ft</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={round(heightInches) || ''}
+                          onChange={(e) => setHeightInches(parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                        />
+                        <span className="text-taupe/50 text-xs font-body">in</span>
                       </div>
                     </div>
-                  )}
+
+                    {/* Depth */}
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10">
+                      <p className="text-xs text-taupe/50 font-body mb-2">Depth</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={depthFeet || ''}
+                          onChange={(e) => setDepthFeet(parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                        />
+                        <span className="text-taupe/50 text-xs font-body">ft</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={round(depthInches) || ''}
+                          onChange={(e) => setDepthInches(parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
+                        />
+                        <span className="text-taupe/50 text-xs font-body">in</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Default Rotation Section */}
-                {isEditing && (
-                  <div>
-                    <h3 className="font-display font-semibold text-graphite mb-3">
-                      Default Rotation
-                    </h3>
-                    <div className="bg-white rounded-xl p-3 border border-taupe/10 space-y-2">
-                      <RotationControls
-                        label="Tilt Forward/Back"
-                        axis="X"
-                        step={editRotationXStep}
-                        onChange={setEditRotationXStep}
-                      />
-                      <RotationControls
-                        label="Roll Left/Right"
-                        axis="Z"
-                        step={editRotationZStep}
-                        onChange={setEditRotationZStep}
-                      />
-                    </div>
+                <div>
+                  <h3 className="font-display font-semibold text-graphite mb-3">
+                    Default Rotation
+                  </h3>
+                  <div className="bg-white rounded-xl p-3 border border-taupe/10 space-y-2">
+                    <RotationControls
+                      label="Tilt Forward/Back"
+                      axis="X"
+                      step={editRotationXStep}
+                      onChange={setEditRotationXStep}
+                    />
+                    <RotationControls
+                      label="Roll Left/Right"
+                      axis="Z"
+                      step={editRotationZStep}
+                      onChange={setEditRotationZStep}
+                    />
                   </div>
-                )}
-
-                {/* Display rotation when not editing (if set) */}
-                {!isEditing && item.defaultRotation && (
-                  <div>
-                    <h3 className="font-display font-semibold text-graphite mb-3">
-                      Default Rotation
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-1">X-Axis (Tilt)</p>
-                        <p className="text-sm font-body font-medium text-graphite">
-                          {Math.round((item.defaultRotation.x * 180) / Math.PI)}°
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-xl p-3 border border-taupe/10">
-                        <p className="text-xs text-taupe/50 font-body mb-1">Z-Axis (Roll)</p>
-                        <p className="text-sm font-body font-medium text-graphite">
-                          {Math.round((item.defaultRotation.z * 180) / Math.PI)}°
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 {/* Materials & Colors Section */}
                 {extractedMaterials.length > 0 && (
@@ -784,8 +713,7 @@ export default function ItemDetailPage() {
                                     onChange={(e) =>
                                       handleMaterialColorChange(material.name, material.index, e.target.value)
                                     }
-                                    disabled={!isEditing}
-                                    className="w-16 h-8 rounded-lg border border-taupe/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-16 h-8 rounded-lg border border-taupe/10 cursor-pointer"
                                   />
                                   <input
                                     type="text"
@@ -796,8 +724,7 @@ export default function ItemDetailPage() {
                                         handleMaterialColorChange(material.name, material.index, value)
                                       }
                                     }}
-                                    disabled={!isEditing}
-                                    className="flex-1 px-2 py-1.5 bg-porcelain text-graphite font-mono text-xs rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors disabled:opacity-50"
+                                    className="flex-1 px-2 py-1.5 bg-porcelain text-graphite font-mono text-xs rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                                     placeholder="#FFFFFF"
                                   />
                                 </div>
@@ -806,7 +733,7 @@ export default function ItemDetailPage() {
                           )
                         })}
 
-                        {editMaterialOverrides.length > 0 && isEditing && (
+                        {editMaterialOverrides.length > 0 && (
                           <button
                             onClick={handleResetAllMaterials}
                             className="w-full px-4 py-2 bg-scarlet/10 text-scarlet text-sm font-body font-medium rounded-lg border border-scarlet/20 hover:bg-scarlet/20 transition-colors"
@@ -814,56 +741,23 @@ export default function ItemDetailPage() {
                             Reset All Materials
                           </button>
                         )}
-
-                        {!isEditing && extractedMaterials.length > 0 && (
-                          <p className="text-xs text-taupe/50 font-body text-center">
-                            Click "Edit Item" to customize materials
-                          </p>
-                        )}
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Action Buttons - Moved to bottom */}
-                <div className="flex gap-3 pt-4 border-t border-taupe/10">
-                  {isEditing ? (
-                    <>
-                      <Button
-                        variant="primary"
-                        onClick={handleSave}
-                        size="lg"
-                        fullWidth
-                      >
-                        Save Changes
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={handleCancel}
-                        size="lg"
-                      >
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        variant="primary"
-                        onClick={() => setIsEditing(true)}
-                        size="lg"
-                        fullWidth
-                      >
-                        Edit Item
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => setShowDeleteConfirm(true)}
-                        size="lg"
-                      >
-                        Delete
-                      </Button>
-                    </>
-                  )}
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between gap-3 pt-4 border-t border-taupe/10">
+                  <p className="text-xs text-taupe/50 font-body">
+                    Changes saved automatically
+                  </p>
+                  <Button
+                    variant="danger"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    size="lg"
+                  >
+                    Delete Item
+                  </Button>
                 </div>
 
               </div>

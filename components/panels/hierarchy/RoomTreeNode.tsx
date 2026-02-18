@@ -43,11 +43,12 @@ export function RoomTreeNode({ room, isCurrentRoom = false }: RoomTreeNodeProps)
   const instances = room.instances || []
   const furnitureCount = instances.length
 
-  // Format dimensions for display
+  // Format dimensions for display (round to 1 decimal place)
   const formatDimensions = () => {
     if (!room.dimensions) return null
     const { width, depth, height } = room.dimensions
-    return `${width}'W x ${depth}'D x ${height}'H`
+    const round = (v: number) => Math.round(v * 10) / 10
+    return `${round(width)}'W x ${round(depth)}'D x ${round(height)}'H`
   }
 
   // Check if this room or any of its children are selected
@@ -106,7 +107,7 @@ export function RoomTreeNode({ room, isCurrentRoom = false }: RoomTreeNodeProps)
                         label={wallLabel}
                         icon={Icons.wall}
                         indent={2}
-                        secondaryLabel={room.dimensions ? `${room.dimensions.height}'` : undefined}
+                        secondaryLabel={room.dimensions ? `${Math.round(room.dimensions.height * 10) / 10}'` : undefined}
                       />
                     )
                   })}
@@ -149,7 +150,7 @@ export function RoomTreeNode({ room, isCurrentRoom = false }: RoomTreeNodeProps)
                             hovered ? { type: 'wall', roomId: room.id, side } : null
                           )
                         }
-                        secondaryLabel={room.dimensions ? `${room.dimensions.height}'` : undefined}
+                        secondaryLabel={room.dimensions ? `${Math.round(room.dimensions.height * 10) / 10}'` : undefined}
                       />
                     )
                   })}
@@ -173,7 +174,7 @@ export function RoomTreeNode({ room, isCurrentRoom = false }: RoomTreeNodeProps)
             }
             secondaryLabel={
               room.dimensions
-                ? `${room.dimensions.width}' x ${room.dimensions.depth}'`
+                ? `${Math.round(room.dimensions.width * 10) / 10}' x ${Math.round(room.dimensions.depth * 10) / 10}'`
                 : undefined
             }
           />

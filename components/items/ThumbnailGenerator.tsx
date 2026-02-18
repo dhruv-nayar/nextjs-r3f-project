@@ -7,15 +7,25 @@ import * as THREE from 'three'
 
 interface ThumbnailGeneratorProps {
   modelPath: string
-  onThumbnailGenerated: (blob: Blob) => void
+  onThumbnailGenerated: (blob: Blob, dimensions?: { width: number; height: number; depth: number }) => void
   onError: (error: string) => void
 }
 
-function ModelForThumbnail({ modelPath, onReady }: { modelPath: string; onReady: () => void }) {
+// Conversion factor: GLB units (typically meters) to feet
+const METERS_TO_FEET = 3.28084
+
+function ModelForThumbnail({
+  modelPath,
+  onReady
+}: {
+  modelPath: string
+  onReady: (dimensions: { width: number; height: number; depth: number }) => void
+}) {
   const { scene } = useGLTF(modelPath)
   const clonedScene = useMemo(() => scene.clone(true), [scene])
   const groupRef = useRef<THREE.Group>(null)
   const [frameCount, setFrameCount] = useState(0)
+  const dimensionsRef = useRef<{ width: number; height: number; depth: number } | null>(null)
   const { invalidate } = useThree()
 
   // Center and scale the model to fit in view
@@ -25,6 +35,14 @@ function ModelForThumbnail({ modelPath, onReady }: { modelPath: string; onReady:
     const box = new THREE.Box3().setFromObject(clonedScene)
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
+
+    // Store dimensions in feet (assuming GLB is in meters)
+    // Round to 1 decimal place for cleaner values
+    dimensionsRef.current = {
+      width: Math.round(size.x * METERS_TO_FEET * 10) / 10,
+      height: Math.round(size.y * METERS_TO_FEET * 10) / 10,
+      depth: Math.round(size.z * METERS_TO_FEET * 10) / 10
+    }
 
     // Center the model
     clonedScene.position.set(-center.x, -box.min.y, -center.z)
@@ -44,7 +62,8 @@ function ModelForThumbnail({ modelPath, onReady }: { modelPath: string; onReady:
       invalidate()
     } else if (frameCount === 10) {
       setFrameCount(11)
-      onReady()
+      // Pass dimensions to parent when ready
+      onReady(dimensionsRef.current || { width: 2, height: 2, depth: 2 })
     }
   })
 
@@ -63,6 +82,12 @@ export function ThumbnailGenerator({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isReady, setIsReady] = useState(false)
   const [hasCapture, setHasCaptured] = useState(false)
+  const dimensionsRef = useRef<{ width: number; height: number; depth: number } | undefined>(undefined)
+
+  const handleModelReady = (dimensions: { width: number; height: number; depth: number }) => {
+    dimensionsRef.current = dimensions
+    setIsReady(true)
+  }
 
   useEffect(() => {
     if (isReady && !hasCapture && canvasRef.current) {
@@ -72,7 +97,7 @@ export function ThumbnailGenerator({
       try {
         canvasRef.current.toBlob((blob) => {
           if (blob) {
-            onThumbnailGenerated(blob)
+            onThumbnailGenerated(blob, dimensionsRef.current)
           } else {
             onError('Failed to capture thumbnail')
           }
@@ -111,7 +136,7 @@ export function ThumbnailGenerator({
 
         <ModelForThumbnail
           modelPath={modelPath}
-          onReady={() => setIsReady(true)}
+          onReady={handleModelReady}
         />
       </Canvas>
     </div>

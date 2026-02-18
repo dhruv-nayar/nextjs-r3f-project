@@ -1,20 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTrellisJobs, TrellisJob } from '@/lib/trellis-job-context'
 import Link from 'next/link'
 
 export function TrellisJobIndicator() {
   const { getActiveJobs, jobs } = useTrellisJobs()
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isHidden, setIsHidden] = useState(false)
+  const prevActiveJobsCount = useRef<number>(0)
 
   const activeJobs = getActiveJobs()
   const recentCompletedJobs = jobs
     .filter(job => job.status === 'completed' || job.status === 'failed')
     .slice(-3)
 
-  // Don't render if no jobs to show
-  if (activeJobs.length === 0 && recentCompletedJobs.length === 0) {
+  // Auto-fade when jobs complete (transition from active > 0 to active === 0)
+  useEffect(() => {
+    // If we just transitioned from having active jobs to having none (jobs completed)
+    if (prevActiveJobsCount.current > 0 && activeJobs.length === 0 && !isExpanded) {
+      // Show the "Jobs completed" state briefly, then fade away
+      const timer = setTimeout(() => {
+        setIsHidden(true)
+      }, 2000) // 2 second delay before fading
+
+      return () => clearTimeout(timer)
+    }
+
+    // Reset hidden state when new jobs start
+    if (activeJobs.length > 0) {
+      setIsHidden(false)
+    }
+
+    prevActiveJobsCount.current = activeJobs.length
+  }, [activeJobs.length, isExpanded])
+
+  // Don't render if no jobs to show or if hidden after completion
+  if ((activeJobs.length === 0 && recentCompletedJobs.length === 0) || isHidden) {
     return null
   }
 

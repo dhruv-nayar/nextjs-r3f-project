@@ -131,6 +131,10 @@ export default function ItemsPage() {
   const handleGLBUploadComplete = (result: GLBUploadResult) => {
     setUploadedModelPath(result.modelPath)
     setUploadedThumbnailPath(result.thumbnailPath || '')
+    // Use extracted dimensions from GLB if available
+    if (result.dimensions) {
+      setNewItemDimensions(result.dimensions)
+    }
     setUploadStep('metadata')
   }
 

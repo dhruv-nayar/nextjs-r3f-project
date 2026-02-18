@@ -16,6 +16,7 @@ export function GLBUpload({ onUploadComplete, onError }: GLBUploadProps) {
   const [uploadStage, setUploadStage] = useState<'idle' | 'uploading-glb' | 'generating-thumbnail' | 'uploading-thumbnail' | 'complete'>('idle')
   const [modelPath, setModelPath] = useState('')
   const [itemId, setItemId] = useState('')
+  const [extractedDimensions, setExtractedDimensions] = useState<{ width: number; height: number; depth: number } | undefined>(undefined)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (file: File) => {
@@ -88,7 +89,12 @@ export function GLBUpload({ onUploadComplete, onError }: GLBUploadProps) {
     }
   }
 
-  const handleThumbnailGenerated = async (blob: Blob) => {
+  const handleThumbnailGenerated = async (blob: Blob, dimensions?: { width: number; height: number; depth: number }) => {
+    // Store extracted dimensions
+    if (dimensions) {
+      setExtractedDimensions(dimensions)
+    }
+
     setUploadStage('uploading-thumbnail')
     setProgress(prev => prev ? { ...prev, progress: 75, status: 'processing', stage: 'thumbnail' } : null)
 
@@ -109,7 +115,8 @@ export function GLBUpload({ onUploadComplete, onError }: GLBUploadProps) {
         setProgress(prev => prev ? { ...prev, progress: 100, status: 'completed' } : null)
         onUploadComplete({
           modelPath,
-          thumbnailPath: result.thumbnailPath
+          thumbnailPath: result.thumbnailPath,
+          dimensions: dimensions || extractedDimensions
         })
       } else {
         setProgress(prev => prev ? { ...prev, status: 'error', error: result.error } : null)

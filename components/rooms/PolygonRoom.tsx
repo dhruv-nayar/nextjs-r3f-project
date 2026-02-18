@@ -21,6 +21,7 @@ interface PolygonRoomProps {
   position?: [number, number, number]
   roomId?: string
   doors?: Door[]  // Optional door openings
+  excludedEdges?: number[]  // Edge indices to exclude from rendering (for shared walls)
 }
 
 /**
@@ -98,8 +99,8 @@ function createWallWithDoors(
  * PolygonRoom: Renders a room with arbitrary polygon floor shape
  * Used by the wall-first V2 floorplan editor
  */
-export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doors = [] }: PolygonRoomProps) {
-  console.log(`[PolygonRoom] Rendering ${roomId} with ${doors.length} doors`)
+export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doors = [], excludedEdges = [] }: PolygonRoomProps) {
+  console.log(`[PolygonRoom] Rendering ${roomId} with ${doors.length} doors, ${excludedEdges.length} excluded edges`)
 
   // Selection and hover state
   const { selectFloor, selectWall, isFloorSelected, isWallSelected, hoveredItem, setHoveredItem } = useSelection()
@@ -218,9 +219,16 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
       position: [number, number, number]
       rotation: [number, number, number]
       direction: 'north' | 'south' | 'east' | 'west'
+      edgeIndex: number
     }> = []
 
     for (let i = 0; i < polygon.length; i++) {
+      // Skip excluded edges (for shared walls that are rendered separately)
+      if (excludedEdges.includes(i)) {
+        console.log(`[PolygonRoom] Skipping edge ${i} (excluded/shared wall)`)
+        continue
+      }
+
       const p1 = polygon[i]
       const p2 = polygon[(i + 1) % polygon.length]
 
@@ -275,11 +283,12 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
         position: [centerX, height / 2, centerZ],
         rotation: [0, angle, 0],
         direction: wallDirection,
+        edgeIndex: i,
       })
     }
 
     return walls
-  }, [polygon, height, doors, bounds])
+  }, [polygon, height, doors, bounds, excludedEdges])
 
   // Create outline for the floor
   const floorOutline = useMemo(() => {

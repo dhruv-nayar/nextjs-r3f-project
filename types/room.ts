@@ -146,6 +146,8 @@ export interface UploadProgress {
 export interface GLBUploadResult {
   modelPath: string
   thumbnailPath?: string
+  /** Dimensions extracted from GLB bounding box (in feet) */
+  dimensions?: { width: number; height: number; depth: number }
 }
 
 /**

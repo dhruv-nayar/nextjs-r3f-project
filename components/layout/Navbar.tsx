@@ -30,9 +30,13 @@ interface NavbarProps {
   breadcrumb?: string
   /** Optional callback for Build 3D Model button (when on floorplan page) */
   onBuild3DModel?: () => void
+  /** External saving state - when provided, controls the saving indicator */
+  isSaving?: boolean
+  /** External last saved timestamp - when provided, shows "Saved" state */
+  lastSavedAt?: Date | null
 }
 
-export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }: NavbarProps) {
+export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel, isSaving, lastSavedAt }: NavbarProps) {
   const { homes, currentHomeId, switchHome, renameHome } = useHome()
   const { items } = useItemLibrary()
   const router = useRouter()
@@ -251,10 +255,11 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel }
                 </div>
               )}
 
-              {/* Auto-save indicator - only show on projects pages when we have a current home */}
-              {activeTab !== 'inventory' && currentHomeId && (showSaving || lastSaved) && (
+              {/* Auto-save indicator - show on projects pages OR when external saving state is provided */}
+              {((activeTab !== 'inventory' && currentHomeId && (showSaving || lastSaved)) ||
+                (isSaving !== undefined || lastSavedAt !== undefined)) && (
                 <div className="flex items-center gap-2 ml-3">
-                  {showSaving ? (
+                  {(isSaving !== undefined ? isSaving : showSaving) ? (
                     <>
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                       <span className="text-graphite/70 text-sm font-body">Saving...</span>

@@ -15,7 +15,7 @@ export function SceneHierarchyPanel() {
 
   return (
     <>
-      <div className="fixed left-6 top-24 bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 w-72 max-h-[calc(100vh-200px)] overflow-hidden flex flex-col">
+      <div className="fixed left-6 top-24 bottom-6 bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 w-72 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-4 py-3 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center justify-between">
