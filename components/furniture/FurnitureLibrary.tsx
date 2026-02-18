@@ -196,7 +196,7 @@ function FurnitureModel({ item }: FurnitureProps) {
       {(isHovered || isSelected) && (
         <>
           {/* Outer glow box */}
-          <mesh position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+          <mesh position={[0, size.y / 2, 0]}>
             <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
             <meshBasicMaterial
               color={isSelected ? "#ffa500" : "#00ffff"}
@@ -206,12 +206,12 @@ function FurnitureModel({ item }: FurnitureProps) {
             />
           </mesh>
           {/* Middle outline */}
-          <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+          <lineSegments position={[0, size.y / 2, 0]}>
             <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
             <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
           </lineSegments>
           {/* Inner outline */}
-          <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+          <lineSegments position={[0, size.y / 2, 0]}>
             <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
             <lineBasicMaterial color="#ffffff" />
           </lineSegments>
@@ -365,8 +365,11 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     z: item.dimensions.depth / size.z
   }
 
-  // Center X and Z, but place bottom at Y=0 (before any scaling)
+  // Center X and Z, place bottom at Y=0 (before any scaling)
   clonedScene.position.set(-center.x, -box.min.y, -center.z)
+
+  // After positioning: model is centered at X=0, Z=0, with bottom at Y=0
+  // Bounding box center is at (0, size.y/2, 0) in local space
 
   // Apply highlight effect when hovered or selected
   useEffect(() => {
@@ -592,7 +595,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
         {/* Outline border when hovered or selected (not in resize mode) */}
         {(isHovered || isSelected) && !isResizeMode && (
           <>
-            <mesh position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+            <mesh position={[0, size.y / 2, 0]}>
               <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
               <meshBasicMaterial
                 color={isSelected ? "#ffa500" : "#00ffff"}
@@ -601,11 +604,11 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
                 opacity={0.6}
               />
             </mesh>
-            <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+            <lineSegments position={[0, size.y / 2, 0]}>
               <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
               <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
             </lineSegments>
-            <lineSegments position={[-center.x, size.y / 2 - box.min.y, -center.z]}>
+            <lineSegments position={[0, size.y / 2, 0]}>
               <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
               <lineBasicMaterial color="#ffffff" />
             </lineSegments>

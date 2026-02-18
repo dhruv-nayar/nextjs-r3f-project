@@ -98,34 +98,49 @@ export function TrellisJobIndicator() {
             {/* Active Jobs */}
             {activeJobs.map(job => (
               <div key={job.jobId} className="px-4 py-3 border-b border-taupe/5 last:border-0">
-                <div className="flex items-center gap-2 mb-2">
-                  {getJobStatusIcon(job)}
-                  <span className="font-body text-sm text-graphite flex-1">
-                    {getJobTypeLabel(job)}
-                  </span>
-                  <Link
-                    href={`/items/${job.itemId}?edit=true`}
-                    className="text-sage text-xs hover:underline"
-                  >
-                    View Item
-                  </Link>
-                </div>
-
-                {/* Progress Bar */}
-                {(job.status === 'pending' || job.status === 'processing') && (
-                  <div className="space-y-1">
-                    <div className="w-full bg-taupe/10 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className="h-full bg-sage transition-all duration-300"
-                        style={{ width: `${Math.max(job.progress, 5)}%` }}
+                <div className="flex items-start gap-3">
+                  {/* Thumbnail */}
+                  {job.inputImageUrls?.[0] && (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-porcelain flex-shrink-0">
+                      <img
+                        src={job.inputImageUrls[0]}
+                        alt=""
+                        className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="flex justify-between text-xs text-taupe/60">
-                      <span>{job.message || 'Processing...'}</span>
-                      <span>{job.progress}%</span>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {getJobStatusIcon(job)}
+                      <span className="font-body text-sm text-graphite flex-1">
+                        {getJobTypeLabel(job)}
+                      </span>
+                      <Link
+                        href={`/items/${job.itemId}?edit=true`}
+                        className="text-sage text-xs hover:underline flex-shrink-0"
+                      >
+                        View
+                      </Link>
                     </div>
+
+                    {/* Progress Bar */}
+                    {(job.status === 'pending' || job.status === 'processing') && (
+                      <div className="space-y-1">
+                        <div className="w-full bg-taupe/10 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full bg-sage transition-all duration-300"
+                            style={{ width: `${Math.max(job.progress, 5)}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-taupe/60">
+                          <span className="truncate">{job.message || 'Processing...'}</span>
+                          <span className="flex-shrink-0 ml-2">{job.progress}%</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             ))}
 
@@ -138,21 +153,36 @@ export function TrellisJobIndicator() {
 
             {recentCompletedJobs.map(job => (
               <div key={job.jobId} className="px-4 py-3 border-b border-taupe/5 last:border-0 opacity-70">
-                <div className="flex items-center gap-2">
-                  {getJobStatusIcon(job)}
-                  <span className="font-body text-sm text-graphite flex-1">
-                    {getJobTypeLabel(job)}
-                  </span>
-                  <Link
-                    href={`/items/${job.itemId}`}
-                    className="text-sage text-xs hover:underline"
-                  >
-                    View Item
-                  </Link>
+                <div className="flex items-start gap-3">
+                  {/* Thumbnail */}
+                  {job.inputImageUrls?.[0] && (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-porcelain flex-shrink-0">
+                      <img
+                        src={job.inputImageUrls[0]}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {getJobStatusIcon(job)}
+                      <span className="font-body text-sm text-graphite flex-1">
+                        {getJobTypeLabel(job)}
+                      </span>
+                      <Link
+                        href={`/items/${job.itemId}`}
+                        className="text-sage text-xs hover:underline flex-shrink-0"
+                      >
+                        View
+                      </Link>
+                    </div>
+                    {job.status === 'failed' && job.error && (
+                      <p className="text-xs text-scarlet mt-1 truncate">{job.error}</p>
+                    )}
+                  </div>
                 </div>
-                {job.status === 'failed' && job.error && (
-                  <p className="text-xs text-scarlet mt-1">{job.error}</p>
-                )}
               </div>
             ))}
 

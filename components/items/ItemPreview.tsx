@@ -15,65 +15,82 @@ interface ItemPreviewProps {
   dimensions?: { width: number; height: number; depth: number }
 }
 
-function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimensions }: { modelPath: string; materialOverrides?: MaterialOverride[]; defaultRotation?: { x: number; z: number }; dimensions?: { width: number; height: number; depth: number } }) {
+/**
+ * ModelPreview - Renders a 3D model with proper transform hierarchy:
+ *
+ * Transform order (outside to inside):
+ * 1. autoRotateGroup - Y-axis auto-rotation for preview spin
+ * 2. groundOffsetGroup - Lifts model so bottom touches Y=0
+ * 3. dimensionScaleGroup - World-space dimension proportions (after rotation)
+ * 4. tiltGroup - X/Z rotation + uniform scale (rotates around model center)
+ * 5. model - Centered at origin
+ *
+ * Key insight: Model must be centered at origin for rotation to work correctly.
+ * Ground offset is applied AFTER rotation so the model sits on the ground.
+ */
+function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimensions }: {
+  modelPath: string
+  materialOverrides?: MaterialOverride[]
+  defaultRotation?: { x: number; z: number }
+  dimensions?: { width: number; height: number; depth: number }
+}) {
   const { scene } = useGLTF(modelPath)
-  const autoRotateRef = useRef<THREE.Group>(null) // Outermost: Y auto-rotation for preview
-  const dimensionScaleRef = useRef<THREE.Group>(null) // World-space dimension scaling (after tilt)
-  const tiltRef = useRef<THREE.Group>(null) // Tilt rotation (X, Z)
+  const autoRotateRef = useRef<THREE.Group>(null)
+  const groundOffsetRef = useRef<THREE.Group>(null)
+  const dimensionScaleRef = useRef<THREE.Group>(null)
+  const tiltRef = useRef<THREE.Group>(null)
   const { invalidate } = useThree()
 
-  // Serialize dimensions for stable dependency tracking
+  // Serialize for stable dependency tracking
   const dimensionsKey = dimensions ? JSON.stringify(dimensions) : 'none'
+  const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
 
-  // Calculate centering and scaling based on original scene
-  // Separate: uniform fit (applied before rotation) vs dimension proportions (applied after rotation)
+  // Calculate transforms based on original scene geometry
   const sceneTransform = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene)
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z)
 
-    // Uniform scale to fit model in preview (applied before rotation)
+    // Uniform scale to fit model in preview
     const uniformScale = 2 / maxDim
 
-    // If dimensions provided, calculate world-space dimension proportions
-    // These are applied AFTER rotation so width=X, height=Y, depth=Z in world space
+    // Scaled half-height (used for ground offset)
+    const scaledHalfHeight = (size.y * uniformScale) / 2
+
+    // Dimension proportions (applied after rotation, in world space)
+    let dimensionScale = new THREE.Vector3(1, 1, 1)
+    let dimensionHeightMultiplier = 1
+
     if (dimensions && dimensions.width > 0 && dimensions.height > 0 && dimensions.depth > 0) {
       const maxTargetDim = Math.max(dimensions.width, dimensions.height, dimensions.depth)
-
-      // Dimension proportions normalized so max = 1
-      const dimensionScale = new THREE.Vector3(
+      dimensionScale = new THREE.Vector3(
         dimensions.width / maxTargetDim,
         dimensions.height / maxTargetDim,
         dimensions.depth / maxTargetDim
       )
-
-      return {
-        position: new THREE.Vector3(-center.x, -center.y, -center.z),
-        uniformScale,
-        dimensionScale
-      }
+      dimensionHeightMultiplier = dimensionScale.y
     }
 
-    // Default: no dimension adjustment
     return {
-      position: new THREE.Vector3(-center.x, -center.y, -center.z),
+      // Center model at origin (all axes) for proper rotation
+      centering: new THREE.Vector3(-center.x, -center.y, -center.z),
       uniformScale,
-      dimensionScale: new THREE.Vector3(1, 1, 1)
+      dimensionScale,
+      // Ground offset: lift the centered model so its bottom is at Y=0
+      // This accounts for dimension scaling of the height
+      groundOffset: scaledHalfHeight * dimensionHeightMultiplier
     }
   }, [scene, dimensionsKey])
 
-  // Serialize materialOverrides for stable dependency tracking
-  const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
-
-  // Re-clone scene whenever materialOverrides changes to start fresh
+  // Clone scene and apply centering + material overrides
   const clonedScene = useMemo(() => {
     const freshClone = scene.clone(true)
 
-    // Apply the fixed centering to the clone
-    freshClone.position.copy(sceneTransform.position)
+    // Center the model at origin
+    freshClone.position.copy(sceneTransform.centering)
 
-    // Apply overrides immediately after cloning
+    // Apply material overrides
     if (materialOverrides && materialOverrides.length > 0) {
       applyMaterialOverrides(freshClone, materialOverrides)
     }
@@ -81,7 +98,7 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     return freshClone
   }, [scene, sceneTransform, overridesKey])
 
-  // Apply uniform scale to tilt group (fits model to preview, before rotation)
+  // Apply uniform scale to tilt group
   useEffect(() => {
     if (tiltRef.current) {
       tiltRef.current.scale.setScalar(sceneTransform.uniformScale)
@@ -89,7 +106,7 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     }
   }, [sceneTransform.uniformScale, invalidate])
 
-  // Apply dimension scale to dimension group (world-space, after rotation)
+  // Apply dimension scale
   useEffect(() => {
     if (dimensionScaleRef.current) {
       dimensionScaleRef.current.scale.copy(sceneTransform.dimensionScale)
@@ -97,7 +114,15 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     }
   }, [sceneTransform.dimensionScale, invalidate])
 
-  // Apply default rotation to tilt group
+  // Apply ground offset
+  useEffect(() => {
+    if (groundOffsetRef.current) {
+      groundOffsetRef.current.position.y = sceneTransform.groundOffset
+      invalidate()
+    }
+  }, [sceneTransform.groundOffset, invalidate])
+
+  // Apply tilt rotation
   useEffect(() => {
     if (tiltRef.current) {
       tiltRef.current.rotation.x = defaultRotation?.x || 0
@@ -106,7 +131,7 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     }
   }, [defaultRotation?.x, defaultRotation?.z, invalidate])
 
-  // Auto-rotate on world Y axis (outer group) - doesn't affect the tilt
+  // Auto-rotate on Y axis for preview
   useFrame((state) => {
     if (autoRotateRef.current) {
       autoRotateRef.current.rotation.y = state.clock.elapsedTime * 0.3
@@ -116,9 +141,11 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
 
   return (
     <group ref={autoRotateRef}>
-      <group ref={dimensionScaleRef}>
-        <group ref={tiltRef}>
-          <primitive object={clonedScene} />
+      <group ref={groundOffsetRef}>
+        <group ref={dimensionScaleRef}>
+          <group ref={tiltRef}>
+            <primitive object={clonedScene} />
+          </group>
         </group>
       </group>
     </group>
@@ -192,8 +219,14 @@ export function ItemPreview({ modelPath, category, materialOverrides, defaultRot
           <directionalLight position={[5, 5, 5]} intensity={1} />
           <directionalLight position={[-5, 3, -5]} intensity={0.5} />
 
-          {/* Model switches dynamically without Canvas remount */}
-          <ModelPreview key={modelPath} modelPath={modelPath} materialOverrides={materialOverrides} defaultRotation={defaultRotation} dimensions={dimensions} />
+          {/* Model */}
+          <ModelPreview
+            key={modelPath}
+            modelPath={modelPath}
+            materialOverrides={materialOverrides}
+            defaultRotation={defaultRotation}
+            dimensions={dimensions}
+          />
 
           {/* Environment */}
           <Environment preset="city" />

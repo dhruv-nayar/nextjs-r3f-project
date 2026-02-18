@@ -15,8 +15,6 @@ export function RotationControls({
   onChange,
   disabled = false,
 }: RotationControlsProps) {
-  const degrees = step * 90
-
   const handleRotateCCW = () => {
     onChange((step - 1 + 4) % 4)
   }
@@ -26,12 +24,9 @@ export function RotationControls({
   }
 
   return (
-    <div className="bg-white rounded-xl p-3 border border-taupe/10">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-taupe/50 font-body">{label}</p>
-        <span className="text-xs text-sage font-body">{axis}-Axis</span>
-      </div>
-      <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
+      <p className="text-xs text-taupe/50 font-body min-w-[100px]">{label}</p>
+      <div className="flex items-center gap-1">
         {/* Counter-clockwise button */}
         <button
           onClick={handleRotateCCW}
@@ -58,13 +53,6 @@ export function RotationControls({
             />
           </svg>
         </button>
-
-        {/* Current value display */}
-        <div className="flex-1 text-center">
-          <span className="text-sm font-body font-medium text-graphite">
-            {degrees}°
-          </span>
-        </div>
 
         {/* Clockwise button */}
         <button
@@ -93,6 +81,7 @@ export function RotationControls({
           </svg>
         </button>
       </div>
+      <span className="text-xs text-sage font-body">{axis}</span>
     </div>
   )
 }

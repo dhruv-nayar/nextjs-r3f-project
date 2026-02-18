@@ -579,20 +579,20 @@ export default function ItemDetailPage() {
                         <p className="text-xs text-taupe/50 font-body mb-2">Width</p>
                         <div className="flex items-center gap-2">
                           <input
-                            type="number"
-                            value={widthFeet}
+                            type="text"
+                            inputMode="numeric"
+                            value={widthFeet || ''}
                             onChange={(e) => setWidthFeet(parseInt(e.target.value) || 0)}
-                            min="0"
+                            placeholder="0"
                             className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                           />
                           <span className="text-taupe/50 text-xs font-body">ft</span>
                           <input
-                            type="number"
-                            value={widthInches.toFixed(1)}
+                            type="text"
+                            inputMode="decimal"
+                            value={widthInches || ''}
                             onChange={(e) => setWidthInches(parseFloat(e.target.value) || 0)}
-                            step="0.1"
-                            min="0"
-                            max="11.9"
+                            placeholder="0"
                             className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                           />
                           <span className="text-taupe/50 text-xs font-body">in</span>
@@ -604,20 +604,20 @@ export default function ItemDetailPage() {
                         <p className="text-xs text-taupe/50 font-body mb-2">Height</p>
                         <div className="flex items-center gap-2">
                           <input
-                            type="number"
-                            value={heightFeet}
+                            type="text"
+                            inputMode="numeric"
+                            value={heightFeet || ''}
                             onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
-                            min="0"
+                            placeholder="0"
                             className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                           />
                           <span className="text-taupe/50 text-xs font-body">ft</span>
                           <input
-                            type="number"
-                            value={heightInches.toFixed(1)}
+                            type="text"
+                            inputMode="decimal"
+                            value={heightInches || ''}
                             onChange={(e) => setHeightInches(parseFloat(e.target.value) || 0)}
-                            step="0.1"
-                            min="0"
-                            max="11.9"
+                            placeholder="0"
                             className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                           />
                           <span className="text-taupe/50 text-xs font-body">in</span>
@@ -629,20 +629,20 @@ export default function ItemDetailPage() {
                         <p className="text-xs text-taupe/50 font-body mb-2">Depth</p>
                         <div className="flex items-center gap-2">
                           <input
-                            type="number"
-                            value={depthFeet}
+                            type="text"
+                            inputMode="numeric"
+                            value={depthFeet || ''}
                             onChange={(e) => setDepthFeet(parseInt(e.target.value) || 0)}
-                            min="0"
+                            placeholder="0"
                             className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                           />
                           <span className="text-taupe/50 text-xs font-body">ft</span>
                           <input
-                            type="number"
-                            value={depthInches.toFixed(1)}
+                            type="text"
+                            inputMode="decimal"
+                            value={depthInches || ''}
                             onChange={(e) => setDepthInches(parseFloat(e.target.value) || 0)}
-                            step="0.1"
-                            min="0"
-                            max="11.9"
+                            placeholder="0"
                             className="w-16 px-2 py-1.5 bg-porcelain text-graphite font-body text-sm rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                           />
                           <span className="text-taupe/50 text-xs font-body">in</span>
@@ -679,10 +679,7 @@ export default function ItemDetailPage() {
                     <h3 className="font-display font-semibold text-graphite mb-3">
                       Default Rotation
                     </h3>
-                    <p className="text-xs text-taupe/50 font-body mb-3">
-                      Set the default orientation for new placements (90° increments)
-                    </p>
-                    <div className="space-y-3">
+                    <div className="bg-white rounded-xl p-3 border border-taupe/10 space-y-2">
                       <RotationControls
                         label="Tilt Forward/Back"
                         axis="X"
@@ -827,36 +824,6 @@ export default function ItemDetailPage() {
                     )}
                   </div>
                 )}
-
-                {/* Tags Section */}
-                <div>
-                  <h3 className="font-display font-semibold text-graphite mb-3">
-                    Tags
-                  </h3>
-                  {isEditing ? (
-                    <Input
-                      type="text"
-                      value={editTags}
-                      onChange={(e) => setEditTags(e.target.value)}
-                      placeholder="Enter tags separated by commas"
-                    />
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {item.tags.length > 0 ? (
-                        item.tags.map((tag, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-sage/10 text-sage text-xs font-body rounded-full border border-sage/20"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-sm text-taupe/50 font-body">No tags</p>
-                      )}
-                    </div>
-                  )}
-                </div>
 
                 {/* Action Buttons - Moved to bottom */}
                 <div className="flex gap-3 pt-4 border-t border-taupe/10">
