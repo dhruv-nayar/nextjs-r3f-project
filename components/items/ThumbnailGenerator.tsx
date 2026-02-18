@@ -9,6 +9,8 @@ interface ThumbnailGeneratorProps {
   modelPath: string
   onThumbnailGenerated: (blob: Blob, dimensions?: { width: number; height: number; depth: number }) => void
   onError: (error: string) => void
+  /** Optional rotation to apply (in radians) */
+  defaultRotation?: { x: number; z: number }
 }
 
 // Conversion factor: GLB units (typically meters) to feet
@@ -16,10 +18,12 @@ const METERS_TO_FEET = 3.28084
 
 function ModelForThumbnail({
   modelPath,
-  onReady
+  onReady,
+  defaultRotation
 }: {
   modelPath: string
   onReady: (dimensions: { width: number; height: number; depth: number }) => void
+  defaultRotation?: { x: number; z: number }
 }) {
   const { scene } = useGLTF(modelPath)
   const clonedScene = useMemo(() => scene.clone(true), [scene])
@@ -44,16 +48,32 @@ function ModelForThumbnail({
       depth: Math.round(size.z * METERS_TO_FEET * 10) / 10
     }
 
-    // Center the model
-    clonedScene.position.set(-center.x, -box.min.y, -center.z)
+    // Center the model at origin for proper rotation
+    clonedScene.position.set(-center.x, -center.y, -center.z)
+
+    // Apply rotation if provided
+    if (defaultRotation) {
+      groupRef.current.rotation.x = defaultRotation.x
+      groupRef.current.rotation.z = defaultRotation.z
+    }
+
+    // Calculate new bounding box after rotation to position correctly
+    groupRef.current.updateMatrixWorld(true)
+    const rotatedBox = new THREE.Box3().setFromObject(groupRef.current)
+    const rotatedSize = rotatedBox.getSize(new THREE.Vector3())
 
     // Scale to fit in view (make largest dimension = 2 units)
-    const maxDim = Math.max(size.x, size.y, size.z)
+    const maxDim = Math.max(rotatedSize.x, rotatedSize.y, rotatedSize.z)
     const scale = 2 / maxDim
     groupRef.current.scale.setScalar(scale)
 
+    // Lift model so bottom touches ground
+    groupRef.current.updateMatrixWorld(true)
+    const finalBox = new THREE.Box3().setFromObject(groupRef.current)
+    groupRef.current.position.y = -finalBox.min.y
+
     invalidate()
-  }, [clonedScene, invalidate])
+  }, [clonedScene, defaultRotation, invalidate])
 
   // Wait 10 frames before capturing (ensures stable render)
   useFrame(() => {
@@ -77,7 +97,8 @@ function ModelForThumbnail({
 export function ThumbnailGenerator({
   modelPath,
   onThumbnailGenerated,
-  onError
+  onError,
+  defaultRotation
 }: ThumbnailGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isReady, setIsReady] = useState(false)
@@ -137,6 +158,7 @@ export function ThumbnailGenerator({
         <ModelForThumbnail
           modelPath={modelPath}
           onReady={handleModelReady}
+          defaultRotation={defaultRotation}
         />
       </Canvas>
     </div>

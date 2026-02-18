@@ -37,15 +37,14 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
   const { scene } = useGLTF(modelPath)
   const autoRotateRef = useRef<THREE.Group>(null)
   const groundOffsetRef = useRef<THREE.Group>(null)
-  const dimensionScaleRef = useRef<THREE.Group>(null)
   const tiltRef = useRef<THREE.Group>(null)
   const { invalidate } = useThree()
 
   // Serialize for stable dependency tracking
-  const dimensionsKey = dimensions ? JSON.stringify(dimensions) : 'none'
   const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
 
   // Calculate transforms based on original scene geometry
+  // Note: Dimensions are NOT used for scaling - only rotation affects the model
   const sceneTransform = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene)
     const center = box.getCenter(new THREE.Vector3())
@@ -58,30 +57,14 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     // Scaled half-height (used for ground offset)
     const scaledHalfHeight = (size.y * uniformScale) / 2
 
-    // Dimension proportions (applied after rotation, in world space)
-    let dimensionScale = new THREE.Vector3(1, 1, 1)
-    let dimensionHeightMultiplier = 1
-
-    if (dimensions && dimensions.width > 0 && dimensions.height > 0 && dimensions.depth > 0) {
-      const maxTargetDim = Math.max(dimensions.width, dimensions.height, dimensions.depth)
-      dimensionScale = new THREE.Vector3(
-        dimensions.width / maxTargetDim,
-        dimensions.height / maxTargetDim,
-        dimensions.depth / maxTargetDim
-      )
-      dimensionHeightMultiplier = dimensionScale.y
-    }
-
     return {
       // Center model at origin (all axes) for proper rotation
       centering: new THREE.Vector3(-center.x, -center.y, -center.z),
       uniformScale,
-      dimensionScale,
       // Ground offset: lift the centered model so its bottom is at Y=0
-      // This accounts for dimension scaling of the height
-      groundOffset: scaledHalfHeight * dimensionHeightMultiplier
+      groundOffset: scaledHalfHeight
     }
-  }, [scene, dimensionsKey])
+  }, [scene])
 
   // Clone scene and apply centering + material overrides
   const clonedScene = useMemo(() => {
@@ -106,13 +89,6 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     }
   }, [sceneTransform.uniformScale, invalidate])
 
-  // Apply dimension scale
-  useEffect(() => {
-    if (dimensionScaleRef.current) {
-      dimensionScaleRef.current.scale.copy(sceneTransform.dimensionScale)
-      invalidate()
-    }
-  }, [sceneTransform.dimensionScale, invalidate])
 
   // Apply ground offset
   useEffect(() => {
@@ -142,10 +118,8 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
   return (
     <group ref={autoRotateRef}>
       <group ref={groundOffsetRef}>
-        <group ref={dimensionScaleRef}>
-          <group ref={tiltRef}>
-            <primitive object={clonedScene} />
-          </group>
+        <group ref={tiltRef}>
+          <primitive object={clonedScene} />
         </group>
       </group>
     </group>

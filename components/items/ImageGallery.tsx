@@ -15,6 +15,8 @@ interface ImageGalleryProps {
   currentThumbnail?: string
   /** When true, only shows the upload button without the image gallery display */
   uploadOnly?: boolean
+  /** Optional ref that gets set to a function to trigger the file upload dialog */
+  triggerUploadRef?: React.MutableRefObject<(() => void) | null>
 }
 
 interface PendingImage {
@@ -34,7 +36,8 @@ export function ImageGallery({
   onImageUpdate,
   onImageDelete,
   currentThumbnail,
-  uploadOnly = false
+  uploadOnly = false,
+  triggerUploadRef
 }: ImageGalleryProps) {
   const [hoveredPairIndex, setHoveredPairIndex] = useState<number | null>(null)
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
@@ -50,6 +53,18 @@ export function ImageGallery({
     onImageUpdateRef.current = onImageUpdate
     onImagesAddRef.current = onImagesAdd
   }, [onImageUpdate, onImagesAdd])
+
+  // Expose trigger function to parent
+  useEffect(() => {
+    if (triggerUploadRef) {
+      triggerUploadRef.current = () => fileInputRef.current?.click()
+    }
+    return () => {
+      if (triggerUploadRef) {
+        triggerUploadRef.current = null
+      }
+    }
+  }, [triggerUploadRef])
 
   // Combine thumbnailPath with images for display
   const allImages: Array<{ url: string; type: 'original' | 'processed' | 'thumbnail'; pairIndex: number }> = []

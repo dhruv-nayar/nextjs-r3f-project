@@ -15,11 +15,18 @@ export function TrellisJobIndicator() {
     .filter(job => job.status === 'completed' || job.status === 'failed')
     .slice(-3)
 
-  // Auto-fade when jobs complete (transition from active > 0 to active === 0)
+  // Auto-fade when jobs complete
   useEffect(() => {
-    // If we just transitioned from having active jobs to having none (jobs completed)
-    if (prevActiveJobsCount.current > 0 && activeJobs.length === 0 && !isExpanded) {
-      // Show the "Jobs completed" state briefly, then fade away
+    // Reset hidden state when new jobs start
+    if (activeJobs.length > 0) {
+      setIsHidden(false)
+      prevActiveJobsCount.current = activeJobs.length
+      return
+    }
+
+    // If no active jobs but we have completed jobs, start fade timer
+    // This handles both: transitioning from active to none, AND loading with already-completed jobs
+    if (activeJobs.length === 0 && recentCompletedJobs.length > 0 && !isExpanded && !isHidden) {
       const timer = setTimeout(() => {
         setIsHidden(true)
       }, 2000) // 2 second delay before fading
@@ -27,13 +34,8 @@ export function TrellisJobIndicator() {
       return () => clearTimeout(timer)
     }
 
-    // Reset hidden state when new jobs start
-    if (activeJobs.length > 0) {
-      setIsHidden(false)
-    }
-
     prevActiveJobsCount.current = activeJobs.length
-  }, [activeJobs.length, isExpanded])
+  }, [activeJobs.length, recentCompletedJobs.length, isExpanded, isHidden])
 
   // Don't render if no jobs to show or if hidden after completion
   if ((activeJobs.length === 0 && recentCompletedJobs.length === 0) || isHidden) {
