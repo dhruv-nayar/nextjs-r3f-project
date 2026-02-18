@@ -102,7 +102,7 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
   console.log(`[PolygonRoom] Rendering ${roomId} with ${doors.length} doors`)
 
   // Selection and hover state
-  const { selectFloor, isFloorSelected, hoveredItem, setHoveredItem } = useSelection()
+  const { selectFloor, selectWall, isFloorSelected, isWallSelected, hoveredItem, setHoveredItem } = useSelection()
   const { setSelectedFurnitureId } = useFurnitureSelection()
   const { hoveredRoomId, setHoveredRoomId } = useRoomHover()
 
@@ -135,11 +135,43 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
     document.body.style.cursor = 'default'
   }, [setHoveredItem, setHoveredRoomId])
 
+  // Click handler for walls (using wall index mapped to direction)
+  const handleWallClick = useCallback((wallDirection: 'north' | 'south' | 'east' | 'west', e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation()
+    if (roomId) {
+      setSelectedFurnitureId(null) // Clear furniture selection
+      selectWall(roomId, wallDirection)
+    }
+  }, [roomId, selectWall, setSelectedFurnitureId])
+
+  // Hover handlers for walls
+  const handleWallPointerOver = useCallback((wallDirection: 'north' | 'south' | 'east' | 'west', e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    if (roomId) {
+      setHoveredItem({ type: 'wall', roomId, side: wallDirection })
+      document.body.style.cursor = 'pointer'
+    }
+  }, [roomId, setHoveredItem])
+
+  const handleWallPointerOut = useCallback(() => {
+    setHoveredItem(null)
+    document.body.style.cursor = 'default'
+  }, [setHoveredItem])
+
   // Get floor material color based on state
   const getFloorColor = () => {
     if (isFloorSelectedHere) return '#ffe4b5' // Light orange when selected
     if (isFloorHovered || isHovered) return '#e0ffff' // Light cyan when hovered
     return '#f5f5f5'
+  }
+
+  // Get wall material color based on state
+  const getWallColor = (wallDirection: 'north' | 'south' | 'east' | 'west') => {
+    const isSelected = roomId ? isWallSelected(roomId, wallDirection) : false
+    const isWallHovered = hoveredItem?.type === 'wall' && hoveredItem.roomId === roomId && hoveredItem.side === wallDirection
+    if (isSelected) return '#ffe4b5' // Light orange when selected
+    if (isWallHovered) return '#e0ffff' // Light cyan when hovered
+    return '#e8e8e8'
   }
   // Create floor geometry from polygon
   const floorGeometry = useMemo(() => {
@@ -185,6 +217,7 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
       geometry: THREE.BufferGeometry
       position: [number, number, number]
       rotation: [number, number, number]
+      direction: 'north' | 'south' | 'east' | 'west'
     }> = []
 
     for (let i = 0; i < polygon.length; i++) {
@@ -241,6 +274,7 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
         geometry,
         position: [centerX, height / 2, centerZ],
         rotation: [0, angle, 0],
+        direction: wallDirection,
       })
     }
 
@@ -295,9 +329,12 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
           position={wall.position}
           rotation={wall.rotation}
           receiveShadow
+          onClick={(e) => handleWallClick(wall.direction, e)}
+          onPointerOver={(e) => handleWallPointerOver(wall.direction, e)}
+          onPointerOut={handleWallPointerOut}
         >
           <primitive object={wall.geometry} attach="geometry" />
-          <meshStandardMaterial color="#e8e8e8" side={THREE.DoubleSide} />
+          <meshStandardMaterial color={getWallColor(wall.direction)} side={THREE.DoubleSide} />
         </mesh>
       ))}
     </group>
