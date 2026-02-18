@@ -26,7 +26,8 @@ interface TrellisJobContextType {
   removeJob: (jobId: string) => void
   getJobsForItem: (itemId: string) => TrellisJob[]
   getActiveJobs: () => TrellisJob[]
-  activeGlbJob: TrellisJob | null
+  hasActiveGlbJobForItem: (itemId: string) => boolean
+  activeGlbJob: TrellisJob | null  // Kept for backward compatibility
   toastMessage: string | null
   toastType: 'success' | 'error' | 'info'
   clearToast: () => void
@@ -187,6 +188,15 @@ export function TrellisJobProvider({ children }: { children: ReactNode }) {
     return jobs.filter(job => job.status === 'pending' || job.status === 'processing')
   }, [jobs])
 
+  const hasActiveGlbJobForItem = useCallback((itemId: string) => {
+    return jobs.some(
+      job => job.itemId === itemId &&
+             job.type === 'trellis' &&
+             (job.status === 'pending' || job.status === 'processing')
+    )
+  }, [jobs])
+
+  // Kept for backward compatibility - but UI should use hasActiveGlbJobForItem instead
   const activeGlbJob = jobs.find(
     job => job.type === 'trellis' && (job.status === 'pending' || job.status === 'processing')
   ) || null
@@ -200,6 +210,7 @@ export function TrellisJobProvider({ children }: { children: ReactNode }) {
         removeJob,
         getJobsForItem,
         getActiveJobs,
+        hasActiveGlbJobForItem,
         activeGlbJob,
         toastMessage,
         toastType,

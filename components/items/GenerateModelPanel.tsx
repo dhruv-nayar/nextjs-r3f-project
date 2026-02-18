@@ -24,7 +24,7 @@ export function GenerateModelPanel({
   onGenerationStart,
   generationStatus,
 }: GenerateModelPanelProps) {
-  const { addJob, getJobsForItem, activeGlbJob } = useTrellisJobs()
+  const { addJob, getJobsForItem, hasActiveGlbJobForItem } = useTrellisJobs()
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -261,9 +261,9 @@ export function GenerateModelPanel({
       {/* Generate button */}
       <button
         onClick={() => handleGenerate()}
-        disabled={selectedImages.size === 0 || isSubmitting || !!activeGlbJob}
+        disabled={selectedImages.size === 0 || isSubmitting}
         className={`w-full py-3 rounded-lg font-body font-medium transition-colors ${
-          selectedImages.size > 0 && !isSubmitting && !activeGlbJob
+          selectedImages.size > 0 && !isSubmitting
             ? 'bg-graphite text-white hover:bg-graphite/90'
             : 'bg-taupe/20 text-taupe/50 cursor-not-allowed'
         }`}
@@ -273,8 +273,6 @@ export function GenerateModelPanel({
             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             Starting...
           </span>
-        ) : activeGlbJob ? (
-          'Another model is generating...'
         ) : selectedImages.size > 0 ? (
           `Generate from ${selectedImages.size} image${selectedImages.size > 1 ? 's' : ''}`
         ) : (
