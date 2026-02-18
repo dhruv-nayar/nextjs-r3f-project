@@ -18,11 +18,12 @@ import Image from 'next/image'
 
 export default function ItemsPage() {
   const router = useRouter()
-  const { items, addItem } = useItemLibrary()
+  const { items, addItem, deleteItem, updateItem } = useItemLibrary()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [sortBy, setSortBy] = useState('recently-added')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
 
   // Upload flow state
   const [uploadStep, setUploadStep] = useState<'choose' | 'upload' | 'metadata'>('choose')
@@ -49,11 +50,14 @@ export default function ItemsPage() {
 
   // Filter items based on search and category
   const filteredItems = items.filter(item => {
-    // Show items that have: valid model, parametric shape, OR images (work in progress)
+    // Show items that have: valid model, parametric shape, images, OR are custom items (user-created)
+    // Custom items always show since users expect to see items they created
     const hasValidModel = item.modelPath && item.modelPath !== 'placeholder'
     const hasParametricShape = !!item.parametricShape
     const hasImages = item.images && item.images.length > 0
-    if (!hasValidModel && !hasParametricShape && !hasImages) {
+    const isCustomItem = item.isCustom === true
+
+    if (!hasValidModel && !hasParametricShape && !hasImages && !isCustomItem) {
       return false
     }
 
@@ -98,6 +102,22 @@ export default function ItemsPage() {
     })
     // Redirect to the item detail page in edit mode
     router.push(`/items/${newId}?edit=true`)
+  }
+
+  // Open item detail page
+  const handleOpenItem = (itemId: string) => {
+    router.push(`/items/${itemId}`)
+  }
+
+  // Delete item
+  const handleDeleteItem = (itemId: string) => {
+    deleteItem(itemId)
+    setShowDeleteConfirm(null)
+  }
+
+  // Rename item
+  const handleRenameItem = (itemId: string, newName: string) => {
+    updateItem(itemId, { name: newName })
   }
 
   const handleUploadMethodSelect = (method: 'glb' | 'images') => {
@@ -277,10 +297,11 @@ export default function ItemsPage() {
                 {filteredItems.map(item => (
                   <ItemCard
                     key={item.id}
-                    id={item.id}
-                    name={item.name}
-                    category={item.category}
-                    thumbnailPath={item.thumbnailPath}
+                    item={item}
+                    onOpen={() => handleOpenItem(item.id)}
+                    onDelete={() => setShowDeleteConfirm(item.id)}
+                    onRename={(newName) => handleRenameItem(item.id, newName)}
+                    canDelete={item.isCustom}
                   />
                 ))}
 
@@ -658,6 +679,32 @@ export default function ItemsPage() {
         isOpen={showCustomCreator}
         onClose={() => setShowCustomCreator(false)}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-graphite/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-floral-white border border-scarlet/20 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-graphite text-xl font-display font-semibold mb-4">Delete Item?</h3>
+            <p className="text-graphite/70 font-body mb-6">
+              Are you sure you want to delete <strong>{items.find(i => i.id === showDeleteConfirm)?.name}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="flex-1 px-4 py-2.5 bg-taupe/10 hover:bg-taupe/20 text-graphite rounded-lg font-medium font-body transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteItem(showDeleteConfirm)}
+                className="flex-1 px-4 py-2.5 bg-scarlet hover:bg-scarlet/90 text-white rounded-lg font-medium font-body transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

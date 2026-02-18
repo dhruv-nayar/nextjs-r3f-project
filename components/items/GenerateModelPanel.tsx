@@ -9,12 +9,20 @@ interface GenerateModelPanelProps {
   itemId: string
   imagePairs: ImagePair[]
   onModelGenerated?: (modelPath: string) => void
+  onGenerationStart?: (selectedImageUrls: string[]) => void
+  generationStatus?: {
+    isGenerating: boolean
+    startedAt?: string
+    selectedImageUrls?: string[]
+  }
 }
 
 export function GenerateModelPanel({
   itemId,
   imagePairs,
   onModelGenerated,
+  onGenerationStart,
+  generationStatus,
 }: GenerateModelPanelProps) {
   const { addJob, getJobsForItem, activeGlbJob } = useTrellisJobs()
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set())
@@ -26,6 +34,9 @@ export function GenerateModelPanel({
   const currentGlbJob = itemJobs.find(
     job => job.type === 'trellis' && (job.status === 'pending' || job.status === 'processing')
   )
+
+  // Check if this item has an in-progress generation (from previous session)
+  const hasInterruptedGeneration = generationStatus?.isGenerating && !currentGlbJob
 
   // Filter to only processed images (background removed)
   const processedImages = imagePairs.filter(pair => pair.processed !== null)
@@ -54,8 +65,12 @@ export function GenerateModelPanel({
     setSelectedImages(newSelected)
   }
 
-  const handleGenerate = async () => {
-    if (selectedImages.size === 0) {
+  const handleGenerate = async (retryUrls?: string[]) => {
+    const urlsToUse = retryUrls || Array.from(selectedImages).map(
+      index => processedImages[index].processed!
+    )
+
+    if (urlsToUse.length === 0) {
       setError('Please select at least one image')
       return
     }
@@ -63,15 +78,14 @@ export function GenerateModelPanel({
     setIsSubmitting(true)
     setError(null)
 
-    try {
-      // Get the URLs of selected processed images
-      const selectedUrls = Array.from(selectedImages).map(
-        index => processedImages[index].processed!
-      )
+    // Notify parent that generation is starting (so it can save state)
+    onGenerationStart?.(urlsToUse)
 
+    try {
       // Create form data with image URLs
       const formData = new FormData()
-      for (const url of selectedUrls) {
+      formData.append('itemId', itemId)
+      for (const url of urlsToUse) {
         formData.append('imageUrls', url)
       }
       formData.append('seed', '1')
@@ -90,16 +104,26 @@ export function GenerateModelPanel({
 
       const data = await response.json()
 
-      // Add job to context for tracking
-      addJob({
-        jobId: data.job_id,
-        itemId,
-        type: 'trellis',
-        status: 'pending',
-        progress: 0,
-        message: 'Starting model generation...',
-        inputImageUrls: selectedUrls,
-      })
+      // Check if API returned GLB directly (no job_id means direct response)
+      if (data.type === 'direct' && data.glbUrl) {
+        // GLB was generated directly, notify immediately
+        onModelGenerated?.(data.glbUrl)
+        setSelectedImages(new Set())
+        return
+      }
+
+      // Otherwise, add job to context for async tracking
+      if (data.job_id) {
+        addJob({
+          jobId: data.job_id,
+          itemId,
+          type: 'trellis',
+          status: 'pending',
+          progress: 0,
+          message: 'Starting model generation...',
+          inputImageUrls: urlsToUse,
+        })
+      }
 
       // Clear selection
       setSelectedImages(new Set())
@@ -119,6 +143,42 @@ export function GenerateModelPanel({
         <p className="text-sm text-taupe/70">
           Upload images and wait for background removal to complete before generating a 3D model.
         </p>
+      </div>
+    )
+  }
+
+  // If there was an interrupted generation, show retry UI
+  if (hasInterruptedGeneration) {
+    return (
+      <div className="bg-amber-50 rounded-lg p-6 border border-amber-200">
+        <h3 className="font-body font-medium text-graphite mb-2">Generation Interrupted</h3>
+        <p className="text-sm text-taupe/70 mb-4">
+          A previous model generation was interrupted (page was closed or navigated away).
+          You can retry with the same images.
+        </p>
+        {error && (
+          <div className="mb-4 p-3 bg-scarlet/10 border border-scarlet/20 rounded-lg text-sm text-scarlet">
+            {error}
+          </div>
+        )}
+        <button
+          onClick={() => handleGenerate(generationStatus?.selectedImageUrls)}
+          disabled={isSubmitting}
+          className={`w-full py-3 rounded-lg font-body font-medium transition-colors ${
+            !isSubmitting
+              ? 'bg-amber-600 text-white hover:bg-amber-700'
+              : 'bg-taupe/20 text-taupe/50 cursor-not-allowed'
+          }`}
+        >
+          {isSubmitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Retrying...
+            </span>
+          ) : (
+            'Retry Generation'
+          )}
+        </button>
       </div>
     )
   }
@@ -203,7 +263,7 @@ export function GenerateModelPanel({
 
       {/* Generate button */}
       <button
-        onClick={handleGenerate}
+        onClick={() => handleGenerate()}
         disabled={selectedImages.size === 0 || isSubmitting || !!activeGlbJob}
         className={`w-full py-3 rounded-lg font-body font-medium transition-colors ${
           selectedImages.size > 0 && !isSubmitting && !activeGlbJob

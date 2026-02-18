@@ -65,6 +65,13 @@ export interface Item {
   thumbnailPath?: string        // "/thumbnails/chair_thumb.jpg"
   images?: ImagePair[]          // All uploaded images (original and processed versions)
 
+  // Generation status (for tracking async operations)
+  generationStatus?: {
+    isGenerating: boolean       // True when model generation is in progress
+    startedAt?: string          // ISO timestamp when generation started
+    selectedImageUrls?: string[] // Which images were selected for generation
+  }
+
   // Default real-world dimensions
   dimensions: {
     width: number               // feet (X axis)

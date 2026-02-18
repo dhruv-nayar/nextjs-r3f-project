@@ -243,11 +243,25 @@ export default function ItemDetailPage() {
     })
   }
 
+  // Handle model generation start - save state so we can recover
+  const handleGenerationStart = (selectedImageUrls: string[]) => {
+    updateItem(itemId, {
+      generationStatus: {
+        isGenerating: true,
+        startedAt: new Date().toISOString(),
+        selectedImageUrls,
+      }
+    })
+  }
+
   // Handle model generation completion
   const handleModelGenerated = (modelPath: string) => {
     setEditModelPath(modelPath)
-    // Also update the item immediately
-    updateItem(itemId, { modelPath })
+    // Update the item with model path and clear generation status
+    updateItem(itemId, {
+      modelPath,
+      generationStatus: undefined, // Clear the generating flag
+    })
     setToastMessage('3D model generated and saved!')
     setToastType('success')
     setShowToast(true)
@@ -390,12 +404,14 @@ export default function ItemDetailPage() {
                   currentThumbnail={isEditing ? editThumbnailPath : item.thumbnailPath}
                 />
 
-                {/* Generate 3D Model Section - shown when editing and there are images */}
-                {isEditing && editImages.length > 0 && !item.modelPath && (
+                {/* Generate 3D Model Section - shown when editing and there are images, or if generation was interrupted */}
+                {isEditing && (editImages.length > 0 || item.generationStatus?.isGenerating) && !item.modelPath && (
                   <GenerateModelPanel
                     itemId={itemId}
                     imagePairs={editImages}
                     onModelGenerated={handleModelGenerated}
+                    onGenerationStart={handleGenerationStart}
+                    generationStatus={item.generationStatus}
                   />
                 )}
 
