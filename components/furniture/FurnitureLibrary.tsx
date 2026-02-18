@@ -18,6 +18,16 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber'
 // Drag threshold in world units - prevents accidental micro-drags
 const DRAG_THRESHOLD = 0.1
 
+// Helper to get accurate normalized device coordinates from pointer events
+// Uses getBoundingClientRect for accuracy with CSS scaling
+function getNDC(e: PointerEvent | MouseEvent, canvas: HTMLCanvasElement): THREE.Vector2 {
+  const rect = canvas.getBoundingClientRect()
+  return new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  )
+}
+
 interface FurnitureProps {
   item: FurnitureItem
 }
@@ -146,13 +156,7 @@ function FurnitureModel({ item }: FurnitureProps) {
 
     e.stopPropagation()
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(
-      new THREE.Vector2(
-        (e.nativeEvent.clientX / gl.domElement.clientWidth) * 2 - 1,
-        -(e.nativeEvent.clientY / gl.domElement.clientHeight) * 2 + 1
-      ),
-      camera
-    )
+    raycaster.setFromCamera(getNDC(e.nativeEvent, gl.domElement), camera)
 
     const intersectionPoint = new THREE.Vector3()
     raycaster.ray.intersectPlane(dragPlaneRef.current, intersectionPoint)
@@ -193,10 +197,11 @@ function FurnitureModel({ item }: FurnitureProps) {
       <primitive object={clonedScene} castShadow receiveShadow />
 
       {/* Outline border when hovered or selected - using multiple layers */}
+      {/* raycast={() => null} prevents these visual elements from intercepting clicks */}
       {(isHovered || isSelected) && (
         <>
           {/* Outer glow box */}
-          <mesh position={[0, size.y / 2, 0]}>
+          <mesh position={[0, size.y / 2, 0]} raycast={() => null}>
             <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
             <meshBasicMaterial
               color={isSelected ? "#ffa500" : "#00ffff"}
@@ -206,12 +211,12 @@ function FurnitureModel({ item }: FurnitureProps) {
             />
           </mesh>
           {/* Middle outline */}
-          <lineSegments position={[0, size.y / 2, 0]}>
+          <lineSegments position={[0, size.y / 2, 0]} raycast={() => null}>
             <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
             <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
           </lineSegments>
           {/* Inner outline */}
-          <lineSegments position={[0, size.y / 2, 0]}>
+          <lineSegments position={[0, size.y / 2, 0]} raycast={() => null}>
             <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
             <lineBasicMaterial color="#ffffff" />
           </lineSegments>
@@ -333,7 +338,6 @@ interface ItemInstanceProps {
  */
 function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const { scene } = useGLTF(item.modelPath!)
-  const clonedScene = scene.clone()
   const groupRef = useRef<THREE.Group>(null)
   const { hoveredFurnitureId, setHoveredFurnitureId } = useFurnitureHover()
   // Use both old and new selection context during migration
@@ -352,21 +356,27 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const dragStartPosRef = useRef<THREE.Vector3 | null>(null)
   const dragOffsetRef = useRef<THREE.Vector2 | null>(null) // Offset from cursor to object center
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
+  const dragPositionRef = useRef<{ x: number; z: number } | null>(null) // Current drag position for direct updates
 
-  // Calculate the model's original bounding box
-  const box = new THREE.Box3().setFromObject(clonedScene)
-  const center = box.getCenter(new THREE.Vector3())
-  const size = box.getSize(new THREE.Vector3())
+  // Memoize the cloned scene and its transformations to prevent position drift
+  const { clonedScene, size, autoScale } = useMemo(() => {
+    const cloned = scene.clone()
+    const box = new THREE.Box3().setFromObject(cloned)
+    const center = box.getCenter(new THREE.Vector3())
+    const sizeVec = box.getSize(new THREE.Vector3())
 
-  // Calculate auto-scale based on item dimensions
-  const autoScale = {
-    x: item.dimensions.width / size.x,
-    y: item.dimensions.height / size.y,
-    z: item.dimensions.depth / size.z
-  }
+    // Center X and Z, place bottom at Y=0 (before any scaling)
+    cloned.position.set(-center.x, -box.min.y, -center.z)
 
-  // Center X and Z, place bottom at Y=0 (before any scaling)
-  clonedScene.position.set(-center.x, -box.min.y, -center.z)
+    // Calculate auto-scale based on item dimensions
+    const scale = {
+      x: item.dimensions.width / sizeVec.x,
+      y: item.dimensions.height / sizeVec.y,
+      z: item.dimensions.depth / sizeVec.z
+    }
+
+    return { clonedScene: cloned, size: sizeVec, autoScale: scale }
+  }, [scene, item.dimensions.width, item.dimensions.height, item.dimensions.depth])
 
   // After positioning: model is centered at X=0, Z=0, with bottom at Y=0
   // Bounding box center is at (0, size.y/2, 0) in local space
@@ -446,6 +456,35 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isSelected, instance.id, instance.position, updateInstance, isResizeMode, setResizeMode])
 
+  // Global pointerup listener to prevent stuck drag state when releasing outside the object
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleGlobalPointerUp = () => {
+      // Commit final position to state if we were dragging
+      if (dragPositionRef.current) {
+        updateInstance(instance.id, {
+          position: {
+            ...instance.position,
+            x: dragPositionRef.current.x,
+            z: dragPositionRef.current.z
+          }
+        })
+      }
+      setIsDragging(false)
+      setIsVisuallyDragging(false)
+      dragStartPosRef.current = null
+      dragOffsetRef.current = null
+      dragPositionRef.current = null
+      setMode('idle')
+      document.body.style.cursor = 'default'
+    }
+
+    // Use window to catch pointerup anywhere
+    window.addEventListener('pointerup', handleGlobalPointerUp)
+    return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
+  }, [isDragging, setMode, instance.id, instance.position, updateInstance])
+
   // Handle dimension change from resize handles
   const handleDimensionChange = (dimension: 'width' | 'height' | 'depth', newValue: number) => {
     updateItem(item.id, {
@@ -477,13 +516,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
 
     // Calculate where the click intersects the drag plane (Y=0)
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(
-      new THREE.Vector2(
-        (e.nativeEvent.clientX / gl.domElement.clientWidth) * 2 - 1,
-        -(e.nativeEvent.clientY / gl.domElement.clientHeight) * 2 + 1
-      ),
-      camera
-    )
+    raycaster.setFromCamera(getNDC(e.nativeEvent, gl.domElement), camera)
     const clickOnPlane = new THREE.Vector3()
     raycaster.ray.intersectPlane(dragPlaneRef.current, clickOnPlane)
 
@@ -505,10 +538,21 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     e.stopPropagation() // FIX: Was missing - prevents camera from also receiving event
 
     if (isDragging) {
+      // Commit final position to state only on release (avoids re-renders during drag)
+      if (dragPositionRef.current) {
+        updateInstance(instance.id, {
+          position: {
+            ...instance.position,
+            x: dragPositionRef.current.x,
+            z: dragPositionRef.current.z
+          }
+        })
+      }
       setIsDragging(false)
       setIsVisuallyDragging(false)
       dragStartPosRef.current = null
       dragOffsetRef.current = null
+      dragPositionRef.current = null
       setMode('idle')
       document.body.style.cursor = isHovered ? 'pointer' : 'default'
     }
@@ -520,13 +564,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     e.stopPropagation()
 
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(
-      new THREE.Vector2(
-        (e.nativeEvent.clientX / gl.domElement.clientWidth) * 2 - 1,
-        -(e.nativeEvent.clientY / gl.domElement.clientHeight) * 2 + 1
-      ),
-      camera
-    )
+    raycaster.setFromCamera(getNDC(e.nativeEvent, gl.domElement), camera)
 
     const intersectionPoint = new THREE.Vector3()
     raycaster.ray.intersectPlane(dragPlaneRef.current, intersectionPoint)
@@ -542,14 +580,18 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
         document.body.style.cursor = 'grabbing'
       }
 
-      // Move the furniture with offset so it stays under the cursor where you grabbed it
-      updateInstance(instance.id, {
-        position: {
-          ...instance.position,
-          x: intersectionPoint.x + dragOffsetRef.current.x,
-          z: intersectionPoint.z + dragOffsetRef.current.y
-        }
-      })
+      // Calculate new position with offset
+      const newX = intersectionPoint.x + dragOffsetRef.current.x
+      const newZ = intersectionPoint.z + dragOffsetRef.current.y
+
+      // Store position for commit on release
+      dragPositionRef.current = { x: newX, z: newZ }
+
+      // Update visual position directly via ref (no React re-render)
+      if (groupRef.current) {
+        groupRef.current.position.x = newX
+        groupRef.current.position.z = newZ
+      }
     }
   }
 
@@ -593,9 +635,10 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
         <primitive object={clonedScene} castShadow receiveShadow />
 
         {/* Outline border when hovered or selected (not in resize mode) */}
+        {/* raycast={null} prevents these visual elements from intercepting clicks */}
         {(isHovered || isSelected) && !isResizeMode && (
           <>
-            <mesh position={[0, size.y / 2, 0]}>
+            <mesh position={[0, size.y / 2, 0]} raycast={() => null}>
               <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
               <meshBasicMaterial
                 color={isSelected ? "#ffa500" : "#00ffff"}
@@ -604,11 +647,11 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
                 opacity={0.6}
               />
             </mesh>
-            <lineSegments position={[0, size.y / 2, 0]}>
+            <lineSegments position={[0, size.y / 2, 0]} raycast={() => null}>
               <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
               <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
             </lineSegments>
-            <lineSegments position={[0, size.y / 2, 0]}>
+            <lineSegments position={[0, size.y / 2, 0]} raycast={() => null}>
               <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
               <lineBasicMaterial color="#ffffff" />
             </lineSegments>
@@ -665,6 +708,7 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
   const dragStartPosRef = useRef<THREE.Vector3 | null>(null)
   const dragOffsetRef = useRef<THREE.Vector2 | null>(null) // Offset from cursor to object center
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
+  const dragPositionRef = useRef<{ x: number; z: number } | null>(null) // Current drag position for direct updates
 
   const shape = item.parametricShape!
 
@@ -761,6 +805,35 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isSelected, instance.id, instance.position, updateInstance, isResizeMode, setResizeMode])
 
+  // Global pointerup listener to prevent stuck drag state when releasing outside the object
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleGlobalPointerUp = () => {
+      // Commit final position to state if we were dragging
+      if (dragPositionRef.current) {
+        updateInstance(instance.id, {
+          position: {
+            ...instance.position,
+            x: dragPositionRef.current.x,
+            z: dragPositionRef.current.z
+          }
+        })
+      }
+      setIsDragging(false)
+      setIsVisuallyDragging(false)
+      dragStartPosRef.current = null
+      dragOffsetRef.current = null
+      dragPositionRef.current = null
+      setMode('idle')
+      document.body.style.cursor = 'default'
+    }
+
+    // Use window to catch pointerup anywhere
+    window.addEventListener('pointerup', handleGlobalPointerUp)
+    return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
+  }, [isDragging, setMode, instance.id, instance.position, updateInstance])
+
   // Handle dimension change from resize handles
   const handleDimensionChange = (dimension: 'width' | 'height' | 'depth', newValue: number) => {
     updateItem(item.id, {
@@ -789,13 +862,7 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
 
     // Calculate where the click intersects the drag plane (Y=0)
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(
-      new THREE.Vector2(
-        (e.nativeEvent.clientX / gl.domElement.clientWidth) * 2 - 1,
-        -(e.nativeEvent.clientY / gl.domElement.clientHeight) * 2 + 1
-      ),
-      camera
-    )
+    raycaster.setFromCamera(getNDC(e.nativeEvent, gl.domElement), camera)
     const clickOnPlane = new THREE.Vector3()
     raycaster.ray.intersectPlane(dragPlaneRef.current, clickOnPlane)
 
@@ -816,10 +883,21 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     e.stopPropagation()
 
     if (isDragging) {
+      // Commit final position to state only on release (avoids re-renders during drag)
+      if (dragPositionRef.current) {
+        updateInstance(instance.id, {
+          position: {
+            ...instance.position,
+            x: dragPositionRef.current.x,
+            z: dragPositionRef.current.z
+          }
+        })
+      }
       setIsDragging(false)
       setIsVisuallyDragging(false)
       dragStartPosRef.current = null
       dragOffsetRef.current = null
+      dragPositionRef.current = null
       setMode('idle')
       document.body.style.cursor = isHovered ? 'pointer' : 'default'
     }
@@ -831,13 +909,7 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     e.stopPropagation()
 
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(
-      new THREE.Vector2(
-        (e.nativeEvent.clientX / gl.domElement.clientWidth) * 2 - 1,
-        -(e.nativeEvent.clientY / gl.domElement.clientHeight) * 2 + 1
-      ),
-      camera
-    )
+    raycaster.setFromCamera(getNDC(e.nativeEvent, gl.domElement), camera)
 
     const intersectionPoint = new THREE.Vector3()
     raycaster.ray.intersectPlane(dragPlaneRef.current, intersectionPoint)
@@ -852,14 +924,18 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
         document.body.style.cursor = 'grabbing'
       }
 
-      // Apply the offset so the object stays under the cursor where you grabbed it
-      updateInstance(instance.id, {
-        position: {
-          ...instance.position,
-          x: intersectionPoint.x + dragOffsetRef.current.x,
-          z: intersectionPoint.z + dragOffsetRef.current.y
-        }
-      })
+      // Calculate new position with offset
+      const newX = intersectionPoint.x + dragOffsetRef.current.x
+      const newZ = intersectionPoint.z + dragOffsetRef.current.y
+
+      // Store position for commit on release
+      dragPositionRef.current = { x: newX, z: newZ }
+
+      // Update visual position directly via ref (no React re-render)
+      if (groupRef.current) {
+        groupRef.current.position.x = newX
+        groupRef.current.position.z = newZ
+      }
     }
   }
 
@@ -942,9 +1018,10 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
         />
 
         {/* Outline border when hovered or selected (not in resize mode) */}
+        {/* raycast={() => null} prevents these visual elements from intercepting clicks */}
         {(isHovered || isSelected) && !isResizeMode && (
           <>
-            <mesh position={[boundingCenter.x, boundingCenter.y, boundingCenter.z]}>
+            <mesh position={[boundingCenter.x, boundingCenter.y, boundingCenter.z]} raycast={() => null}>
               <boxGeometry args={[boundingSize.x * 1.05, boundingSize.y * 1.05, boundingSize.z * 1.05]} />
               <meshBasicMaterial
                 color={isSelected ? "#ffa500" : "#00ffff"}
@@ -953,11 +1030,11 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
                 opacity={0.6}
               />
             </mesh>
-            <lineSegments position={[boundingCenter.x, boundingCenter.y, boundingCenter.z]}>
+            <lineSegments position={[boundingCenter.x, boundingCenter.y, boundingCenter.z]} raycast={() => null}>
               <edgesGeometry args={[new THREE.BoxGeometry(boundingSize.x * 1.03, boundingSize.y * 1.03, boundingSize.z * 1.03)]} />
               <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
             </lineSegments>
-            <lineSegments position={[boundingCenter.x, boundingCenter.y, boundingCenter.z]}>
+            <lineSegments position={[boundingCenter.x, boundingCenter.y, boundingCenter.z]} raycast={() => null}>
               <edgesGeometry args={[new THREE.BoxGeometry(boundingSize.x * 1.01, boundingSize.y * 1.01, boundingSize.z * 1.01)]} />
               <lineBasicMaterial color="#ffffff" />
             </lineSegments>

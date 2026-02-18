@@ -5,6 +5,7 @@ import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ThreeEvent } from '@react-three/fiber'
 import { useRoomHover } from '@/lib/room-hover-context'
 import { useSelection } from '@/lib/selection-context'
+import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { WallSide, RoomGridState, createDefaultRoomGridState } from '@/types/selection'
 import { WallHeights } from '@/types/room'
 import { FloorMeasurementGrid, WallMeasurementGrid } from './MeasurementGrid'
@@ -169,6 +170,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
     hoveredItem,
     setHoveredItem,
   } = useSelection()
+  const { setSelectedFurnitureId } = useFurnitureSelection()
 
   const isHovered = roomId && hoveredRoomId === roomId
 
@@ -187,16 +189,18 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
   const handleWallClick = useCallback((side: WallSide, e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
     if (roomId) {
+      setSelectedFurnitureId(null) // Clear furniture selection when selecting wall
       selectWall(roomId, side)
     }
-  }, [roomId, selectWall])
+  }, [roomId, selectWall, setSelectedFurnitureId])
 
   const handleFloorClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
     if (roomId) {
+      setSelectedFurnitureId(null) // Clear furniture selection when selecting floor
       selectFloor(roomId)
     }
-  }, [roomId, selectFloor])
+  }, [roomId, selectFloor, setSelectedFurnitureId])
 
   // Hover handlers for walls/floor - use PointerEvent for onPointerOver/Out
   const handleWallHover = useCallback((side: WallSide, hovered: boolean, e: ThreeEvent<PointerEvent>) => {
