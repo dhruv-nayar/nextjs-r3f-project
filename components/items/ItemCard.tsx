@@ -75,7 +75,7 @@ export function ItemCard({
     <div className={cn('group overflow-hidden', className)}>
       {/* Thumbnail */}
       <div
-        className="aspect-square relative bg-floral-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-md transition-shadow duration-200 cursor-pointer"
+        className="aspect-square relative rounded-lg overflow-hidden cursor-pointer"
         onClick={onOpen}
       >
         {item.thumbnailPath ? (
@@ -118,7 +118,7 @@ export function ItemCard({
       </div>
 
       {/* Info Section */}
-      <div className="pt-3">
+      <div className="pt-2">
         {/* Editable name */}
         {isEditing ? (
           <input

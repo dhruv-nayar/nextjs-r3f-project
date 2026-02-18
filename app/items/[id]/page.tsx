@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { ItemPreview } from '@/components/items/ItemPreview'
@@ -67,6 +68,9 @@ export default function ItemDetailPage() {
   const [editPlacementType, setEditPlacementType] = useState<PlacementType | undefined>(item?.placementType)
   const [editThumbnailPath, setEditThumbnailPath] = useState(item?.thumbnailPath || '')
   const [editImages, setEditImages] = useState<ImagePair[]>(item?.images || [])
+
+  // Viewer gallery state - 'model' for 3D viewer, or index for which image to show
+  const [selectedViewerType, setSelectedViewerType] = useState<'model' | number>('model')
 
   // Dimension state (feet and inches)
   const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
@@ -380,40 +384,113 @@ export default function ItemDetailPage() {
 
       {/* Main Content Layout */}
       <div className="flex">
-        {/* Left Side - 3D Viewer */}
+        {/* Left Side - 3D Viewer / Image Viewer */}
         <main className="flex-1 p-6">
-          <div className="w-full h-[calc(100vh-88px)] bg-porcelain">
-            {item.modelPath ? (
-              <ItemPreview
-                modelPath={item.modelPath}
-                category={item.category}
-                materialOverrides={editMaterialOverrides}
-                defaultRotation={{ x: (editRotationXStep * Math.PI) / 2, z: (editRotationZStep * Math.PI) / 2 }}
-                dimensions={{
-                  width: widthFeet + widthInches / 12,
-                  height: heightFeet + heightInches / 12,
-                  depth: depthFeet + depthInches / 12
-                }}
-              />
-            ) : item.parametricShape ? (
-              <ParametricShapePreview
-                shape={item.parametricShape}
-                dimensions={item.dimensions}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-8xl text-taupe/20 mb-4">
-                    {item.category === 'seating' && '🪑'}
-                    {item.category === 'table' && '🪑'}
-                    {item.category === 'storage' && '📚'}
-                    {item.category === 'bed' && '🛏️'}
-                    {item.category === 'decoration' && '🪴'}
-                    {item.category === 'lighting' && '💡'}
-                    {item.category === 'other' && '📦'}
+          <div className="w-full h-[calc(100vh-88px)] bg-porcelain relative">
+            {/* Main Viewer Content */}
+            {selectedViewerType === 'model' ? (
+              // 3D Model Viewer
+              item.modelPath ? (
+                <ItemPreview
+                  modelPath={item.modelPath}
+                  category={item.category}
+                  materialOverrides={editMaterialOverrides}
+                  defaultRotation={{ x: (editRotationXStep * Math.PI) / 2, z: (editRotationZStep * Math.PI) / 2 }}
+                  dimensions={{
+                    width: widthFeet + widthInches / 12,
+                    height: heightFeet + heightInches / 12,
+                    depth: depthFeet + depthInches / 12
+                  }}
+                />
+              ) : item.parametricShape ? (
+                <ParametricShapePreview
+                  shape={item.parametricShape}
+                  dimensions={item.dimensions}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-8xl text-taupe/20 mb-4">
+                      {item.category === 'seating' && '🪑'}
+                      {item.category === 'table' && '🪑'}
+                      {item.category === 'storage' && '📚'}
+                      {item.category === 'bed' && '🛏️'}
+                      {item.category === 'decoration' && '🪴'}
+                      {item.category === 'lighting' && '💡'}
+                      {item.category === 'other' && '📦'}
+                    </div>
+                    <p className="text-taupe/40 font-body">No 3D model available</p>
                   </div>
-                  <p className="text-taupe/40 font-body">No 3D model available</p>
                 </div>
+              )
+            ) : (
+              // Image Viewer
+              <div className="w-full h-full flex items-center justify-center p-8">
+                {editImages[selectedViewerType] && (
+                  <div className="relative w-full h-full max-w-2xl max-h-full">
+                    {editImages[selectedViewerType].processed ? (
+                      <div className="absolute inset-0 bg-[url('/checkerboard.svg')] bg-repeat rounded-lg" />
+                    ) : null}
+                    <Image
+                      src={editImages[selectedViewerType].processed || editImages[selectedViewerType].original}
+                      alt={`Image ${selectedViewerType + 1}`}
+                      fill
+                      className="object-contain relative"
+                      unoptimized
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Floating Thumbnail Gallery - only show when there are images or a model */}
+            {(item.modelPath || item.parametricShape || editImages.length > 0) && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-xl p-2 shadow-lg">
+                {/* 3D Model Thumbnail */}
+                {(item.modelPath || item.parametricShape) && (
+                  <button
+                    onClick={() => setSelectedViewerType('model')}
+                    className={cn(
+                      'w-12 h-12 flex items-center justify-center transition-all',
+                      selectedViewerType === 'model'
+                        ? 'ring-2 ring-sage ring-offset-2'
+                        : 'opacity-70 hover:opacity-100'
+                    )}
+                    title="View 3D Model"
+                  >
+                    <svg className="w-6 h-6 text-graphite" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Image Thumbnails */}
+                {editImages.map((pair, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedViewerType(index)}
+                    className={cn(
+                      'w-12 h-12 rounded-lg overflow-hidden transition-all',
+                      selectedViewerType === index
+                        ? 'ring-2 ring-sage ring-offset-2'
+                        : 'opacity-70 hover:opacity-100'
+                    )}
+                    title={`View Image ${index + 1}`}
+                  >
+                    <div className="relative w-full h-full">
+                      {pair.processed && (
+                        <div className="absolute inset-0 bg-[url('/checkerboard.svg')] bg-repeat" />
+                      )}
+                      <Image
+                        src={pair.processed || pair.original}
+                        alt={`Thumbnail ${index + 1}`}
+                        fill
+                        className="object-cover relative"
+                        unoptimized
+                      />
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -479,7 +556,7 @@ export default function ItemDetailPage() {
                   />
                 </div>
 
-                {/* Images Section */}
+                {/* Images Section - Upload only (gallery is in floating bar at bottom of viewer) */}
                 <ImageGallery
                   images={editImages}
                   thumbnailPath={item.thumbnailPath}
@@ -494,8 +571,15 @@ export default function ItemDetailPage() {
                     if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
                       setEditThumbnailPath('')
                     }
+                    // Reset viewer if viewing deleted image
+                    if (selectedViewerType === pairIndex) {
+                      setSelectedViewerType('model')
+                    } else if (typeof selectedViewerType === 'number' && selectedViewerType > pairIndex) {
+                      setSelectedViewerType(selectedViewerType - 1)
+                    }
                   }}
                   currentThumbnail={editThumbnailPath}
+                  uploadOnly
                 />
 
                 {/* Generate 3D Model Section - shown when there are images, or if generation was interrupted */}
