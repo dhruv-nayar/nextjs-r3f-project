@@ -91,8 +91,8 @@ export default function ItemsPage() {
   }, {} as Record<string, number>)
 
   // Quick create: Creates item immediately and redirects to edit mode
-  const handleQuickCreate = () => {
-    const newId = addItem({
+  const handleQuickCreate = async () => {
+    const newId = await addItem({
       name: 'New Item',
       description: '',
       dimensions: { width: 2, height: 2, depth: 2 },
@@ -149,7 +149,7 @@ export default function ItemsPage() {
     setUploadError(error)
   }
 
-  const handleCreateItem = () => {
+  const handleCreateItem = async () => {
     if (!newItemName.trim()) {
       alert('Please enter an item name')
       return
@@ -164,7 +164,7 @@ export default function ItemsPage() {
     // For image uploads, use a placeholder model path (will be replaced when 3D generation is implemented)
     const modelPath = uploadMethod === 'glb' ? uploadedModelPath.trim() : 'placeholder'
 
-    const newId = addItem({
+    await addItem({
       name: newItemName.trim(),
       description: newItemDescription.trim() || undefined,
       modelPath,
