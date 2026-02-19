@@ -102,6 +102,7 @@ export default function ItemDetailPage() {
   const [heightInches, setHeightInches] = useState(((item?.dimensions?.height || 0) % 1) * 12)
   const [depthFeet, setDepthFeet] = useState(Math.floor(item?.dimensions?.depth || 0))
   const [depthInches, setDepthInches] = useState(((item?.dimensions?.depth || 0) % 1) * 12)
+  const [showDimensionLines, setShowDimensionLines] = useState(false)
 
   // Rotation state (steps: 0, 1, 2, 3 representing 0, 90, 180, 270 degrees)
   const [editRotationXStep, setEditRotationXStep] = useState(
@@ -685,6 +686,7 @@ export default function ItemDetailPage() {
                     height: heightFeet + heightInches / 12,
                     depth: depthFeet + depthInches / 12
                   }}
+                  showDimensionLines={showDimensionLines}
                 />
                 {/* Floating action buttons on 3D model */}
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover/canvas:opacity-100 transition-opacity">
@@ -1256,7 +1258,10 @@ export default function ItemDetailPage() {
                 </div>
 
                 {/* Dimensions Section */}
-                <div>
+                <div
+                  onMouseEnter={() => setShowDimensionLines(true)}
+                  onMouseLeave={() => setShowDimensionLines(false)}
+                >
                   <h3 className="text-white font-medium text-sm mb-2">
                     Dimensions
                   </h3>
@@ -1270,6 +1275,8 @@ export default function ItemDetailPage() {
                           inputMode="numeric"
                           value={widthFeet || ''}
                           onChange={(e) => setWidthFeet(parseInt(e.target.value) || 0)}
+                          onFocus={() => setShowDimensionLines(true)}
+                          onBlur={() => setShowDimensionLines(false)}
                           placeholder="0"
                           className="w-16 px-2 py-1.5 bg-white/10 text-white font-body text-sm rounded-lg border border-white/20 focus:outline-none focus:border-white/40 transition-colors"
                         />
@@ -1279,6 +1286,8 @@ export default function ItemDetailPage() {
                           inputMode="decimal"
                           value={round(widthInches) || ''}
                           onChange={(e) => setWidthInches(parseFloat(e.target.value) || 0)}
+                          onFocus={() => setShowDimensionLines(true)}
+                          onBlur={() => setShowDimensionLines(false)}
                           placeholder="0"
                           className="w-16 px-2 py-1.5 bg-white/10 text-white font-body text-sm rounded-lg border border-white/20 focus:outline-none focus:border-white/40 transition-colors"
                         />
@@ -1295,6 +1304,8 @@ export default function ItemDetailPage() {
                           inputMode="numeric"
                           value={heightFeet || ''}
                           onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
+                          onFocus={() => setShowDimensionLines(true)}
+                          onBlur={() => setShowDimensionLines(false)}
                           placeholder="0"
                           className="w-16 px-2 py-1.5 bg-white/10 text-white font-body text-sm rounded-lg border border-white/20 focus:outline-none focus:border-white/40 transition-colors"
                         />
@@ -1304,6 +1315,8 @@ export default function ItemDetailPage() {
                           inputMode="decimal"
                           value={round(heightInches) || ''}
                           onChange={(e) => setHeightInches(parseFloat(e.target.value) || 0)}
+                          onFocus={() => setShowDimensionLines(true)}
+                          onBlur={() => setShowDimensionLines(false)}
                           placeholder="0"
                           className="w-16 px-2 py-1.5 bg-white/10 text-white font-body text-sm rounded-lg border border-white/20 focus:outline-none focus:border-white/40 transition-colors"
                         />
@@ -1320,6 +1333,8 @@ export default function ItemDetailPage() {
                           inputMode="numeric"
                           value={depthFeet || ''}
                           onChange={(e) => setDepthFeet(parseInt(e.target.value) || 0)}
+                          onFocus={() => setShowDimensionLines(true)}
+                          onBlur={() => setShowDimensionLines(false)}
                           placeholder="0"
                           className="w-16 px-2 py-1.5 bg-white/10 text-white font-body text-sm rounded-lg border border-white/20 focus:outline-none focus:border-white/40 transition-colors"
                         />
@@ -1329,6 +1344,8 @@ export default function ItemDetailPage() {
                           inputMode="decimal"
                           value={round(depthInches) || ''}
                           onChange={(e) => setDepthInches(parseFloat(e.target.value) || 0)}
+                          onFocus={() => setShowDimensionLines(true)}
+                          onBlur={() => setShowDimensionLines(false)}
                           placeholder="0"
                           className="w-16 px-2 py-1.5 bg-white/10 text-white font-body text-sm rounded-lg border border-white/20 focus:outline-none focus:border-white/40 transition-colors"
                         />

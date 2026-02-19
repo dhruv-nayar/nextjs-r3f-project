@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import {
   Selection,
   WallSide,
@@ -9,6 +9,7 @@ import {
   isFloorSelection,
   isFurnitureSelection,
 } from '@/types/selection'
+import { useHome } from './home-context'
 
 interface SelectionContextType {
   // Current selection state
@@ -39,8 +40,26 @@ interface SelectionContextType {
 const SelectionContext = createContext<SelectionContextType | undefined>(undefined)
 
 export function SelectionProvider({ children }: { children: ReactNode }) {
+  const { currentHome } = useHome()
   const [selection, setSelectionState] = useState<Selection>(null)
   const [hoveredItem, setHoveredItem] = useState<Selection>(null)
+
+  // Track home ID to reset selection when switching projects
+  const prevHomeIdRef = useRef<string | null>(null)
+
+  // Reset selection when switching to a different home/project
+  useEffect(() => {
+    const currentHomeId = currentHome?.id || null
+
+    if (prevHomeIdRef.current !== null && prevHomeIdRef.current !== currentHomeId) {
+      // Home changed - clear selection to prevent stale references
+      console.log('[SelectionContext] Home changed, clearing selection')
+      setSelectionState(null)
+      setHoveredItem(null)
+    }
+
+    prevHomeIdRef.current = currentHomeId
+  }, [currentHome?.id])
 
   const setSelection = useCallback((newSelection: Selection) => {
     setSelectionState(newSelection)

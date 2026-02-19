@@ -1,11 +1,12 @@
 'use client'
 
 import { Suspense, useRef, useEffect, useMemo } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useGLTF, PerspectiveCamera, Environment } from '@react-three/drei'
+import { Canvas, useThree } from '@react-three/fiber'
+import { useGLTF, PerspectiveCamera, Environment, OrbitControls, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { MaterialOverride } from '@/types/room'
 import { applyMaterialOverrides } from '@/lib/material-utils'
+import { DimensionLines } from './DimensionLines'
 
 interface ItemPreviewProps {
   modelPath: string
@@ -13,20 +14,20 @@ interface ItemPreviewProps {
   materialOverrides?: MaterialOverride[]
   defaultRotation?: { x: number; z: number }
   dimensions?: { width: number; height: number; depth: number }
+  showDimensionLines?: boolean
 }
 
 /**
  * ModelPreview - Renders a 3D model with proper transform hierarchy:
  *
  * Transform order (outside to inside):
- * 1. autoRotateGroup - Y-axis auto-rotation for preview spin
- * 2. groundOffsetGroup - Lifts model so bottom touches Y=0
- * 3. dimensionScaleGroup - World-space dimension proportions (after rotation)
- * 4. tiltGroup - X/Z rotation + uniform scale (rotates around model center)
- * 5. model - Centered at origin
+ * 1. groundOffsetGroup - Lifts model so bottom touches Y=0
+ * 2. tiltGroup - X/Z rotation + uniform scale (rotates around model center)
+ * 3. model - Centered at origin
  *
  * Key insight: Model must be centered at origin for rotation to work correctly.
  * Ground offset is applied AFTER rotation so the model sits on the ground.
+ * Camera interaction is handled by OrbitControls in the parent Canvas.
  */
 function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimensions }: {
   modelPath: string
@@ -35,7 +36,6 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
   dimensions?: { width: number; height: number; depth: number }
 }) {
   const { scene } = useGLTF(modelPath)
-  const autoRotateRef = useRef<THREE.Group>(null)
   const groundOffsetRef = useRef<THREE.Group>(null)
   const tiltRef = useRef<THREE.Group>(null)
   const { invalidate } = useThree()
@@ -107,20 +107,10 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     }
   }, [defaultRotation?.x, defaultRotation?.z, invalidate])
 
-  // Auto-rotate on Y axis for preview
-  useFrame((state) => {
-    if (autoRotateRef.current) {
-      autoRotateRef.current.rotation.y = state.clock.elapsedTime * 0.3
-      invalidate()
-    }
-  })
-
   return (
-    <group ref={autoRotateRef}>
-      <group ref={groundOffsetRef}>
-        <group ref={tiltRef}>
-          <primitive object={clonedScene} />
-        </group>
+    <group ref={groundOffsetRef}>
+      <group ref={tiltRef}>
+        <primitive object={clonedScene} />
       </group>
     </group>
   )
@@ -142,7 +132,7 @@ function Placeholder({ category }: { category: string }) {
   )
 }
 
-export function ItemPreview({ modelPath, category, materialOverrides, defaultRotation, dimensions }: ItemPreviewProps) {
+export function ItemPreview({ modelPath, category, materialOverrides, defaultRotation, dimensions, showDimensionLines }: ItemPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -172,7 +162,7 @@ export function ItemPreview({ modelPath, category, materialOverrides, defaultRot
       <Suspense fallback={<Placeholder category={category} />}>
         <Canvas
           ref={canvasRef}
-          frameloop="always"
+          frameloop="demand"
           gl={{
             preserveDrawingBuffer: true,
             antialias: true,
@@ -188,6 +178,16 @@ export function ItemPreview({ modelPath, category, materialOverrides, defaultRot
         >
           <PerspectiveCamera makeDefault position={[0, 1, 4]} fov={50} />
 
+          {/* Camera Controls */}
+          <OrbitControls
+            enablePan={true}
+            enableZoom={true}
+            enableRotate={true}
+            minDistance={1}
+            maxDistance={10}
+            target={[0, 1, 0]}
+          />
+
           {/* Lighting */}
           <ambientLight intensity={0.5} />
           <directionalLight position={[5, 5, 5]} intensity={1} />
@@ -201,6 +201,11 @@ export function ItemPreview({ modelPath, category, materialOverrides, defaultRot
             defaultRotation={defaultRotation}
             dimensions={dimensions}
           />
+
+          {/* Dimension Lines - rendered in world space, outside the model rotation */}
+          {dimensions && showDimensionLines && (
+            <DimensionLines dimensions={dimensions} />
+          )}
 
           {/* Environment */}
           <Environment preset="city" />

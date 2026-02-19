@@ -70,8 +70,28 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
   // Local state for V3 data (synced to home context for persistence)
   const [localV3Data, setLocalV3Data] = useState<FloorplanDataV3 | null>(null)
 
+  // Track the home ID to detect when switching projects
+  const prevHomeIdRef = useRef<string | null>(null)
+
   // Track the V2 data to detect when it changes (new floorplan)
   const prevV2DataRef = useRef<string | null>(null)
+
+  // Reset ALL state when switching to a different home/project
+  useEffect(() => {
+    const currentHomeId = currentHome?.id || null
+
+    if (prevHomeIdRef.current !== null && prevHomeIdRef.current !== currentHomeId) {
+      // Home changed - reset ALL state to prevent data leaking between projects
+      console.log('[WallSegmentsContext] Home changed, resetting all state')
+      setLocalV3Data(null)
+      setSelectedSegmentId(null)
+      setSelectedSide(null)
+      setDoorPlacementModeInternal(false)
+      prevV2DataRef.current = null // Also reset V2 tracking
+    }
+
+    prevHomeIdRef.current = currentHomeId
+  }, [currentHome?.id])
 
   // Reset local V3 data when V2 data changes (user created/edited floorplan)
   useEffect(() => {
