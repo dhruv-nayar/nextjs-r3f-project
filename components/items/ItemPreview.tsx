@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useEffect, useMemo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useGLTF, PerspectiveCamera, Environment, OrbitControls, Html } from '@react-three/drei'
+import { useGLTF, PerspectiveCamera, OrbitControls, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { MaterialOverride } from '@/types/room'
 import { applyMaterialOverrides } from '@/lib/material-utils'
@@ -189,9 +189,8 @@ export function ItemPreview({ modelPath, category, materialOverrides, defaultRot
           />
 
           {/* Lighting */}
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[5, 5, 5]} intensity={1} />
-          <directionalLight position={[-5, 3, -5]} intensity={0.5} />
+          <ambientLight intensity={0.6} />
+          <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
           {/* Model */}
           <ModelPreview
@@ -206,9 +205,6 @@ export function ItemPreview({ modelPath, category, materialOverrides, defaultRot
           {dimensions && showDimensionLines && (
             <DimensionLines dimensions={dimensions} />
           )}
-
-          {/* Environment */}
-          <Environment preset="city" />
         </Canvas>
       </Suspense>
     </div>
