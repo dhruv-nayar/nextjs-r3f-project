@@ -6,12 +6,27 @@ import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
 import { RoomTreeNode } from './hierarchy/RoomTreeNode'
 import { ItemLibraryModal } from '../items/ItemLibraryModal'
+import { CopyProjectModal } from '../homes/CopyProjectModal'
+import { CopyMode } from '@/lib/utils/copy-home'
 
 export function SceneHierarchyPanel() {
   const router = useRouter()
   const { rooms, currentRoomId } = useRoom()
-  const { currentHome } = useHome()
+  const { currentHome, copyHome, switchHome } = useHome()
   const [showItemLibrary, setShowItemLibrary] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
+
+  const handleCopy = (mode: CopyMode) => {
+    if (currentHome) {
+      const newHomeId = copyHome(currentHome.id, mode)
+      setShowCopyModal(false)
+      // Navigate to the new project with full page reload
+      if (newHomeId) {
+        switchHome(newHomeId)
+        router.refresh() // Force refresh to reload with new project
+      }
+    }
+  }
 
   return (
     <>
@@ -31,6 +46,18 @@ export function SceneHierarchyPanel() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
+              {/* Duplicate Project Button */}
+              {currentHome && (
+                <button
+                  onClick={() => setShowCopyModal(true)}
+                  className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+                  title="Duplicate project"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              )}
             </div>
             {currentHome && (
               <span className="text-white/50 text-xs truncate max-w-[100px]">
@@ -83,6 +110,16 @@ export function SceneHierarchyPanel() {
         isOpen={showItemLibrary}
         onClose={() => setShowItemLibrary(false)}
       />
+
+      {/* Copy Project Modal */}
+      {currentHome && (
+        <CopyProjectModal
+          home={currentHome}
+          isOpen={showCopyModal}
+          onClose={() => setShowCopyModal(false)}
+          onCopy={handleCopy}
+        />
+      )}
     </>
   )
 }

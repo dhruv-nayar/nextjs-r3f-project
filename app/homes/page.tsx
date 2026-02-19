@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation'
 import { useHome } from '@/lib/home-context'
 import { Navbar } from '@/components/layout/Navbar'
 import { ProjectCard, AddProjectCard } from '@/components/homes/ProjectCard'
+import { CopyProjectModal } from '@/components/homes/CopyProjectModal'
 import { PageTitle } from '@/components/ui/Typography'
+import { CopyMode } from '@/lib/utils/copy-home'
 
 export default function HomesPage() {
   const router = useRouter()
-  const { homes, createHome, deleteHome, switchHome, renameHome } = useHome()
+  const { homes, createHome, copyHome, deleteHome, switchHome, renameHome } = useHome()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [showCopyModal, setShowCopyModal] = useState<string | null>(null)
 
   // Create home form state
   const [newHomeName, setNewHomeName] = useState('')
@@ -43,6 +46,13 @@ export default function HomesPage() {
   const handleOpenHome = (homeId: string) => {
     switchHome(homeId)
     router.push('/')
+  }
+
+  const handleCopyHome = (homeId: string, mode: CopyMode) => {
+    const newHomeId = copyHome(homeId, mode)
+    if (newHomeId) {
+      setShowCopyModal(null)
+    }
   }
 
   return (
@@ -90,6 +100,7 @@ export default function HomesPage() {
                 onOpen={() => handleOpenHome(home.id)}
                 onDelete={() => setShowDeleteConfirm(home.id)}
                 onRename={(newName) => renameHome(home.id, newName)}
+                onCopy={() => setShowCopyModal(home.id)}
                 canDelete={home.id !== 'example-home'}
               />
             ))}
@@ -185,6 +196,16 @@ export default function HomesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Copy Project Modal */}
+      {showCopyModal && homes.find(h => h.id === showCopyModal) && (
+        <CopyProjectModal
+          home={homes.find(h => h.id === showCopyModal)!}
+          isOpen={true}
+          onClose={() => setShowCopyModal(null)}
+          onCopy={(mode) => handleCopyHome(showCopyModal, mode)}
+        />
       )}
     </div>
   )

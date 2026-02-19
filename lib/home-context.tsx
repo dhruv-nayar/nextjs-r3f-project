@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from './storage'
 import { convertFloorplanTo3D } from './floorplan/floorplan-converter'
 import { convertV2To3D } from './utils/floorplan-geometry'
+import { copyHome as copyHomeUtil, CopyMode } from './utils/copy-home'
 
 interface HomeContextType {
   homes: Home[]
@@ -16,6 +17,7 @@ interface HomeContextType {
   currentHome: Home | null
   isLoading: boolean
   createHome: (name: string, rooms: Room[]) => void
+  copyHome: (homeId: string, mode: CopyMode) => string | null
   deleteHome: (homeId: string) => void
   switchHome: (homeId: string) => void
   updateHome: (homeId: string, updates: Partial<Home>) => void
@@ -285,6 +287,37 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 
     return newHome.id
   }, [])
+
+  const copyHome = useCallback((homeId: string, mode: CopyMode): string | null => {
+    const sourceHome = homes.find(h => h.id === homeId)
+    if (!sourceHome) {
+      console.error('[HomeContext] Cannot copy: home not found', homeId)
+      return null
+    }
+
+    const newHome = copyHomeUtil(sourceHome, mode)
+    console.log('[HomeContext] Copying home:', sourceHome.name, '→', newHome.name, 'mode:', mode)
+
+    // Optimistic update
+    setHomes(prev => [...prev, newHome])
+
+    // Insert into Supabase
+    const supabase = createClient()
+    supabase
+      .from('homes')
+      .insert(homeToRow(newHome))
+      .then(({ error }) => {
+        if (error) {
+          console.error('[HomeContext] Failed to copy home to Supabase:', error)
+          // Rollback on error
+          setHomes(prev => prev.filter(h => h.id !== newHome.id))
+        } else {
+          console.log('[HomeContext] Home copied successfully:', newHome.id)
+        }
+      })
+
+    return newHome.id
+  }, [homes])
 
   const deleteHome = useCallback((homeId: string) => {
     // Optimistic update
@@ -755,6 +788,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         currentHome,
         isLoading,
         createHome,
+        copyHome,
         deleteHome,
         switchHome,
         updateHome,
