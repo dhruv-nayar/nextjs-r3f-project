@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
 import { Home, Room, ItemInstance, Vector3 } from '@/types/room'
 import { FloorplanData } from '@/types/floorplan'
-import { FloorplanDataV2 } from '@/types/floorplan-v2'
+import { FloorplanDataV2, FloorplanDataV3 } from '@/types/floorplan-v2'
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from './storage'
 import { convertFloorplanTo3D } from './floorplan/floorplan-converter'
 import { convertV2To3D } from './utils/floorplan-geometry'
@@ -42,6 +42,10 @@ interface HomeContextType {
 
   // Two-way sync: 3D → V2
   syncRoomChangesToFloorplanV2: (homeId: string, roomId: string, updates: Partial<Room>) => void
+
+  // Floorplan V3 (two-sided wall segments with styles/doors)
+  setFloorplanDataV3: (homeId: string, data: FloorplanDataV3) => void
+  getFloorplanDataV3: (homeId: string) => FloorplanDataV3 | undefined
 }
 
 const HomeContext = createContext<HomeContextType | undefined>(undefined)
@@ -305,6 +309,27 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     return home?.floorplanDataV2
   }
 
+  // V3 Floorplan methods (two-sided wall segments with styles/doors)
+  const setFloorplanDataV3 = (homeId: string, data: FloorplanDataV3) => {
+    console.log('[HomeContext] setFloorplanDataV3 called for home:', homeId)
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? {
+              ...home,
+              floorplanDataV3: data,
+              updatedAt: new Date().toISOString()
+            }
+          : home
+      )
+    )
+  }
+
+  const getFloorplanDataV3 = (homeId: string): FloorplanDataV3 | undefined => {
+    const home = homes.find(h => h.id === homeId)
+    return home?.floorplanDataV3
+  }
+
   const buildRoomsFromFloorplanV2 = (homeId: string, data: FloorplanDataV2) => {
     console.log('[buildRoomsFromFloorplanV2] Starting conversion for home:', homeId)
     console.log('[buildRoomsFromFloorplanV2] V2 data:', data)
@@ -449,7 +474,9 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         setFloorplanDataV2,
         getFloorplanDataV2,
         buildRoomsFromFloorplanV2,
-        syncRoomChangesToFloorplanV2
+        syncRoomChangesToFloorplanV2,
+        setFloorplanDataV3,
+        getFloorplanDataV3
       }}
     >
       {children}

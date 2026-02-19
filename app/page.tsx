@@ -9,6 +9,7 @@ import { RoomNavigation } from "@/components/rooms/RoomNavigation";
 import { Controls } from "@/components/Controls";
 import { SceneHierarchyPanel } from "@/components/panels/SceneHierarchyPanel";
 import { PropertiesPanel } from "@/components/panels/PropertiesPanel";
+import { WallSegmentPropertiesPanel } from "@/components/panels/WallSegmentPropertiesPanel";
 import { Navbar } from "@/components/layout/Navbar";
 
 function HomeContent() {
@@ -52,6 +53,7 @@ function HomeContent() {
       <Controls />
       <SceneHierarchyPanel />
       <PropertiesPanel />
+      <WallSegmentPropertiesPanel />
     </div>
   );
 }

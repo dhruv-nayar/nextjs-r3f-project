@@ -490,80 +490,6 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
       return w
     }))
   }, [walls, vertices])
-
-  // Place a door on a wall (finds wall near click point)
-  const placeDoorOnWall = useCallback((clickX: number, clickY: number) => {
-    // Find wall near click
-    const nearWallResult = findNearbyWall(clickX, clickY, walls, vertices, 0.5)
-    if (!nearWallResult) return
-
-    const wall = nearWallResult.wall
-    if (!wall) return
-
-    const startV = vertices.find(v => v.id === wall.startVertexId)
-    const endV = vertices.find(v => v.id === wall.endVertexId)
-    if (!startV || !endV) return
-
-    // Calculate wall length
-    const dx = endV.x - startV.x
-    const dy = endV.y - startV.y
-    const wallLength = Math.sqrt(dx * dx + dy * dy)
-
-    // Project click point onto wall to get position
-    const wallDx = endV.x - startV.x
-    const wallDy = endV.y - startV.y
-    const t = ((clickX - startV.x) * wallDx + (clickY - startV.y) * wallDy) / (wallLength ** 2)
-    const positionAlongWall = t * wallLength
-
-    // Default door width
-    const doorWidth = 3
-
-    // Clamp position to keep door within wall bounds (1 foot margin from corners)
-    const position = Math.max(1, Math.min(wallLength - doorWidth - 1, positionAlongWall - doorWidth / 2))
-
-    // Validate: ensure door fits and doesn't overlap with existing doors
-    if (position < 1 || position + doorWidth > wallLength - 1) {
-      alert('Door does not fit on this wall')
-      return
-    }
-
-    // Check for overlapping doors
-    const existingDoors = wall.doors || []
-    for (const existingDoor of existingDoors) {
-      const existingStart = existingDoor.position
-      const existingEnd = existingDoor.position + existingDoor.width
-      const newStart = position
-      const newEnd = position + doorWidth
-
-      // Check overlap
-      if (!(newEnd < existingStart || newStart > existingEnd)) {
-        alert('Door overlaps with an existing door')
-        return
-      }
-    }
-
-    const newDoor: FloorplanDoorV2 = {
-      id: generateId('door'),
-      position,
-      width: doorWidth,
-      height: 7  // Default 7 feet
-    }
-
-    // Update wall with new door
-    const updatedWalls = walls.map(w => {
-      if (w.id === wall.id) {
-        return {
-          ...w,
-          doors: [...(w.doors || []), newDoor]
-        }
-      }
-      return w
-    })
-
-    setWalls(updatedWalls)
-    // Stay in PLACE_DOORS mode (don't exit)
-  }, [walls, vertices])
-
   // SELECT mode handler - select vertices/doors/walls, no auto-drawing
   const handleSelectClick = useCallback((x: number, y: number) => {
     // Priority: vertices > doors > walls > empty
@@ -704,16 +630,6 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     createRoom
   ])
 
-  // PLACE_DOORS mode handler - click on walls to place doors
-  const handlePlaceDoorsClick = useCallback((x: number, y: number) => {
-    // Find wall near click
-    const nearWall = findNearbyWall(x, y, walls, vertices, 0.5)
-    if (nearWall) {
-      placeDoorOnWall(x, y)
-      // Stay in PLACE_DOORS mode for placing multiple doors
-    }
-  }, [walls, vertices, placeDoorOnWall])
-
   // Handle canvas click - route to appropriate mode handler
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -729,12 +645,9 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         case EditorMode.DRAW_WALLS:
           handleDrawWallsClick(x, y)
           break
-        case EditorMode.PLACE_DOORS:
-          handlePlaceDoorsClick(x, y)
-          break
       }
     },
-    [isPanMode, isPanning, editorMode, getCanvasCoords, handleSelectClick, handleDrawWallsClick, handlePlaceDoorsClick]
+    [isPanMode, isPanning, editorMode, getCanvasCoords, handleSelectClick, handleDrawWallsClick]
   )
 
   // Handle mouse down (for dragging in SELECT mode or panning)
@@ -866,23 +779,11 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         return
       }
 
-      if (e.key === 'd' || e.key === 'D') {
-        e.preventDefault()
-        setEditorMode(EditorMode.PLACE_DOORS)
-        setDrawingVertexIds([])
-        setSelectedVertexId(null)
-        setSelectedWallId(null)
-        return
-      }
-
       // Escape - cancel current action and return to SELECT
       if (e.key === 'Escape') {
         if (editorMode === EditorMode.DRAW_WALLS) {
           // Cancel current drawing path
           setDrawingVertexIds([])
-          setEditorMode(EditorMode.SELECT)
-        } else if (editorMode === EditorMode.PLACE_DOORS) {
-          // Return to SELECT mode
           setEditorMode(EditorMode.SELECT)
         } else {
           // Already in SELECT mode - just clear selections
@@ -1393,9 +1294,6 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         } else {
           return 'Click to continue, click start to close room, Escape to cancel'
         }
-
-      case EditorMode.PLACE_DOORS:
-        return 'Click on a wall to place a door'
     }
   }
 
@@ -1452,7 +1350,7 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
             ? 'grab'
             : isDragging
             ? 'grabbing'
-            : editorMode === EditorMode.DRAW_WALLS || editorMode === EditorMode.PLACE_DOORS
+            : editorMode === EditorMode.DRAW_WALLS
             ? 'crosshair'
             : editorMode === EditorMode.SELECT && (hoverVertex || hoverWall || hoverDoor)
             ? 'pointer'
@@ -1477,14 +1375,14 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
 
       {/* Instructions */}
       <div className="text-sm text-gray-500 space-y-1">
-        <p><strong>Keyboard Shortcuts:</strong> V = Select, W = Draw Walls, D = Place Doors, Escape = Cancel/Return to Select</p>
+        <p><strong>Keyboard Shortcuts:</strong> V = Select, W = Draw Walls, Escape = Cancel/Return to Select</p>
         <p><strong>Navigation:</strong> Mouse wheel to zoom (25%-400%). Hold Space + drag to pan.</p>
+        <p><strong>Note:</strong> Door placement is available in the 3D view after building.</p>
 
         {editorMode === EditorMode.SELECT && (
           <>
-            <p><strong>Select:</strong> Click objects to select them (vertices, walls, doors). Drag vertices to move them.</p>
+            <p><strong>Select:</strong> Click objects to select them (vertices, walls). Drag vertices to move them.</p>
             <p><strong>Delete:</strong> Select an object, then press Delete to remove it.</p>
-            <p><strong>Edit Doors:</strong> Click a door to open the properties panel and adjust position/width.</p>
           </>
         )}
 
@@ -1493,13 +1391,6 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
             <p><strong>Draw:</strong> Click to place vertices. Click an existing vertex to close the shape and create a room.</p>
             <p><strong>Shift:</strong> Hold Shift while drawing to snap lines to 45° angles.</p>
             <p><strong>Shared walls:</strong> Click on an existing vertex to share corners. Click on a wall to split it.</p>
-          </>
-        )}
-
-        {editorMode === EditorMode.PLACE_DOORS && (
-          <>
-            <p><strong>Place Doors:</strong> Click on any wall to place a 3-foot door opening.</p>
-            <p><strong>Note:</strong> Doors must be at least 1 foot from corners and cannot overlap.</p>
           </>
         )}
       </div>

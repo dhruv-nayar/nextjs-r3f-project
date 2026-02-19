@@ -361,14 +361,11 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const dragPositionRef = useRef<{ x: number; z: number } | null>(null) // Current drag position for direct updates
 
   // Memoize the cloned scene and its transformations to prevent position drift
-  const { clonedScene, size, autoScale } = useMemo(() => {
+  const { clonedScene, size, center, autoScale, yOffset } = useMemo(() => {
     const cloned = scene.clone()
     const box = new THREE.Box3().setFromObject(cloned)
-    const center = box.getCenter(new THREE.Vector3())
+    const centerVec = box.getCenter(new THREE.Vector3())
     const sizeVec = box.getSize(new THREE.Vector3())
-
-    // Center X and Z, place bottom at Y=0 (before any scaling)
-    cloned.position.set(-center.x, -box.min.y, -center.z)
 
     // Calculate auto-scale based on item dimensions
     const scale = {
@@ -377,7 +374,16 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
       z: item.dimensions.depth / sizeVec.z
     }
 
-    return { clonedScene: cloned, size: sizeVec, autoScale: scale }
+    // Center X and Z only - Y offset will be applied outside the scaled group
+    // to ensure the bottom is at Y=0 regardless of scaling
+    cloned.position.set(-centerVec.x, 0, -centerVec.z)
+
+    // Calculate the Y offset needed to place bottom at Y=0 AFTER scaling
+    // The scaled bottom position is: box.min.y * scale.y
+    // We need to offset by the negative of this
+    const bottomOffset = -box.min.y * scale.y
+
+    return { clonedScene: cloned, size: sizeVec, center: centerVec, autoScale: scale, yOffset: bottomOffset }
   }, [scene, item.dimensions.width, item.dimensions.height, item.dimensions.depth])
 
   // After positioning: model is centered at X=0, Z=0, with bottom at Y=0
@@ -600,9 +606,10 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   return (
     <>
       {/* Main model group with scaling */}
+      {/* Y position includes yOffset to place model bottom at Y=0 after scaling */}
       <group
         ref={groupRef}
-        position={[instance.position.x, instance.position.y, instance.position.z]}
+        position={[instance.position.x, instance.position.y + yOffset, instance.position.z]}
         rotation={[instance.rotation.x, instance.rotation.y, instance.rotation.z]}
         scale={[
           instance.scaleMultiplier.x * autoScale.x,
@@ -638,9 +645,10 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
 
         {/* Outline border when hovered or selected (not in resize mode) */}
         {/* raycast={null} prevents these visual elements from intercepting clicks */}
+        {/* Position at center.y (model's actual center) since we don't center Y in clonedScene */}
         {(isHovered || isSelected) && !isResizeMode && (
           <>
-            <mesh position={[0, size.y / 2, 0]} raycast={() => null}>
+            <mesh position={[0, center.y, 0]} raycast={() => null}>
               <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
               <meshBasicMaterial
                 color={isSelected ? "#ffa500" : "#00ffff"}
@@ -649,11 +657,11 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
                 opacity={0.6}
               />
             </mesh>
-            <lineSegments position={[0, size.y / 2, 0]} raycast={() => null}>
+            <lineSegments position={[0, center.y, 0]} raycast={() => null}>
               <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
               <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
             </lineSegments>
-            <lineSegments position={[0, size.y / 2, 0]} raycast={() => null}>
+            <lineSegments position={[0, center.y, 0]} raycast={() => null}>
               <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
               <lineBasicMaterial color="#ffffff" />
             </lineSegments>

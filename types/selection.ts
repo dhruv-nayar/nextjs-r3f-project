@@ -28,7 +28,17 @@ export interface FurnitureSelection {
   roomId: string
 }
 
-export type Selection = RoomSelection | WallSelection | FloorSelection | FurnitureSelection | null
+/**
+ * V3 Wall Segment Selection - two-sided walls
+ * Used when V3 rendering is active
+ */
+export interface WallSegmentSelection {
+  type: 'wall-segment'
+  segmentId: string
+  side: 'A' | 'B'
+}
+
+export type Selection = RoomSelection | WallSelection | FloorSelection | FurnitureSelection | WallSegmentSelection | null
 
 // Type guards for selection types
 export function isRoomSelection(selection: Selection): selection is RoomSelection {
@@ -45,6 +55,10 @@ export function isFloorSelection(selection: Selection): selection is FloorSelect
 
 export function isFurnitureSelection(selection: Selection): selection is FurnitureSelection {
   return selection?.type === 'furniture'
+}
+
+export function isWallSegmentSelection(selection: Selection): selection is WallSegmentSelection {
+  return selection?.type === 'wall-segment'
 }
 
 /**

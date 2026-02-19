@@ -8,10 +8,10 @@
  */
 
 // Editor interaction modes
+// Note: Door placement is now handled in the 3D view
 export enum EditorMode {
   SELECT = 'SELECT',
   DRAW_WALLS = 'DRAW_WALLS',
-  PLACE_DOORS = 'PLACE_DOORS'
 }
 
 // A point in 2D space (shared corner)
@@ -118,4 +118,82 @@ export interface FloorplanDataV2 {
   // Metadata
   createdAt: string
   updatedAt: string
+}
+
+// ============================================
+// V3: Two-Sided Wall Segment Architecture
+// ============================================
+
+import type { WallSegment, WallSideStyle } from './wall-segment'
+
+/**
+ * V3 Room: References wall segments instead of owning walls
+ *
+ * The key change is that rooms no longer own their walls.
+ * Instead, they reference wall segments and specify which side
+ * of each segment faces into the room.
+ */
+export interface FloorplanRoomV3 {
+  id: string
+  name: string
+  color: string                              // Fill color for 2D rendering
+
+  // Ordered list of segment IDs forming the room boundary (closed loop)
+  boundarySegmentIds: string[]
+
+  // Which side of each segment faces this room
+  // Key = segment ID, Value = 'A' or 'B'
+  segmentSides: Record<string, 'A' | 'B'>
+
+  // Floor styling (future)
+  floorStyle?: {
+    color: string
+    textureUrl?: string
+  }
+}
+
+/**
+ * V3 Floorplan Data Structure
+ *
+ * Architecture: Vertices → WallSegments → Rooms
+ * - Vertices are shared corner points (same as V2)
+ * - WallSegments have two independently styled sides
+ * - Rooms reference segments and specify which side faces inward
+ */
+export interface FloorplanDataV3 {
+  version: 3
+
+  // Geometry primitives
+  vertices: FloorplanVertex[]
+  wallSegments: WallSegment[]
+  rooms: FloorplanRoomV3[]
+
+  // Reusable style library (optional)
+  wallStyles?: WallSideStyle[]
+
+  // Canvas settings (for consistent editing)
+  canvasWidth: number
+  canvasHeight: number
+  pixelsPerFoot: number
+
+  // Metadata
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Create an empty V3 floorplan
+ */
+export function createEmptyFloorplanV3(): FloorplanDataV3 {
+  return {
+    version: 3,
+    vertices: [],
+    wallSegments: [],
+    rooms: [],
+    canvasWidth: CANVAS_WIDTH,
+    canvasHeight: CANVAS_HEIGHT,
+    pixelsPerFoot: PIXELS_PER_FOOT,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
 }

@@ -13,6 +13,7 @@ import { SelectionProvider } from "@/lib/selection-context";
 import { ResizeModeProvider } from "@/lib/resize-mode-context";
 import { InteractionModeProvider } from "@/lib/interaction-mode-context";
 import { ControlsProvider } from "@/lib/controls-context";
+import { WallSegmentsProvider } from "@/lib/use-wall-segments";
 import { GlobalBackgroundJobManager } from "@/components/GlobalBackgroundJobManager";
 
 const geistSans = Geist({
@@ -57,6 +58,7 @@ export default function RootLayout({
         <ItemLibraryProvider>
           <TrellisJobProvider>
             <HomeProvider>
+            <WallSegmentsProvider>
             <RoomProvider>
               <RoomHoverProvider>
                 <FurnitureHoverProvider>
@@ -77,6 +79,7 @@ export default function RootLayout({
                 </FurnitureHoverProvider>
               </RoomHoverProvider>
             </RoomProvider>
+            </WallSegmentsProvider>
           </HomeProvider>
           </TrellisJobProvider>
         </ItemLibraryProvider>

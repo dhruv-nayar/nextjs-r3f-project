@@ -330,6 +330,7 @@ export interface Home {
   thumbnailPath?: string        // NEW: auto-generated or manual
   floorplanData?: import('./floorplan').FloorplanData  // V1: Rectangle-based floorplan
   floorplanDataV2?: import('./floorplan-v2').FloorplanDataV2  // V2: Wall-first polygon floorplan
+  floorplanDataV3?: import('./floorplan-v2').FloorplanDataV3  // V3: Two-sided wall segments with styles/doors
   sharedWalls?: SharedWall[]    // Shared walls between adjacent rooms
   createdAt: string
   updatedAt: string

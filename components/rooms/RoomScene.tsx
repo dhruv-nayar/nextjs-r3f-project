@@ -14,10 +14,13 @@ import { Furniture, ItemInstanceRenderer } from '../furniture/FurnitureLibrary'
 import { PlacementGhost } from '../furniture/PlacementGhost'
 import { Room } from './Room'
 import { PolygonRoom } from './PolygonRoom'
+import { PolygonRoomFloor } from './PolygonRoomFloor'
 import { SharedWall } from './SharedWall'
+import { WallSegmentRenderer } from './WallSegmentRenderer'
 import { SCALE } from '@/lib/constants'
 import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
 import { ProjectThumbnailCapture } from '../homes/ProjectThumbnailCapture'
+import { useWallSegments } from '@/lib/use-wall-segments'
 
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
@@ -29,11 +32,61 @@ export function RoomScene() {
   const { mode, setMode, isDraggingObject, isPlacing, placementState } = useInteractionMode()
   const [spaceHeld, setSpaceHeld] = useState(false)
 
-  // Combined clear function that clears both selection systems
+  // V3 Wall Segments - two-sided wall rendering
+  const {
+    floorplanV3,
+    useV3Rendering,
+    selectedSegmentId,
+    selectedSide,
+    selectWallSide,
+    clearWallSelection,
+    doorPlacementMode,
+    addDoor,
+    setDoorPlacementMode,
+  } = useWallSegments()
+
+  // Log doorPlacementMode changes
+  useEffect(() => {
+    console.log('[RoomScene] doorPlacementMode changed:', doorPlacementMode)
+  }, [doorPlacementMode])
+
+  // Handle door placement from 3D click
+  const handleDoorPlace = useCallback((segmentId: string, clickPosition: number) => {
+    // Offset by half door width so door centers on click
+    // Default door width is 3ft, so offset by 1.5ft
+    const DEFAULT_DOOR_WIDTH = 3
+    const doorPosition = Math.max(0, clickPosition - DEFAULT_DOOR_WIDTH / 2)
+    console.log('[RoomScene] Door place request:', segmentId, 'click:', clickPosition, 'door position:', doorPosition)
+
+    // Select the segment that received the door (in case it's different from currently selected)
+    // This handles the case where overlapping segments exist
+    if (segmentId !== selectedSegmentId) {
+      console.log('[RoomScene] Switching selection to clicked segment:', segmentId)
+      selectWallSide(segmentId, 'A') // Default to side A
+    }
+
+    const success = addDoor(segmentId, doorPosition)
+    if (success) {
+      // Exit door placement mode after successfully placing a door
+      setDoorPlacementMode(false)
+    }
+  }, [addDoor, setDoorPlacementMode, selectedSegmentId, selectWallSide])
+
+  // Combined clear function that clears all selection systems
   const clearAllSelections = useCallback(() => {
     clearSelection()
     setSelectedFurnitureId(null)
-  }, [clearSelection, setSelectedFurnitureId])
+    clearWallSelection()
+  }, [clearSelection, setSelectedFurnitureId, clearWallSelection])
+
+  // Wrapper for wall segment selection that also clears other selections
+  const handleWallSegmentSelect = useCallback((segmentId: string, side: 'A' | 'B') => {
+    // Clear general selection so PropertiesPanel hides
+    clearSelection()
+    setSelectedFurnitureId(null)
+    // Then select the wall segment
+    selectWallSide(segmentId, side)
+  }, [clearSelection, setSelectedFurnitureId, selectWallSide])
 
   // Delete selected furniture
   const deleteSelectedFurniture = useCallback(() => {
@@ -288,15 +341,28 @@ export function RoomScene() {
 
         return (
           <group key={room.id}>
-            {/* Room - use PolygonRoom for arbitrary polygon shapes, Room for rectangles */}
+            {/* Room rendering:
+                - V3 mode (useV3Rendering): Use PolygonRoomFloor for floors, walls rendered separately
+                - V2 mode: Use PolygonRoom (includes walls) or Room for rectangles
+            */}
             {room.polygon && room.polygon.length >= 3 ? (
-              <PolygonRoom
-                polygon={room.polygon}
-                height={roomHeight}
-                position={roomPosition}
-                roomId={room.id}
-                doors={roomDoors}
-              />
+              useV3Rendering ? (
+                // V3: Floor only - walls rendered via WallSegmentRenderer below
+                <PolygonRoomFloor
+                  polygon={room.polygon}
+                  position={roomPosition}
+                  roomId={room.id}
+                />
+              ) : (
+                // V2: Full PolygonRoom with walls
+                <PolygonRoom
+                  polygon={room.polygon}
+                  height={roomHeight}
+                  position={roomPosition}
+                  roomId={room.id}
+                  doors={roomDoors}
+                />
+              )
             ) : (
               <Room
                 width={roomWidth}
@@ -328,8 +394,21 @@ export function RoomScene() {
         )
       })}
 
-      {/* Shared Walls - renders walls between adjacent rooms */}
-      {currentHome?.sharedWalls?.map(wall => (
+      {/* V3 Wall Segments - two-sided walls with independent styling per side */}
+      {useV3Rendering && floorplanV3 && (
+        <WallSegmentRenderer
+          segments={floorplanV3.wallSegments}
+          vertices={floorplanV3.vertices}
+          selectedSegmentId={selectedSegmentId}
+          selectedSide={selectedSide}
+          onSegmentSideClick={handleWallSegmentSelect}
+          doorPlacementMode={doorPlacementMode}
+          onDoorPlace={handleDoorPlace}
+        />
+      )}
+
+      {/* Shared Walls - only render when NOT using V3 (V3 absorbs this concept) */}
+      {!useV3Rendering && currentHome?.sharedWalls?.map(wall => (
         <SharedWall key={wall.id} wall={wall} />
       ))}
 
