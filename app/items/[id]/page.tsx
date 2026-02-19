@@ -74,8 +74,8 @@ export default function ItemDetailPage() {
   const [editThumbnailPath, setEditThumbnailPath] = useState(item?.thumbnailPath || '')
   const [editImages, setEditImages] = useState<ImagePair[]>(item?.images || [])
 
-  // Viewer gallery state - 'model' for 3D viewer, or index for which image to show
-  const [selectedViewerType, setSelectedViewerType] = useState<'model' | number>('model')
+  // Viewer gallery state - 'model' for 3D viewer, or { pairIndex, version } for images
+  const [selectedViewerType, setSelectedViewerType] = useState<'model' | { pairIndex: number; version: 'original' | 'processed' }>('model')
 
   // Dropdown menu state for add image button
   const [showAddImageMenu, setShowAddImageMenu] = useState(false)
@@ -344,6 +344,11 @@ export default function ItemDetailPage() {
       images: updatedImages,
       thumbnailPath: newThumbnail || undefined
     })
+
+    // Show success toast
+    setToastMessage('Background removed!')
+    setToastType('success')
+    setShowToast(true)
   }, [itemId, getItem, updateItem])
 
   // Handle mask correction saved - update the image pair with new processed URL
@@ -465,37 +470,80 @@ export default function ItemDetailPage() {
     setShowMaskCorrection(true)
   }
 
-  // Handle paste from clipboard
+  // Handle paste from clipboard - directly upload the image
   const handlePasteFromClipboard = async () => {
     setShowAddImageMenu(false)
     try {
       const clipboardItems = await navigator.clipboard.read()
-      for (const item of clipboardItems) {
-        const imageType = item.types.find(type => type.startsWith('image/'))
+      for (const clipboardItem of clipboardItems) {
+        const imageType = clipboardItem.types.find(type => type.startsWith('image/'))
         if (imageType) {
-          const blob = await item.getType(imageType)
+          const blob = await clipboardItem.getType(imageType)
           const file = new File([blob], `pasted-${Date.now()}.png`, { type: imageType })
 
-          // Create a DataTransfer to simulate file input
-          const dataTransfer = new DataTransfer()
-          dataTransfer.items.add(file)
+          setToastMessage('Uploading pasted image...')
+          setToastType('info')
+          setShowToast(true)
 
-          // Trigger the file input handler through ImageGallery
-          if (triggerUploadRef.current) {
-            // We need to manually trigger the upload flow
-            // For now, let's use a workaround - create a hidden input and trigger it
-            const input = document.createElement('input')
-            input.type = 'file'
-            input.accept = 'image/*'
-            input.files = dataTransfer.files
-            input.dispatchEvent(new Event('change', { bubbles: true }))
+          // Upload the original image
+          const formData = new FormData()
+          formData.append('files', file)
+          formData.append('itemId', `paste-${Date.now()}`)
 
-            // Actually, let's just call the ImageGallery's handleFileSelect indirectly
-            // by using the file input ref
-            triggerUploadRef.current()
+          const uploadRes = await fetch('/api/items/upload-images', {
+            method: 'POST',
+            body: formData
+          })
+          const uploadResult = await uploadRes.json()
+
+          if (!uploadResult.success) {
+            throw new Error('Failed to upload image')
           }
 
-          setToastMessage('Image pasted from clipboard!')
+          const originalUrl = uploadResult.imagePaths[0]
+
+          // Add image to gallery immediately (without processed version yet)
+          handleImagesAdd([{ original: originalUrl, processed: null }])
+
+          // Start background removal asynchronously
+          const reader = new FileReader()
+          reader.onload = async () => {
+            const base64 = (reader.result as string).split(',')[1]
+            try {
+              const bgRes = await fetch('/api/remove_bg', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageData: base64 })
+              })
+              const bgResult = await bgRes.json()
+
+              if (bgResult.success) {
+                // Upload processed image
+                const processedBlob = await fetch(`data:image/png;base64,${bgResult.processedImageData}`).then(r => r.blob())
+                const processedFile = new File([processedBlob], `processed-${Date.now()}.png`, { type: 'image/png' })
+
+                const processedFormData = new FormData()
+                processedFormData.append('files', processedFile)
+                processedFormData.append('itemId', `paste-processed-${Date.now()}`)
+
+                const processedUploadRes = await fetch('/api/items/upload-images', {
+                  method: 'POST',
+                  body: processedFormData
+                })
+                const processedUploadResult = await processedUploadRes.json()
+
+                if (processedUploadResult.success) {
+                  // Update the image pair with processed version
+                  handleImageUpdate(originalUrl, processedUploadResult.imagePaths[0])
+                }
+              }
+            } catch (err) {
+              console.error('Background removal failed:', err)
+            }
+          }
+          reader.readAsDataURL(file)
+
+          setToastMessage('Image added! Processing background removal...')
           setToastType('success')
           setShowToast(true)
           return
@@ -587,6 +635,33 @@ export default function ItemDetailPage() {
         />
       )}
 
+      {/* Hidden ImageGallery for handling file uploads */}
+      <div className="hidden">
+        <ImageGallery
+          images={editImages}
+          thumbnailPath={item.thumbnailPath}
+          isEditing={true}
+          onThumbnailChange={setEditThumbnailPath}
+          onImagesAdd={handleImagesAdd}
+          onImageUpdate={handleImageUpdate}
+          onImageDelete={(pairIndex) => {
+            const deletedImage = editImages[pairIndex]
+            setEditImages(prev => prev.filter((_, i) => i !== pairIndex))
+            if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
+              setEditThumbnailPath('')
+            }
+            if (selectedViewerType !== 'model' && selectedViewerType.pairIndex === pairIndex) {
+              setSelectedViewerType('model')
+            } else if (selectedViewerType !== 'model' && selectedViewerType.pairIndex > pairIndex) {
+              setSelectedViewerType({ ...selectedViewerType, pairIndex: selectedViewerType.pairIndex - 1 })
+            }
+          }}
+          currentThumbnail={editThumbnailPath}
+          uploadOnly
+          triggerUploadRef={triggerUploadRef}
+        />
+      </div>
+
       {/* Navigation Bar */}
       <Navbar activeTab="inventory" breadcrumb={item.name} isSaving={isSaving} lastSavedAt={lastSavedAt} />
 
@@ -611,9 +686,27 @@ export default function ItemDetailPage() {
                     depth: depthFeet + depthInches / 12
                   }}
                 />
-                {/* Floating regenerate button */}
-                {editImages.some(img => img.processed) && (
-                  <div className="absolute top-4 right-4 opacity-0 group-hover/canvas:opacity-100 transition-opacity">
+                {/* Floating action buttons on 3D model */}
+                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover/canvas:opacity-100 transition-opacity">
+                  {/* Use as thumbnail button */}
+                  <button
+                    onClick={() => {
+                      // Trigger thumbnail regeneration from current model view
+                      setShouldRegenerateThumbnail(true)
+                      setToastMessage('Capturing model snapshot as thumbnail...')
+                      setToastType('info')
+                      setShowToast(true)
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md text-graphite hover:bg-sage hover:text-white transition-colors text-sm font-body"
+                    title="Use as thumbnail"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Use as Thumbnail
+                  </button>
+                  {/* Regenerate button */}
+                  {editImages.some(img => img.processed) && (
                     <button
                       onClick={() => setShowRegenerateModal(true)}
                       className="flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md text-graphite hover:bg-sage hover:text-white transition-colors text-sm font-body"
@@ -624,8 +717,8 @@ export default function ItemDetailPage() {
                       </svg>
                       Regenerate
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
                 </div>
               ) : item.parametricShape ? (
                 <ParametricShapePreview
@@ -648,7 +741,76 @@ export default function ItemDetailPage() {
                     <p className="text-taupe/50 font-body text-sm">This usually takes 1-3 minutes...</p>
                   </div>
                 </div>
+              ) : editImages.length === 0 ? (
+                // No images AND no model - show Add Photos as primary action
+                <div className="w-full h-full flex items-center justify-center relative">
+                  <div className="text-center">
+                    <div className="text-8xl text-taupe/20 mb-4">📷</div>
+                    <p className="text-taupe/40 font-body mb-4">No photos yet</p>
+
+                    {/* Add Photos Menu */}
+                    <div className="relative inline-block">
+                      <button
+                        onClick={() => setShowAddImageMenu(!showAddImageMenu)}
+                        className="flex items-center gap-2 px-4 py-2 bg-sage text-white rounded-lg hover:bg-sage/90 transition-colors text-sm font-body font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Photos
+                      </button>
+
+                      {showAddImageMenu && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setShowAddImageMenu(false)}
+                          />
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-20 bg-white rounded-xl shadow-lg border border-taupe/10 py-2 min-w-[200px]">
+                            <button
+                              onClick={() => {
+                                setShowAddImageMenu(false)
+                                triggerUploadRef.current?.()
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm font-body text-graphite hover:bg-porcelain flex items-center gap-3"
+                            >
+                              <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                              </svg>
+                              Upload from device
+                            </button>
+                            <button
+                              onClick={handlePasteFromClipboard}
+                              className="w-full px-4 py-2 text-left text-sm font-body text-graphite hover:bg-porcelain flex items-center gap-3"
+                            >
+                              <svg className="w-4 h-4 text-taupe" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                              Paste from clipboard
+                            </button>
+                            <div className="border-t border-taupe/10 my-1" />
+                            <button
+                              onClick={() => {
+                                setShowAddImageMenu(false)
+                                setToastMessage('Asset library coming soon!')
+                                setToastType('info')
+                                setShowToast(true)
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm font-body text-taupe/60 hover:bg-porcelain flex items-center gap-3"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                              </svg>
+                              Select from assets
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
               ) : (
+                // Has images but no model - show Add Model
                 <div className="w-full h-full flex items-center justify-center relative">
                   <div className="text-center">
                     <div className="text-8xl text-taupe/20 mb-4">
@@ -731,61 +893,93 @@ export default function ItemDetailPage() {
               )
             ) : (
               // Image Viewer
-              <div className="w-full h-full flex items-center justify-center p-8 pb-24">
-                {editImages[selectedViewerType] && (
-                  <div className="relative max-w-2xl max-h-full group">
-                    <Image
-                      src={editImages[selectedViewerType].processed || editImages[selectedViewerType].original}
-                      alt={`Image ${selectedViewerType + 1}`}
-                      width={800}
-                      height={800}
-                      className="object-contain max-h-[calc(100vh-200px)]"
-                      unoptimized
-                    />
-                    {/* Floating action buttons on image */}
-                    <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Use as thumbnail button */}
-                      <button
-                        onClick={() => {
-                          const currentImage = editImages[selectedViewerType]
-                          const newThumbnail = currentImage.processed || currentImage.original
-                          setEditThumbnailPath(newThumbnail)
-                          updateItem(itemId, { thumbnailPath: newThumbnail })
-                        }}
-                        className={cn(
-                          "p-2 rounded-lg shadow-md transition-colors",
-                          editThumbnailPath === (editImages[selectedViewerType].processed || editImages[selectedViewerType].original)
-                            ? "bg-sage text-white"
-                            : "bg-white/90 backdrop-blur-sm text-graphite hover:bg-sage hover:text-white"
+              (() => {
+                const { pairIndex, version } = selectedViewerType as { pairIndex: number; version: 'original' | 'processed' }
+                const imagePair = editImages[pairIndex]
+                const imageUrl = version === 'processed' && imagePair?.processed ? imagePair.processed : imagePair?.original
+                const isCurrentThumbnail = editThumbnailPath === imageUrl
+
+                return (
+                  <div className="w-full h-full flex items-center justify-center p-8 pb-24">
+                    {imagePair && imageUrl && (
+                      <div className="relative max-w-2xl max-h-full group">
+                        <Image
+                          src={imageUrl}
+                          alt={`Image ${pairIndex + 1} (${version})`}
+                          width={800}
+                          height={800}
+                          className="object-contain max-h-[calc(100vh-200px)] relative"
+                          unoptimized
+                        />
+                        {/* Processing indicator overlay - shows when viewing original and processed is still pending */}
+                        {version === 'original' && imagePair.original && !imagePair.processed && (
+                          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-full">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-body">Removing background...</span>
+                          </div>
                         )}
-                        title="Use as thumbnail"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      {/* Delete button */}
-                      <button
-                        onClick={() => {
-                          const index = selectedViewerType as number
-                          const deletedImage = editImages[index]
-                          setEditImages(prev => prev.filter((_, i) => i !== index))
-                          if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
-                            setEditThumbnailPath('')
-                          }
-                          setSelectedViewerType('model')
-                        }}
-                        className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md text-scarlet hover:bg-scarlet hover:text-white transition-colors"
-                        title="Delete image"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
+                        {/* Version label */}
+                        <div className={cn(
+                          "absolute bottom-4 left-4 px-3 py-1 rounded-full text-xs font-body font-medium",
+                          version === 'processed' ? "bg-sage text-white" : "bg-graphite/70 text-white"
+                        )}>
+                          {version === 'processed' ? 'No Background' : 'Original'}
+                        </div>
+                        {/* Floating action buttons on image */}
+                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Use as thumbnail button */}
+                          <button
+                            onClick={() => {
+                              setEditThumbnailPath(imageUrl)
+                              updateItem(itemId, { thumbnailPath: imageUrl })
+                            }}
+                            className={cn(
+                              "p-2 rounded-lg shadow-md transition-colors",
+                              isCurrentThumbnail
+                                ? "bg-sage text-white"
+                                : "bg-white/90 backdrop-blur-sm text-graphite hover:bg-sage hover:text-white"
+                            )}
+                            title="Use as thumbnail"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                          {/* Correct mask button - only for processed version */}
+                          {version === 'processed' && imagePair.processed && (
+                            <button
+                              onClick={() => handleCorrectMask(pairIndex)}
+                              className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md text-graphite hover:bg-sage hover:text-white transition-colors"
+                              title="Correct mask"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                              </svg>
+                            </button>
+                          )}
+                          {/* Delete button */}
+                          <button
+                            onClick={() => {
+                              const deletedImage = editImages[pairIndex]
+                              setEditImages(prev => prev.filter((_, i) => i !== pairIndex))
+                              if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
+                                setEditThumbnailPath('')
+                              }
+                              setSelectedViewerType('model')
+                            }}
+                            className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md text-scarlet hover:bg-scarlet hover:text-white transition-colors"
+                            title="Delete image pair"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                )
+              })()
             )}
 
             {/* Floating Thumbnail Gallery - only show when there are images or a model */}
@@ -809,69 +1003,107 @@ export default function ItemDetailPage() {
                   </button>
                 )}
 
-                {/* Image Thumbnails */}
-                {editImages.map((pair, index) => (
-                  <div
-                    key={index}
-                    className="relative group"
-                  >
-                    <button
-                      onClick={() => setSelectedViewerType(index)}
-                      className={cn(
-                        'w-12 h-12 rounded-lg overflow-hidden transition-all',
-                        selectedViewerType === index
-                          ? 'ring-2 ring-taupe/30 ring-offset-2'
-                          : 'opacity-70 hover:opacity-100'
-                      )}
-                      title={`View Image ${index + 1}`}
-                    >
-                      <div className="relative w-full h-full">
-                        <Image
-                          src={pair.processed || pair.original}
-                          alt={`Thumbnail ${index + 1}`}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    </button>
-                    {/* Correct mask button on hover - only for images with processed version */}
-                    {pair.processed && (
+                {/* Image Thumbnails - show both original and processed as separate thumbnails */}
+                {editImages.map((pair, pairIndex) => (
+                  <div key={pairIndex} className="flex gap-1">
+                    {/* Original thumbnail */}
+                    <div className="relative group">
+                      <button
+                        onClick={() => setSelectedViewerType({ pairIndex, version: 'original' })}
+                        className={cn(
+                          'w-12 h-12 rounded-lg overflow-hidden transition-all',
+                          selectedViewerType !== 'model' && selectedViewerType.pairIndex === pairIndex && selectedViewerType.version === 'original'
+                            ? 'ring-2 ring-taupe/30 ring-offset-2'
+                            : 'opacity-70 hover:opacity-100'
+                        )}
+                        title={`Original ${pairIndex + 1}`}
+                      >
+                        <div className="relative w-full h-full">
+                          <Image
+                            src={pair.original}
+                            alt={`Original ${pairIndex + 1}`}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                          {/* Processing indicator - shows when background removal is in progress */}
+                          {!pair.processed && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {/* Label */}
+                          <div className="absolute bottom-0 inset-x-0 bg-graphite/70 text-white text-[8px] py-0.5 text-center">
+                            Original
+                          </div>
+                        </div>
+                      </button>
+                      {/* Delete button on hover - deletes entire pair */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleCorrectMask(index)
+                          const deletedImage = editImages[pairIndex]
+                          setEditImages(prev => prev.filter((_, i) => i !== pairIndex))
+                          if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
+                            setEditThumbnailPath('')
+                          }
+                          if (selectedViewerType !== 'model' && selectedViewerType.pairIndex === pairIndex) {
+                            setSelectedViewerType('model')
+                          } else if (selectedViewerType !== 'model' && selectedViewerType.pairIndex > pairIndex) {
+                            setSelectedViewerType({ ...selectedViewerType, pairIndex: selectedViewerType.pairIndex - 1 })
+                          }
                         }}
-                        className="absolute -top-1 -left-1 w-5 h-5 bg-sage rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                        title="Correct mask"
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-scarlet rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                        title="Delete image pair"
                       >
                         <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
+                    </div>
+
+                    {/* Processed thumbnail - only show when processed exists */}
+                    {pair.processed && (
+                      <div className="relative group">
+                        <button
+                          onClick={() => setSelectedViewerType({ pairIndex, version: 'processed' })}
+                          className={cn(
+                            'w-12 h-12 rounded-lg overflow-hidden transition-all',
+                            selectedViewerType !== 'model' && selectedViewerType.pairIndex === pairIndex && selectedViewerType.version === 'processed'
+                              ? 'ring-2 ring-sage/50 ring-offset-2'
+                              : 'opacity-70 hover:opacity-100'
+                          )}
+                          title={`No Background ${pairIndex + 1}`}
+                        >
+                          <div className="relative w-full h-full">
+                            <Image
+                              src={pair.processed}
+                              alt={`Processed ${pairIndex + 1}`}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                            {/* Label */}
+                            <div className="absolute bottom-0 inset-x-0 bg-sage/90 text-white text-[8px] py-0.5 text-center">
+                              No BG
+                            </div>
+                          </div>
+                        </button>
+                        {/* Correct mask button on hover */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCorrectMask(pairIndex)
+                          }}
+                          className="absolute -top-1 -left-1 w-5 h-5 bg-sage rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                          title="Correct mask"
+                        >
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
-                    {/* Delete button on hover */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const deletedImage = editImages[index]
-                        setEditImages(prev => prev.filter((_, i) => i !== index))
-                        if (deletedImage && (editThumbnailPath === deletedImage.original || editThumbnailPath === deletedImage.processed)) {
-                          setEditThumbnailPath('')
-                        }
-                        if (selectedViewerType === index) {
-                          setSelectedViewerType('model')
-                        } else if (typeof selectedViewerType === 'number' && selectedViewerType > index) {
-                          setSelectedViewerType(selectedViewerType - 1)
-                        }
-                      }}
-                      className="absolute -top-1 -right-1 w-5 h-5 bg-scarlet rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                      title="Delete image"
-                    >
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
                   </div>
                 ))}
 

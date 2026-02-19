@@ -362,58 +362,22 @@ export default function ItemsPage() {
             {/* Step 1: Choose Upload Method */}
             {uploadStep === 'choose' && (
               <div className="space-y-4">
-                {/* GLB Upload Option */}
+                {/* Normal Furniture Option */}
                 <button
-                  onClick={() => handleUploadMethodSelect('glb')}
-                  className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="text-4xl">📦</div>
-                    <div className="flex-1">
-                      <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
-                        Upload GLB File
-                      </h4>
-                      <p className="text-taupe/70 text-sm font-body">
-                        Upload a ready-to-use .glb 3D model file directly
-                      </p>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Image Upload Option */}
-                <button
-                  onClick={() => handleUploadMethodSelect('images')}
-                  className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="text-4xl">🖼️</div>
-                    <div className="flex-1">
-                      <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
-                        Upload Images
-                      </h4>
-                      <p className="text-taupe/70 text-sm font-body">
-                        Upload photos with AI background removal
-                      </p>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Draw Custom Shape Option */}
-                <button
-                  onClick={() => {
+                  onClick={async () => {
                     handleCloseModal()
-                    setShowCustomCreator(true)
+                    await handleCreateBlankItem()
                   }}
                   className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="text-4xl">✏️</div>
+                    <div className="text-4xl">🪑</div>
                     <div className="flex-1">
                       <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
-                        Draw Custom Shape
+                        Normal Furniture
                       </h4>
                       <p className="text-taupe/70 text-sm font-body">
-                        Draw a 2D shape and extrude it into a 3D item
+                        Create a new item and add photos or a 3D model
                       </p>
                     </div>
                   </div>
@@ -426,8 +390,8 @@ export default function ItemsPage() {
                   <div className="flex-1 h-px bg-taupe/20" />
                 </div>
 
-                {/* Quick Create Options - Rug, Frame, Shelf */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Quick Create Options - Rug, Frame, Shelf, Custom Shape */}
+                <div className="grid grid-cols-4 gap-3">
                   {/* Create Rug */}
                   <button
                     onClick={() => {
@@ -467,6 +431,20 @@ export default function ItemsPage() {
                     <div className="text-3xl mb-2">📚</div>
                     <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
                       Shelf
+                    </h4>
+                  </button>
+
+                  {/* Draw Custom Shape */}
+                  <button
+                    onClick={() => {
+                      handleCloseModal()
+                      setShowCustomCreator(true)
+                    }}
+                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
+                  >
+                    <div className="text-3xl mb-2">✏️</div>
+                    <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                      Custom
                     </h4>
                   </button>
                 </div>
