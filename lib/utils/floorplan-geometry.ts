@@ -328,17 +328,24 @@ export function detectAllRooms(
   // Convert back to arrays and filter out outer boundary
   const allCycles = Array.from(cycles).map(s => s.split(','))
 
-  // Filter: Keep only cycles with >= 3 walls
-  const validCycles = allCycles.filter(cycle => cycle.length >= 3)
+  // Filter: Keep only cycles with >= 3 walls that form simple (non-self-intersecting) polygons
+  const validCycles = allCycles.filter(cycle => {
+    if (cycle.length < 3) return false
+    return isSimplePolygon(cycle, walls, vertices)
+  })
 
   // Remove outer boundary (cycle with largest perimeter)
+  let innerCycles = validCycles
   if (validCycles.length > 1) {
     const perimeters = validCycles.map(cycle => calculateCyclePerimeter(cycle, walls, vertexMap))
     const maxPerimeter = Math.max(...perimeters)
-    return validCycles.filter((_, i) => perimeters[i] < maxPerimeter - 0.1) // Keep non-outer cycles
+    innerCycles = validCycles.filter((_, i) => perimeters[i] < maxPerimeter - 0.1)
   }
 
-  return validCycles
+  // Filter out cycles that contain other cycles (keep only elementary/minimal cycles)
+  const elementaryCycles = filterElementaryCycles(innerCycles, walls, vertices)
+
+  return elementaryCycles
 }
 
 /**
@@ -518,6 +525,200 @@ function calculateCyclePerimeter(
 
   return perimeter
 }
+
+/**
+ * Filter out non-elementary cycles (cycles that contain other cycles within them)
+ * Keep only the minimal/face cycles
+ */
+function filterElementaryCycles(
+  cycles: string[][],
+  walls: FloorplanWallV2[],
+  vertices: FloorplanVertex[]
+): string[][] {
+  if (cycles.length <= 1) return cycles
+
+  const wallMap = new Map(walls.map(w => [w.id, w]))
+  const vertexMap = new Map(vertices.map(v => [v.id, v]))
+
+  // Build polygon for each cycle
+  const cyclePolygons = cycles.map(wallIds => {
+    return getCyclePolygon(wallIds, wallMap, vertexMap)
+  })
+
+  // Filter: keep cycles whose interior doesn't contain vertices from other walls
+  return cycles.filter((cycle, i) => {
+    const polygon = cyclePolygons[i]
+    if (!polygon) return false
+
+    // Get all vertices that are part of this cycle
+    const cycleVertexIds = new Set<string>()
+    for (const wallId of cycle) {
+      const wall = wallMap.get(wallId)
+      if (wall) {
+        cycleVertexIds.add(wall.startVertexId)
+        cycleVertexIds.add(wall.endVertexId)
+      }
+    }
+
+    // Check if any other vertex is inside this polygon
+    for (const vertex of vertices) {
+      // Skip vertices that are part of this cycle's boundary
+      if (cycleVertexIds.has(vertex.id)) continue
+
+      // If an external vertex is inside, this cycle contains other structures
+      if (isPointInPolygon(vertex.x, vertex.y, polygon)) {
+        return false
+      }
+    }
+
+    return true
+  })
+}
+
+/**
+ * Get polygon points for a cycle
+ */
+function getCyclePolygon(
+  wallIds: string[],
+  wallMap: Map<string, FloorplanWallV2>,
+  vertexMap: Map<string, FloorplanVertex>
+): Array<{ x: number; y: number }> | null {
+  if (wallIds.length < 3) return null
+
+  const firstWall = wallMap.get(wallIds[0])
+  if (!firstWall) return null
+
+  // Try both starting vertices
+  for (const startVertexId of [firstWall.startVertexId, firstWall.endVertexId]) {
+    const points: Array<{ x: number; y: number }> = []
+    let currentVertexId = startVertexId
+
+    let valid = true
+    for (const wallId of wallIds) {
+      const wall = wallMap.get(wallId)
+      if (!wall) {
+        valid = false
+        break
+      }
+
+      const vertex = vertexMap.get(currentVertexId)
+      if (!vertex) {
+        valid = false
+        break
+      }
+
+      points.push({ x: vertex.x, y: vertex.y })
+
+      currentVertexId = wall.startVertexId === currentVertexId
+        ? wall.endVertexId
+        : wall.startVertexId
+    }
+
+    if (valid && points.length >= 3) {
+      return points
+    }
+  }
+
+  return null
+}
+
+/**
+ * Point-in-polygon test using ray casting algorithm
+ */
+function isPointInPolygon(
+  x: number,
+  y: number,
+  polygon: Array<{ x: number; y: number }>
+): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y
+    const xj = polygon[j].x, yj = polygon[j].y
+
+    const intersect = ((yi > y) !== (yj > y)) &&
+      (x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+/**
+ * Check if a cycle forms a simple (non-self-intersecting) polygon
+ * Tries both possible starting vertices to find a valid polygon
+ */
+function isSimplePolygon(
+  wallIds: string[],
+  walls: FloorplanWallV2[],
+  vertices: FloorplanVertex[]
+): boolean {
+  if (wallIds.length < 3) return false
+
+  const wallMap = new Map(walls.map(w => [w.id, w]))
+  const vertexMap = new Map(vertices.map(v => [v.id, v]))
+
+  const firstWall = wallMap.get(wallIds[0])
+  if (!firstWall) return false
+
+  // Try both possible starting vertices
+  for (const startVertexId of [firstWall.startVertexId, firstWall.endVertexId]) {
+    const orderedVertices: FloorplanVertex[] = []
+    let currentVertexId = startVertexId
+
+    // Build ordered list of vertices for this cycle
+    let validTraversal = true
+    for (const wallId of wallIds) {
+      const wall = wallMap.get(wallId)
+      if (!wall) {
+        validTraversal = false
+        break
+      }
+
+      const vertex = vertexMap.get(currentVertexId)
+      if (!vertex) {
+        validTraversal = false
+        break
+      }
+
+      orderedVertices.push(vertex)
+
+      // Move to next vertex
+      currentVertexId = wall.startVertexId === currentVertexId
+        ? wall.endVertexId
+        : wall.startVertexId
+    }
+
+    if (!validTraversal || orderedVertices.length < 3) continue
+
+    // Check for self-intersection: test each edge against all non-adjacent edges
+    let hasIntersection = false
+    for (let i = 0; i < orderedVertices.length; i++) {
+      const p1 = orderedVertices[i]
+      const p2 = orderedVertices[(i + 1) % orderedVertices.length]
+
+      for (let j = i + 2; j < orderedVertices.length; j++) {
+        // Skip adjacent edges and the closing edge
+        if (j === orderedVertices.length - 1 && i === 0) continue
+
+        const p3 = orderedVertices[j]
+        const p4 = orderedVertices[(j + 1) % orderedVertices.length]
+
+        if (segmentsIntersect(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y)) {
+          hasIntersection = true
+          break
+        }
+      }
+      if (hasIntersection) break
+    }
+
+    // If this traversal produces a simple polygon, accept it
+    if (!hasIntersection) {
+      return true
+    }
+  }
+
+  return false
+}
+
 
 /**
  * Get ordered polygon points for a room (for rendering)

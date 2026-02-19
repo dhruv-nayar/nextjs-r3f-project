@@ -395,6 +395,38 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     })
   }, [rooms, createRoom])
 
+  // Reconcile rooms after wall deletion - removes invalid rooms and creates merged rooms
+  const reconcileRooms = useCallback((currentWalls: FloorplanWallV2[], currentVertices: FloorplanVertex[], deletedWallId?: string) => {
+    // Helper to normalize a wall ID array for comparison (sort it)
+    const normalizeWallIds = (wallIds: string[]) => [...wallIds].sort().join(',')
+
+    // First, remove any rooms that referenced the deleted wall
+    let remainingRooms = rooms
+    if (deletedWallId) {
+      remainingRooms = rooms.filter(room => !room.wallIds.includes(deletedWallId))
+      setRooms(remainingRooms)
+    }
+
+    // Detect all valid closed shapes from current walls
+    const detectedCycles = detectAllRooms(currentWalls, currentVertices)
+
+    // Create a map of existing room wall sets
+    const existingRoomWallSets = new Set(
+      remainingRooms.map(room => normalizeWallIds(room.wallIds))
+    )
+
+    // Find new cycles that don't have rooms yet (e.g., merged rooms)
+    const newCycles = detectedCycles.filter(cycle => {
+      const normalizedCycle = normalizeWallIds(cycle)
+      return !existingRoomWallSets.has(normalizedCycle)
+    })
+
+    // Create rooms for new cycles
+    newCycles.forEach(wallIds => {
+      createRoom(wallIds)
+    })
+  }, [rooms, createRoom])
+
   // Move a vertex (updates in place)
   const moveVertex = useCallback((vertexId: string, x: number, y: number) => {
     setVertices((prev) =>
@@ -413,16 +445,6 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     const updatedWalls = walls.filter(w => w.id !== wallId)
     setWalls(updatedWalls)
 
-    // Update rooms (remove rooms that used this wall and now have <3 walls)
-    setRooms((prev) =>
-      prev
-        .map(room => ({
-          ...room,
-          wallIds: room.wallIds.filter(id => id !== wallId)
-        }))
-        .filter(room => room.wallIds.length >= 3)
-    )
-
     // Find orphaned vertices (no connected walls)
     const vertexIdsToCheck = [wall.startVertexId, wall.endVertexId]
     const orphanedVertices = vertexIdsToCheck.filter(vId => {
@@ -433,12 +455,17 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     })
 
     // Remove orphaned vertices
+    let updatedVertices = vertices
     if (orphanedVertices.length > 0) {
-      setVertices((prev) => prev.filter(v => !orphanedVertices.includes(v.id)))
+      updatedVertices = vertices.filter(v => !orphanedVertices.includes(v.id))
+      setVertices(updatedVertices)
     }
 
+    // Reconcile rooms: remove invalid rooms, create merged rooms
+    reconcileRooms(updatedWalls, updatedVertices, wallId)
+
     setSelectedWallId(null)
-  }, [walls])
+  }, [walls, vertices, reconcileRooms])
 
   // Delete a door from a wall
   const deleteDoor = useCallback((wallId: string, doorId: string) => {
