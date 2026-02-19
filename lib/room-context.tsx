@@ -74,26 +74,54 @@ const MAX_HISTORY_SIZE = 50
 
 export function RoomProvider({ children }: { children: ReactNode }) {
   const homeContext = useHome()
-  const currentHomeRooms = homeContext.currentHome?.rooms || DEFAULT_ROOMS
+
+  // Use empty array as default - never use DEFAULT_ROOMS for new/empty projects
+  const currentHomeRooms = homeContext.currentHome?.rooms || []
 
   const [rooms, setRoomsState] = useState<Room[]>(currentHomeRooms)
   const [currentRoomId, setCurrentRoomId] = useState<string>(currentHomeRooms[0]?.id || '')
 
-  // Sync with home context when current home changes
-  useEffect(() => {
-    if (homeContext.currentHome) {
-      setRoomsState(homeContext.currentHome.rooms)
-      setHistoryIndex(0)
-      setHistory([JSON.parse(JSON.stringify(homeContext.currentHome.rooms))])
-      if (homeContext.currentHome.rooms.length > 0) {
-        setCurrentRoomId(homeContext.currentHome.rooms[0].id)
-      }
-    }
-  }, [homeContext.currentHomeId])
+  // Track home ID to detect project switches
+  const prevHomeIdRef = useRef<string | null>(null)
 
   // Sync when home context's rooms are updated (e.g., when instances are added via HomeContext)
   // Use a ref to track the last synced updatedAt to avoid unnecessary updates
   const lastSyncedUpdatedAt = useRef<string | undefined>(undefined)
+
+  // Sync with home context when current home changes
+  useEffect(() => {
+    const currentHomeId = homeContext.currentHomeId || null
+
+    // Detect home switch (including initial load)
+    if (prevHomeIdRef.current !== currentHomeId) {
+      console.log('[RoomContext] Home changed from', prevHomeIdRef.current, 'to', currentHomeId)
+
+      // Reset the lastSyncedUpdatedAt to allow the next sync effect to run
+      lastSyncedUpdatedAt.current = undefined
+
+      if (homeContext.currentHome) {
+        const newRooms = homeContext.currentHome.rooms || []
+        console.log('[RoomContext] Syncing rooms for new home, count:', newRooms.length)
+        setRoomsState(newRooms)
+        setHistoryIndex(0)
+        setHistory([JSON.parse(JSON.stringify(newRooms))])
+        if (newRooms.length > 0) {
+          setCurrentRoomId(newRooms[0].id)
+        } else {
+          setCurrentRoomId('')
+        }
+      } else {
+        // No home loaded - reset to empty state
+        console.log('[RoomContext] No home loaded, resetting to empty state')
+        setRoomsState([])
+        setCurrentRoomId('')
+        setHistoryIndex(0)
+        setHistory([[]])
+      }
+
+      prevHomeIdRef.current = currentHomeId
+    }
+  }, [homeContext.currentHomeId, homeContext.currentHome])
 
   useEffect(() => {
     if (homeContext.currentHome && !isUndoRedoRef.current) {
