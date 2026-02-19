@@ -46,6 +46,9 @@ interface HomeContextType {
   // Floorplan V3 (two-sided wall segments with styles/doors)
   setFloorplanDataV3: (homeId: string, data: FloorplanDataV3) => void
   getFloorplanDataV3: (homeId: string) => FloorplanDataV3 | undefined
+
+  // Force immediate save to localStorage (bypasses debounce)
+  flushHomesToStorage: () => void
 }
 
 const HomeContext = createContext<HomeContextType | undefined>(undefined)
@@ -391,21 +394,28 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       homeId
     }))
 
-    setHomes(prev =>
-      prev.map(home =>
-        home.id === homeId
-          ? {
-              ...home,
-              rooms: roomsWithHomeId,
-              sharedWalls,
-              floorplanDataV2: data,
-              updatedAt: new Date().toISOString()
-            }
-          : home
-      )
+    // Compute the new homes array for both state update AND immediate storage
+    const updatedHomes = homes.map(home =>
+      home.id === homeId
+        ? {
+            ...home,
+            rooms: roomsWithHomeId,
+            sharedWalls,
+            floorplanDataV2: data,
+            updatedAt: new Date().toISOString()
+          }
+        : home
     )
 
-    console.log('[buildRoomsFromFloorplanV2] Homes updated successfully')
+    // Update React state
+    setHomes(updatedHomes)
+
+    // CRITICAL: Immediately save to localStorage to prevent race condition
+    // The normal debounced save (500ms) won't complete before navigation (100ms)
+    console.log('[buildRoomsFromFloorplanV2] Immediately saving to localStorage')
+    saveToStorage(STORAGE_KEYS.HOMES, updatedHomes)
+
+    console.log('[buildRoomsFromFloorplanV2] Homes updated and saved successfully')
   }
 
   // Two-way sync: Sync room changes from 3D back to V2 floorplan data
@@ -516,7 +526,11 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         buildRoomsFromFloorplanV2,
         syncRoomChangesToFloorplanV2,
         setFloorplanDataV3,
-        getFloorplanDataV3
+        getFloorplanDataV3,
+        flushHomesToStorage: () => {
+          console.log('[HomeContext] Flushing homes to storage immediately')
+          saveToStorage(STORAGE_KEYS.HOMES, homes)
+        }
       }}
     >
       {children}

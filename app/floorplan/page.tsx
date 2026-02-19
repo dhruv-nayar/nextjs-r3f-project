@@ -38,7 +38,8 @@ function FloorplanV2PageWrapper({ homeId }: { homeId: string }) {
     getFloorplanDataV2,
     setFloorplanDataV2,
     buildRoomsFromFloorplanV2,
-    switchHome
+    switchHome,
+    flushHomesToStorage
   } = useHome()
 
   const [floorplanData, setFloorplanData] = useState<FloorplanV2Data | null>(null)
