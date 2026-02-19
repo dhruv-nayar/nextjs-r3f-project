@@ -394,28 +394,29 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       homeId
     }))
 
-    // Compute the new homes array for both state update AND immediate storage
-    const updatedHomes = homes.map(home =>
-      home.id === homeId
-        ? {
-            ...home,
-            rooms: roomsWithHomeId,
-            sharedWalls,
-            floorplanDataV2: data,
-            updatedAt: new Date().toISOString()
-          }
-        : home
-    )
+    // Use functional update to get LATEST homes state (avoid stale closure)
+    // Also immediately save to localStorage after computing the update
+    setHomes(prevHomes => {
+      const updatedHomes = prevHomes.map(home =>
+        home.id === homeId
+          ? {
+              ...home,
+              rooms: roomsWithHomeId,
+              sharedWalls,
+              floorplanDataV2: data,
+              updatedAt: new Date().toISOString()
+            }
+          : home
+      )
 
-    // Update React state
-    setHomes(updatedHomes)
+      // CRITICAL: Immediately save to localStorage to prevent race condition
+      // The normal debounced save (500ms) won't complete before navigation (100ms)
+      console.log('[buildRoomsFromFloorplanV2] Immediately saving to localStorage')
+      saveToStorage(STORAGE_KEYS.HOMES, updatedHomes)
 
-    // CRITICAL: Immediately save to localStorage to prevent race condition
-    // The normal debounced save (500ms) won't complete before navigation (100ms)
-    console.log('[buildRoomsFromFloorplanV2] Immediately saving to localStorage')
-    saveToStorage(STORAGE_KEYS.HOMES, updatedHomes)
-
-    console.log('[buildRoomsFromFloorplanV2] Homes updated and saved successfully')
+      console.log('[buildRoomsFromFloorplanV2] Homes updated and saved successfully')
+      return updatedHomes
+    })
   }
 
   // Two-way sync: Sync room changes from 3D back to V2 floorplan data
