@@ -10,6 +10,7 @@ import { WallSide, RoomGridState, createDefaultRoomGridState } from '@/types/sel
 import { WallHeights } from '@/types/room'
 import { FloorMeasurementGrid, WallMeasurementGrid } from './MeasurementGrid'
 import { useWallMesh } from '@/lib/contexts/wall-mesh-context'
+import { useSurfaceMesh } from '@/lib/contexts/surface-mesh-context'
 
 interface Door {
   wall: 'north' | 'south' | 'east' | 'west'  // Which wall (north=+Z, south=-Z, east=+X, west=-X)
@@ -124,11 +125,13 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
   const eastWallRef = useRef<THREE.Mesh>(null)
   const westWallRef = useRef<THREE.Mesh>(null)
   const ceilingRef = useRef<THREE.Mesh>(null)
+  const floorMeshRef = useRef<THREE.Mesh>(null)
 
   // Wall mesh context for item placement
   const { registerWall, unregisterWall, registerCeiling, unregisterCeiling } = useWallMesh()
+  const { registerFloorSurface, unregisterFloorSurface } = useSurfaceMesh()
 
-  // Register wall and ceiling meshes with context
+  // Register wall, ceiling, and floor meshes with context
   useEffect(() => {
     if (!roomId) return
 
@@ -148,6 +151,10 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
     if (ceilingRef.current) {
       registerCeiling(roomId, ceilingRef.current)
     }
+    // Register floor surface
+    if (floorMeshRef.current) {
+      registerFloorSurface(roomId, floorMeshRef.current)
+    }
 
     // Cleanup on unmount
     return () => {
@@ -156,8 +163,9 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
       unregisterWall(roomId, 'east')
       unregisterWall(roomId, 'west')
       unregisterCeiling(roomId)
+      unregisterFloorSurface(roomId)
     }
-  }, [roomId, excludedWalls, registerWall, unregisterWall, registerCeiling, unregisterCeiling])
+  }, [roomId, excludedWalls, registerWall, unregisterWall, registerCeiling, unregisterCeiling, registerFloorSurface, unregisterFloorSurface])
 
   // Use provided grid settings or defaults
   const effectiveGridSettings = gridSettings || createDefaultRoomGridState()
@@ -290,6 +298,7 @@ export function Room({ width, height, depth, position = [0, 0, 0], doors = [], r
     >
       {/* Floor */}
       <mesh
+        ref={floorMeshRef}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
         receiveShadow

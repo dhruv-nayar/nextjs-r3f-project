@@ -197,10 +197,50 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     setHomes(prev =>
       prev.map(home => ({
         ...home,
-        rooms: home.rooms.map(room => ({
-          ...room,
-          instances: (room.instances || []).filter(instance => instance.id !== instanceId)
-        })),
+        rooms: home.rooms.map(room => {
+          const instances = room.instances || []
+
+          // Find the instance being deleted to get its position
+          const deletedInstance = instances.find(inst => inst.id === instanceId)
+
+          // If no instance found or instance doesn't exist in this room, just filter
+          if (!deletedInstance) {
+            return {
+              ...room,
+              instances: instances.filter(instance => instance.id !== instanceId)
+            }
+          }
+
+          // Reparent children: Find all instances that have this instance as parent
+          const updatedInstances = instances
+            .filter(instance => instance.id !== instanceId) // Remove the deleted instance
+            .map(instance => {
+              // If this instance's parent is the deleted instance
+              if (instance.parentSurfaceId === instanceId) {
+                // Convert relative position to world position
+                // Add parent's position to child's relative position
+                const worldPosition = {
+                  x: instance.position.x + deletedInstance.position.x,
+                  y: instance.position.y, // Y is typically floor level (0) for floor items
+                  z: instance.position.z + deletedInstance.position.z
+                }
+
+                // Reparent to floor
+                return {
+                  ...instance,
+                  position: worldPosition,
+                  parentSurfaceId: 'floor',
+                  parentSurfaceType: 'floor' as const
+                }
+              }
+              return instance
+            })
+
+          return {
+            ...room,
+            instances: updatedInstances
+          }
+        }),
         updatedAt: new Date().toISOString()
       }))
     )

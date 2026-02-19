@@ -8,8 +8,11 @@ import { useInteractionMode } from '@/lib/interaction-mode-context'
 import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
 import { useWallMesh } from '@/lib/contexts/wall-mesh-context'
+import { useSurfaceMesh, SurfaceHit } from '@/lib/contexts/surface-mesh-context'
 import * as THREE from 'three'
-import { ParametricShape, PlacementType } from '@/types/room'
+import { ParametricShape, PlacementType, WallPlacement } from '@/types/room'
+import { ParametricShapeRenderer, calculateShapeDimensions } from '@/components/items/ParametricShapeRenderer'
+import { worldToWallRelative, getWallFacingRotation, getWallNormal } from '@/lib/utils/wall-coordinates'
 
 interface PlacementGhostProps {
   itemId: string
@@ -23,6 +26,7 @@ function GhostModel({ itemId }: { itemId: string }) {
   const { addInstanceToRoom, updateInstance } = useHome()
   const { camera } = useThree()
   const { getAllWallMeshes, getAllCeilingMeshes } = useWallMesh()
+  const { raycastSurfaces, getAllPlaceableSurfaces } = useSurfaceMesh()
   const item = getItem(itemId)
   const groupRef = useRef<THREE.Group>(null)
   const floorPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
@@ -37,6 +41,8 @@ function GhostModel({ itemId }: { itemId: string }) {
   const [localPosition, setLocalPosition] = useState({ x: 0, y: 0, z: 0 })
   const positionRef = useRef({ x: 0, y: 0, z: 0 })
   const rotationRef = useRef({ x: 0, y: 0, z: 0 })
+  const wallPlacementRef = useRef<WallPlacement | null>(null)
+  const surfaceParentRef = useRef<{ surfaceId: string; surfaceType: 'floor' | 'item'; surfacePosition: { x: number; y: number; z: number } } | null>(null)
 
   // Get placement type from item
   const placementType: PlacementType = item?.placementType || 'floor'
@@ -62,13 +68,48 @@ function GhostModel({ itemId }: { itemId: string }) {
     let newRotation: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }
 
     if (placementType === 'floor') {
-      // Floor placement - raycast to floor plane (Y=0)
-      const intersectionPoint = new THREE.Vector3()
-      if (raycaster.ray.intersectPlane(floorPlane.current, intersectionPoint)) {
+      // Floor placement - raycast to surfaces (floor and item surfaces like rugs/shelves)
+      // First try registered surfaces
+      const surfaceHit = raycastSurfaces(raycaster)
+
+      if (surfaceHit) {
+        // Place at the hit point on the surface
         newPosition = {
-          x: intersectionPoint.x,
-          y: 0,
-          z: intersectionPoint.z
+          x: surfaceHit.point.x,
+          y: surfaceHit.point.y,
+          z: surfaceHit.point.z
+        }
+
+        // Track surface parent for hierarchy
+        // Get surface world position for relative positioning
+        const surfaceMesh = surfaceHit.mesh
+        const surfaceWorldPos = new THREE.Vector3()
+        surfaceMesh.getWorldPosition(surfaceWorldPos)
+
+        surfaceParentRef.current = {
+          surfaceId: surfaceHit.surfaceId,
+          surfaceType: surfaceHit.surfaceType,
+          surfacePosition: {
+            x: surfaceWorldPos.x,
+            y: surfaceWorldPos.y,
+            z: surfaceWorldPos.z
+          }
+        }
+      } else {
+        // Fallback: raycast to floor plane (Y=0) when no surfaces registered
+        const intersectionPoint = new THREE.Vector3()
+        if (raycaster.ray.intersectPlane(floorPlane.current, intersectionPoint)) {
+          newPosition = {
+            x: intersectionPoint.x,
+            y: 0,
+            z: intersectionPoint.z
+          }
+          // Default to floor parent
+          surfaceParentRef.current = {
+            surfaceId: 'floor',
+            surfaceType: 'floor',
+            surfacePosition: { x: 0, y: 0, z: 0 }
+          }
         }
       }
     } else if (placementType === 'ceiling') {
@@ -106,28 +147,67 @@ function GhostModel({ itemId }: { itemId: string }) {
         if (intersects.length > 0) {
           const hit = intersects[0]
           const wallMesh = hit.object as THREE.Mesh
-          const wallSide = wallMesh.userData.wallSide as string
+          const wallSide = wallMesh.userData.wallSide as 'north' | 'south' | 'east' | 'west'
+          const roomId = wallMesh.userData.roomId as string
 
-          // Position slightly in front of wall
-          const normal = hit.face?.normal || new THREE.Vector3(0, 0, 1)
-          const worldNormal = normal.clone().applyQuaternion(wallMesh.quaternion)
+          // Get item dimensions for positioning
+          const itemDepth = item?.dimensions?.depth || 0.5
+
+          // Get the ACTUAL wall normal from the mesh's world transform
+          // The wall geometry faces +Z in local space, so we transform (0,0,1) to world space
+          // This works for walls at ANY angle, not just cardinal directions
+
+          // Ensure the world matrix is up to date before reading
+          wallMesh.updateWorldMatrix(true, false)
+
+          const worldQuaternion = new THREE.Quaternion()
+          wallMesh.getWorldQuaternion(worldQuaternion)
+          const wallNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQuaternion)
+          // Ensure normal is horizontal (zero out Y component and renormalize)
+          wallNormal.y = 0
+          if (wallNormal.length() < 0.01) {
+            // Fallback if normal is degenerate
+            wallNormal.set(0, 0, 1)
+          } else {
+            wallNormal.normalize()
+          }
+
+          // Ensure the normal points TOWARD the camera (item should face viewer)
+          // If the normal points away from camera, flip it
+          const toCamera = new THREE.Vector3().subVectors(camera.position, hit.point)
+          toCamera.y = 0
+          toCamera.normalize()
+          if (wallNormal.dot(toCamera) < 0) {
+            wallNormal.negate()
+          }
+
+          // Position in front of wall surface (offset along the normal direction)
+          const WALL_BUFFER = 0.05
+          const normalOffset = itemDepth / 2 + WALL_BUFFER
 
           newPosition = {
-            x: hit.point.x + worldNormal.x * 0.1,
+            x: hit.point.x + wallNormal.x * normalOffset,
             y: hit.point.y,
-            z: hit.point.z + worldNormal.z * 0.1
+            z: hit.point.z + wallNormal.z * normalOffset
           }
 
-          // Rotate to face outward from wall
-          if (wallSide === 'north') {
-            newRotation = { x: 0, y: Math.PI, z: 0 }
-          } else if (wallSide === 'south') {
-            newRotation = { x: 0, y: 0, z: 0 }
-          } else if (wallSide === 'east') {
-            newRotation = { x: 0, y: -Math.PI / 2, z: 0 }
-          } else if (wallSide === 'west') {
-            newRotation = { x: 0, y: Math.PI / 2, z: 0 }
+          // Store wall placement data for instance creation
+          wallPlacementRef.current = {
+            roomId: roomId || currentRoom?.id || '',
+            wallSide,
+            heightFromFloor: hit.point.y,
+            lateralOffset: 0,
+            normalOffset
           }
+
+          // Rotate item so its front face (-Z local) aligns with the wall normal
+          // atan2(x, z) gives angle to point +Z toward (x, z)
+          // Adding PI makes -Z (front face) point toward the normal instead
+          let rotationY = Math.atan2(wallNormal.x, wallNormal.z) + Math.PI
+          // Normalize to [-PI, PI] range
+          if (rotationY > Math.PI) rotationY -= 2 * Math.PI
+          if (rotationY < -Math.PI) rotationY += 2 * Math.PI
+          newRotation = { x: 0, y: rotationY, z: 0 }
         }
       }
     }
@@ -149,8 +229,17 @@ function GhostModel({ itemId }: { itemId: string }) {
     e.stopPropagation()
 
     if (currentRoom) {
-      // Use the current ref position and rotation for placement
-      const instanceId = addInstanceToRoom(currentRoom.id, itemId, positionRef.current)
+      // Convert world position to room-relative position
+      // (instances are rendered inside a group with roomPosition, so we need local coords)
+      const roomPosition = currentRoom.position || [0, 0, 0]
+      const roomLocalPosition = {
+        x: positionRef.current.x - roomPosition[0],
+        y: positionRef.current.y - roomPosition[1],
+        z: positionRef.current.z - roomPosition[2]
+      }
+
+      // Use room-local position for placement
+      const instanceId = addInstanceToRoom(currentRoom.id, itemId, roomLocalPosition)
 
       // Combine placement rotation with item's default rotation
       const finalRotation = {
@@ -159,11 +248,46 @@ function GhostModel({ itemId }: { itemId: string }) {
         z: rotationRef.current.z + (item?.defaultRotation?.z || 0)
       }
 
-      // If rotation is set (from placement or item default), update the instance rotation
+      // Build update object
+      const instanceUpdate: {
+        rotation?: typeof finalRotation
+        wallPlacement?: WallPlacement
+        parentSurfaceId?: string
+        parentSurfaceType?: 'floor' | 'item'
+        position?: { x: number; y: number; z: number }
+      } = {}
+
+      // If rotation is set (from placement or item default), include it
       if (finalRotation.x !== 0 || finalRotation.y !== 0 || finalRotation.z !== 0) {
+        instanceUpdate.rotation = finalRotation
+      }
+
+      // If this is a wall item, include wall placement data
+      if (placementType === 'wall' && wallPlacementRef.current) {
+        instanceUpdate.wallPlacement = wallPlacementRef.current
+      }
+
+      // If placing on a surface, include parent info and relative position
+      if (placementType === 'floor' && surfaceParentRef.current) {
+        const { surfaceId, surfaceType, surfacePosition } = surfaceParentRef.current
+        instanceUpdate.parentSurfaceId = surfaceId
+        instanceUpdate.parentSurfaceType = surfaceType
+
+        // If placing on an item surface (not floor), store relative position
+        if (surfaceType === 'item') {
+          instanceUpdate.position = {
+            x: positionRef.current.x - surfacePosition.x,
+            y: positionRef.current.y - surfacePosition.y,
+            z: positionRef.current.z - surfacePosition.z
+          }
+        }
+      }
+
+      // Apply updates if any
+      if (Object.keys(instanceUpdate).length > 0) {
         // Small delay to ensure instance is created
         setTimeout(() => {
-          updateInstance(instanceId, { rotation: finalRotation })
+          updateInstance(instanceId, instanceUpdate)
         }, 0)
       }
     }
@@ -251,8 +375,15 @@ function ParametricShapeGhost({
   handleClick: (e: ThreeEvent<MouseEvent>) => void
   groupRef: React.RefObject<THREE.Group | null>
 }) {
-  // Create the extruded geometry from the shape points
+  // Create the extruded geometry from the shape points (for extrusion shapes only)
+  // Other shapes use a simple box geometry based on calculated dimensions
   const geometry = useMemo(() => {
+    if (shape.type !== 'extrusion') {
+      // For non-extrusion shapes, use calculated dimensions for a box geometry
+      const dims = calculateShapeDimensions(shape)
+      return new THREE.BoxGeometry(dims.width, dims.height, dims.depth)
+    }
+
     if (!shape.points || shape.points.length < 3) {
       return new THREE.BoxGeometry(1, shape.height, 1)
     }
@@ -281,6 +412,13 @@ function ParametricShapeGhost({
     return extrudeGeometry
   }, [shape])
 
+  // Calculate center Y offset for non-extrusion shapes
+  const yOffset = useMemo(() => {
+    if (shape.type === 'extrusion') return 0
+    const dims = calculateShapeDimensions(shape)
+    return dims.height / 2
+  }, [shape])
+
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
       color: 0x4ade80, // Green ghost color
@@ -295,6 +433,7 @@ function ParametricShapeGhost({
       <mesh
         geometry={geometry}
         material={material}
+        position={[0, yOffset, 0]}
         onClick={handleClick}
       />
       {/* Floor click target */}

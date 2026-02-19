@@ -60,6 +60,28 @@ export interface ItemRow {
     points: Array<{ x: number; y: number }>
     height: number
     color: string
+  } | {
+    type: 'rug'
+    width: number
+    depth: number
+    thickness: number
+    texturePath: string
+  } | {
+    type: 'frame'
+    imagePath: string
+    imageWidth: number
+    imageHeight: number
+    matWidth: number
+    matColor: string
+    frameWidth: number
+    frameDepth: number
+    frameColor: string
+  } | {
+    type: 'shelf'
+    width: number
+    height: number
+    depth: number
+    color: string
   } | null
   generation_status: {
     isGenerating: boolean

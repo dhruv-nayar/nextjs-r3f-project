@@ -7,6 +7,10 @@ import { useRoom } from '@/lib/room-context'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { useResizeMode } from '@/lib/resize-mode-context'
+import { WallPlacement } from '@/types/room'
+
+type WallSide = 'north' | 'south' | 'east' | 'west'
+const WALL_SIDES: WallSide[] = ['north', 'south', 'east', 'west']
 
 export function FurnitureEditor() {
   const router = useRouter()
@@ -36,7 +40,11 @@ export function FurnitureEditor() {
     rotation: selectedInstance.rotation,
     scale: selectedInstance.scaleMultiplier,
     targetDimensions: selectedItem.dimensions,
-    isInstance: true
+    isInstance: true,
+    // Wall item properties
+    isWallItem: selectedItem.placementType === 'wall' || !!selectedInstance.wallPlacement,
+    wallPlacement: selectedInstance.wallPlacement,
+    roomId: selectedInstance.roomId
   } : undefined)
 
   const [posX, setPosX] = useState(0)
@@ -54,6 +62,13 @@ export function FurnitureEditor() {
   const [heightInches, setHeightInches] = useState(0)
   const [depthFeet, setDepthFeet] = useState(0)
   const [depthInches, setDepthInches] = useState(0)
+
+  // Wall placement state (for wall-mounted items)
+  const [wallHeightFeet, setWallHeightFeet] = useState(0)
+  const [wallHeightInches, setWallHeightInches] = useState(0)
+  const [lateralOffsetFeet, setLateralOffsetFeet] = useState(0)
+  const [lateralOffsetInches, setLateralOffsetInches] = useState(0)
+  const [selectedWall, setSelectedWall] = useState<WallSide>('north')
 
   // Update local state when selection properties change
   useEffect(() => {
@@ -75,6 +90,16 @@ export function FurnitureEditor() {
         setDepthFeet(Math.floor(depth))
         setDepthInches((depth % 1) * 12)
       }
+
+      // Update wall placement state for wall-mounted items
+      if ('isWallItem' in selected && selected.isWallItem && selected.wallPlacement) {
+        const wp = selected.wallPlacement
+        setWallHeightFeet(Math.floor(wp.heightFromFloor))
+        setWallHeightInches((wp.heightFromFloor % 1) * 12)
+        setLateralOffsetFeet(Math.floor(Math.abs(wp.lateralOffset)) * Math.sign(wp.lateralOffset || 1))
+        setLateralOffsetInches(((Math.abs(wp.lateralOffset) % 1) * 12) * Math.sign(wp.lateralOffset || 1))
+        setSelectedWall(wp.wallSide)
+      }
     }
   }, [
     selected?.id,
@@ -86,7 +111,13 @@ export function FurnitureEditor() {
     selected?.scale.z,
     selected?.targetDimensions?.width,
     selected?.targetDimensions?.height,
-    selected?.targetDimensions?.depth
+    selected?.targetDimensions?.depth,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (selected as any)?.wallPlacement?.heightFromFloor,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (selected as any)?.wallPlacement?.lateralOffset,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (selected as any)?.wallPlacement?.wallSide
   ])
 
   if (!selected) return null
@@ -126,6 +157,42 @@ export function FurnitureEditor() {
         instanceId: selectedInstance.id,
       }))
       router.push(`/items/${selectedItem.id}?returnTo=${returnContext}`)
+    }
+  }
+
+  // Wall placement change handlers
+  const handleWallHeightChange = (feet: number, inches: number) => {
+    const totalFeet = feet + inches / 12
+    if (selectedInstance && selected && 'wallPlacement' in selected && selected.wallPlacement) {
+      updateInstance(selected.id, {
+        wallPlacement: {
+          ...selected.wallPlacement,
+          heightFromFloor: totalFeet
+        }
+      })
+    }
+  }
+
+  const handleLateralOffsetChange = (feet: number, inches: number) => {
+    const totalFeet = feet + inches / 12
+    if (selectedInstance && selected && 'wallPlacement' in selected && selected.wallPlacement) {
+      updateInstance(selected.id, {
+        wallPlacement: {
+          ...selected.wallPlacement,
+          lateralOffset: totalFeet
+        }
+      })
+    }
+  }
+
+  const handleWallChange = (newWall: WallSide) => {
+    if (selectedInstance && selected && 'wallPlacement' in selected && selected.wallPlacement) {
+      updateInstance(selected.id, {
+        wallPlacement: {
+          ...selected.wallPlacement,
+          wallSide: newWall
+        }
+      })
     }
   }
 
@@ -188,54 +255,144 @@ export function FurnitureEditor() {
         </div>
       </div>
 
-      {/* Position Controls */}
-      <div className="mb-4">
-        <h3 className="text-white font-medium text-sm mb-2">Position (feet)</h3>
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <label className="text-white/70 text-sm w-6">X:</label>
-            <input
-              type="number"
-              value={posX.toFixed(2)}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value) || 0
-                setPosX(val)
-                handlePositionChange('x', val)
-              }}
-              step="0.1"
-              className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-white/70 text-sm w-6">Y:</label>
-            <input
-              type="number"
-              value={posY.toFixed(2)}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value) || 0
-                setPosY(val)
-                handlePositionChange('y', val)
-              }}
-              step="0.1"
-              className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-white/70 text-sm w-6">Z:</label>
-            <input
-              type="number"
-              value={posZ.toFixed(2)}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value) || 0
-                setPosZ(val)
-                handlePositionChange('z', val)
-              }}
-              step="0.1"
-              className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none"
-            />
+      {/* Wall Placement Controls (for wall-mounted items) */}
+      {'isWallItem' in selected && selected.isWallItem && selected.wallPlacement && (
+        <div className="mb-4">
+          <h3 className="text-white font-medium text-sm mb-2">Wall Position</h3>
+          <div className="space-y-2">
+            {/* Wall Selection */}
+            <div className="flex items-center gap-2">
+              <label className="text-white/70 text-sm w-14">Wall:</label>
+              <select
+                value={selectedWall}
+                onChange={(e) => {
+                  const newWall = e.target.value as WallSide
+                  setSelectedWall(newWall)
+                  handleWallChange(newWall)
+                }}
+                className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none capitalize"
+              >
+                {WALL_SIDES.map(side => (
+                  <option key={side} value={side} className="bg-gray-800 capitalize">
+                    {side}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Height from Floor */}
+            <div className="flex items-center gap-2">
+              <label className="text-white/70 text-sm w-14">Height:</label>
+              <input
+                type="number"
+                value={wallHeightFeet}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 0
+                  setWallHeightFeet(val)
+                  handleWallHeightChange(val, wallHeightInches)
+                }}
+                min="0"
+                className="w-16 bg-white/10 text-white px-2 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none text-sm"
+              />
+              <span className="text-white/50 text-xs">ft</span>
+              <input
+                type="number"
+                value={wallHeightInches.toFixed(1)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0
+                  setWallHeightInches(val)
+                  handleWallHeightChange(wallHeightFeet, val)
+                }}
+                step="0.5"
+                min="0"
+                max="11.9"
+                className="w-16 bg-white/10 text-white px-2 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none text-sm"
+              />
+              <span className="text-white/50 text-xs">in</span>
+            </div>
+
+            {/* Lateral Offset */}
+            <div className="flex items-center gap-2">
+              <label className="text-white/70 text-sm w-14">Offset:</label>
+              <input
+                type="number"
+                value={lateralOffsetFeet}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 0
+                  setLateralOffsetFeet(val)
+                  handleLateralOffsetChange(val, lateralOffsetInches)
+                }}
+                className="w-16 bg-white/10 text-white px-2 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none text-sm"
+              />
+              <span className="text-white/50 text-xs">ft</span>
+              <input
+                type="number"
+                value={lateralOffsetInches.toFixed(1)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0
+                  setLateralOffsetInches(val)
+                  handleLateralOffsetChange(lateralOffsetFeet, val)
+                }}
+                step="0.5"
+                className="w-16 bg-white/10 text-white px-2 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none text-sm"
+              />
+              <span className="text-white/50 text-xs">in</span>
+            </div>
+            <p className="text-white/40 text-xs pl-14">Positive = right when facing wall</p>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Position Controls (for floor items) */}
+      {!('isWallItem' in selected && selected.isWallItem) && (
+        <div className="mb-4">
+          <h3 className="text-white font-medium text-sm mb-2">Position (feet)</h3>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <label className="text-white/70 text-sm w-6">X:</label>
+              <input
+                type="number"
+                value={posX.toFixed(2)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0
+                  setPosX(val)
+                  handlePositionChange('x', val)
+                }}
+                step="0.1"
+                className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-white/70 text-sm w-6">Y:</label>
+              <input
+                type="number"
+                value={posY.toFixed(2)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0
+                  setPosY(val)
+                  handlePositionChange('y', val)
+                }}
+                step="0.1"
+                className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-white/70 text-sm w-6">Z:</label>
+              <input
+                type="number"
+                value={posZ.toFixed(2)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0
+                  setPosZ(val)
+                  handlePositionChange('z', val)
+                }}
+                step="0.1"
+                className="flex-1 bg-white/10 text-white px-3 py-1.5 rounded-lg border border-white/20 focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dimensions Controls */}
       <div className="mb-4">
@@ -425,7 +582,11 @@ export function FurnitureEditor() {
 
       {/* Keyboard Hint */}
       <div className="text-white/50 text-xs pt-3 border-t border-white/10">
-        <p>💡 Arrow keys to move • R to resize • Drag to reposition</p>
+        {'isWallItem' in selected && selected.isWallItem ? (
+          <p>💡 ↑↓ adjust height • ←→ slide along wall • Drag to reposition</p>
+        ) : (
+          <p>💡 Arrow keys to move • R to resize • Drag to reposition</p>
+        )}
       </div>
     </div>
   )

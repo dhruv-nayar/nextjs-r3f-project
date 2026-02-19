@@ -14,6 +14,9 @@ import { Navbar } from '@/components/layout/Navbar'
 import { CategoryFilterSidebar } from '@/components/items/CategoryFilterSidebar'
 import { ItemCard, AddItemCard } from '@/components/items/ItemCard'
 import { CustomItemCreator } from '@/components/items/CustomItemCreator'
+import { RugCreator } from '@/components/items/RugCreator'
+import { FrameCreator } from '@/components/items/FrameCreator'
+import { ShelfCreator } from '@/components/items/ShelfCreator'
 import Image from 'next/image'
 
 export default function ItemsPage() {
@@ -29,6 +32,9 @@ export default function ItemsPage() {
   const [uploadStep, setUploadStep] = useState<'choose' | 'upload' | 'metadata'>('choose')
   const [uploadMethod, setUploadMethod] = useState<'glb' | 'images' | null>(null)
   const [showCustomCreator, setShowCustomCreator] = useState(false)
+  const [showRugCreator, setShowRugCreator] = useState(false)
+  const [showFrameCreator, setShowFrameCreator] = useState(false)
+  const [showShelfCreator, setShowShelfCreator] = useState(false)
   const [uploadedModelPath, setUploadedModelPath] = useState('')
   const [uploadedThumbnailPath, setUploadedThumbnailPath] = useState('')
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
@@ -91,7 +97,12 @@ export default function ItemsPage() {
   }, {} as Record<string, number>)
 
   // Quick create: Creates item immediately and redirects to edit mode
-  const handleQuickCreate = async () => {
+  const handleQuickCreate = () => {
+    // Open the create modal to show Quick Create options
+    setShowCreateModal(true)
+  }
+
+  const handleCreateBlankItem = async () => {
     const newId = await addItem({
       name: 'New Item',
       description: '',
@@ -407,6 +418,58 @@ export default function ItemsPage() {
                     </div>
                   </div>
                 </button>
+
+                {/* Divider */}
+                <div className="flex items-center gap-4 py-2">
+                  <div className="flex-1 h-px bg-taupe/20" />
+                  <span className="text-taupe/50 text-sm font-body">Quick Create</span>
+                  <div className="flex-1 h-px bg-taupe/20" />
+                </div>
+
+                {/* Quick Create Options - Rug, Frame, Shelf */}
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Create Rug */}
+                  <button
+                    onClick={() => {
+                      handleCloseModal()
+                      setShowRugCreator(true)
+                    }}
+                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
+                  >
+                    <div className="text-3xl mb-2">🧶</div>
+                    <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                      Rug
+                    </h4>
+                  </button>
+
+                  {/* Create Frame */}
+                  <button
+                    onClick={() => {
+                      handleCloseModal()
+                      setShowFrameCreator(true)
+                    }}
+                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
+                  >
+                    <div className="text-3xl mb-2">🖼️</div>
+                    <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                      Frame
+                    </h4>
+                  </button>
+
+                  {/* Create Shelf */}
+                  <button
+                    onClick={() => {
+                      handleCloseModal()
+                      setShowShelfCreator(true)
+                    }}
+                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
+                  >
+                    <div className="text-3xl mb-2">📚</div>
+                    <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                      Shelf
+                    </h4>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -682,6 +745,24 @@ export default function ItemsPage() {
       <CustomItemCreator
         isOpen={showCustomCreator}
         onClose={() => setShowCustomCreator(false)}
+      />
+
+      {/* Rug Creator Modal */}
+      <RugCreator
+        isOpen={showRugCreator}
+        onClose={() => setShowRugCreator(false)}
+      />
+
+      {/* Frame Creator Modal */}
+      <FrameCreator
+        isOpen={showFrameCreator}
+        onClose={() => setShowFrameCreator(false)}
+      />
+
+      {/* Shelf Creator Modal */}
+      <ShelfCreator
+        isOpen={showShelfCreator}
+        onClose={() => setShowShelfCreator(false)}
       />
 
       {/* Delete Confirmation Modal */}

@@ -19,6 +19,7 @@ import { SharedWall } from './SharedWall'
 import { WallSegmentRenderer } from './WallSegmentRenderer'
 import { SCALE } from '@/lib/constants'
 import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
+import { SurfaceMeshProvider } from '@/lib/contexts/surface-mesh-context'
 import { ProjectThumbnailCapture } from '../homes/ProjectThumbnailCapture'
 import { useWallSegments } from '@/lib/use-wall-segments'
 
@@ -285,6 +286,7 @@ export function RoomScene() {
   ]
 
   return (
+    <SurfaceMeshProvider>
     <WallMeshProvider>
     <Canvas
       shadows
@@ -429,5 +431,6 @@ export function RoomScene() {
       )}
     </Canvas>
     </WallMeshProvider>
+    </SurfaceMeshProvider>
   )
 }

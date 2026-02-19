@@ -2,10 +2,14 @@
 
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { ParametricShape, Vector3 } from '@/types/room'
+import { ParametricShape, ExtrusionShape, RugShape, FrameShape, ShelfShape, Vector3 } from '@/types/room'
+import { RugShapeRenderer, calculateRugDimensions } from './RugShapeRenderer'
+import { FrameShapeRenderer, calculateFrameDimensions } from './FrameShapeRenderer'
+import { ShelfShapeRenderer, calculateShelfDimensions } from './ShelfShapeRenderer'
 
 interface ParametricShapeRendererProps {
   shape: ParametricShape
+  instanceId?: string         // For surface registration (rugs, shelves)
   position?: Vector3
   rotation?: Vector3
   scale?: Vector3
@@ -17,10 +21,9 @@ interface ParametricShapeRendererProps {
 }
 
 /**
- * Renders a parametric shape (extruded 2D polygon) as a 3D mesh
- * Used for user-created custom items
+ * Renders an extrusion shape (2D polygon extruded to 3D)
  */
-export function ParametricShapeRenderer({
+function ExtrusionShapeRenderer({
   shape,
   position = { x: 0, y: 0, z: 0 },
   rotation = { x: 0, y: 0, z: 0 },
@@ -30,7 +33,17 @@ export function ParametricShapeRenderer({
   onClick,
   onPointerOver,
   onPointerOut
-}: ParametricShapeRendererProps) {
+}: {
+  shape: ExtrusionShape
+  position?: Vector3
+  rotation?: Vector3
+  scale?: Vector3
+  castShadow?: boolean
+  receiveShadow?: boolean
+  onClick?: () => void
+  onPointerOver?: () => void
+  onPointerOut?: () => void
+}) {
   // Create the extruded geometry from the shape points
   const geometry = useMemo(() => {
     if (!shape.points || shape.points.length < 3) {
@@ -101,7 +114,89 @@ export function ParametricShapeRenderer({
 }
 
 /**
- * Calculate the bounding dimensions of a parametric shape
+ * Main dispatcher component that renders the appropriate shape type
+ * Supports: extrusion, rug, frame, shelf
+ */
+export function ParametricShapeRenderer({
+  shape,
+  instanceId,
+  position = { x: 0, y: 0, z: 0 },
+  rotation = { x: 0, y: 0, z: 0 },
+  scale = { x: 1, y: 1, z: 1 },
+  castShadow = true,
+  receiveShadow = true,
+  onClick,
+  onPointerOver,
+  onPointerOut
+}: ParametricShapeRendererProps) {
+  switch (shape.type) {
+    case 'rug':
+      return (
+        <RugShapeRenderer
+          shape={shape}
+          instanceId={instanceId}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          onClick={onClick}
+          onPointerOver={onPointerOver}
+          onPointerOut={onPointerOut}
+        />
+      )
+
+    case 'frame':
+      return (
+        <FrameShapeRenderer
+          shape={shape}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          onClick={onClick}
+          onPointerOver={onPointerOver}
+          onPointerOut={onPointerOut}
+        />
+      )
+
+    case 'shelf':
+      return (
+        <ShelfShapeRenderer
+          shape={shape}
+          instanceId={instanceId}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          onClick={onClick}
+          onPointerOver={onPointerOver}
+          onPointerOut={onPointerOut}
+        />
+      )
+
+    case 'extrusion':
+    default:
+      return (
+        <ExtrusionShapeRenderer
+          shape={shape as ExtrusionShape}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          onClick={onClick}
+          onPointerOver={onPointerOver}
+          onPointerOut={onPointerOut}
+        />
+      )
+  }
+}
+
+/**
+ * Calculate the bounding dimensions of any parametric shape type
  * Used for item dimensions when creating from parametric shape
  */
 export function calculateShapeDimensions(shape: ParametricShape): {
@@ -109,25 +204,40 @@ export function calculateShapeDimensions(shape: ParametricShape): {
   height: number
   depth: number
 } {
-  if (!shape.points || shape.points.length < 3) {
-    return { width: 1, height: shape.height, depth: 1 }
-  }
+  switch (shape.type) {
+    case 'rug':
+      return calculateRugDimensions(shape)
 
-  let minX = Infinity
-  let maxX = -Infinity
-  let minY = Infinity
-  let maxY = -Infinity
+    case 'frame':
+      return calculateFrameDimensions(shape)
 
-  for (const point of shape.points) {
-    minX = Math.min(minX, point.x)
-    maxX = Math.max(maxX, point.x)
-    minY = Math.min(minY, point.y)
-    maxY = Math.max(maxY, point.y)
-  }
+    case 'shelf':
+      return calculateShelfDimensions(shape)
 
-  return {
-    width: maxX - minX,
-    height: shape.height,
-    depth: maxY - minY  // 2D Y becomes 3D Z (depth)
+    case 'extrusion':
+    default: {
+      const extrusionShape = shape as ExtrusionShape
+      if (!extrusionShape.points || extrusionShape.points.length < 3) {
+        return { width: 1, height: extrusionShape.height, depth: 1 }
+      }
+
+      let minX = Infinity
+      let maxX = -Infinity
+      let minY = Infinity
+      let maxY = -Infinity
+
+      for (const point of extrusionShape.points) {
+        minX = Math.min(minX, point.x)
+        maxX = Math.max(maxX, point.x)
+        minY = Math.min(minY, point.y)
+        maxY = Math.max(maxY, point.y)
+      }
+
+      return {
+        width: maxX - minX,
+        height: extrusionShape.height,
+        depth: maxY - minY  // 2D Y becomes 3D Z (depth)
+      }
+    }
   }
 }

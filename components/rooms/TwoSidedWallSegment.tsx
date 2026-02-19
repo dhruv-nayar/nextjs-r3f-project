@@ -1,9 +1,10 @@
 'use client'
 
 import * as THREE from 'three'
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ThreeEvent } from '@react-three/fiber'
 import type { ComputedWallSegment, WallSideStyle, WallSegmentDoor } from '@/types/wall-segment'
+import { useWallMesh } from '@/lib/contexts/wall-mesh-context'
 
 /**
  * Surface offset to prevent z-fighting between the two sides
@@ -104,6 +105,23 @@ function getMaterialColor(
  * - Each side can have different color/material
  * - No z-fighting because surfaces don't overlap
  */
+/**
+ * Compute closest cardinal direction from a 2D normal
+ * Normal is in floorplan space: x = world X, y = world Z
+ */
+function normalToCardinalDirection(
+  normalX: number,
+  normalY: number
+): 'north' | 'south' | 'east' | 'west' {
+  // normalY maps to Z axis in 3D (north/south)
+  // normalX maps to X axis in 3D (east/west)
+  if (Math.abs(normalY) > Math.abs(normalX)) {
+    return normalY > 0 ? 'north' : 'south'
+  } else {
+    return normalX > 0 ? 'east' : 'west'
+  }
+}
+
 export function TwoSidedWallSegment({
   computed,
   onSideClick,
@@ -115,6 +133,48 @@ export function TwoSidedWallSegment({
   onDoorPlace,
 }: TwoSidedWallSegmentProps) {
   const { segment, length, normal, position3D, rotation3D } = computed
+  const { registerWall, unregisterWall } = useWallMesh()
+
+  // Refs for wall meshes (for raycasting/placement)
+  const sideAMeshRef = useRef<THREE.Mesh>(null)
+  const sideBMeshRef = useRef<THREE.Mesh>(null)
+
+  // Compute cardinal directions for each side
+  const sideADirection = useMemo(() =>
+    normalToCardinalDirection(normal.x, normal.y), [normal])
+  const sideBDirection = useMemo(() =>
+    normalToCardinalDirection(-normal.x, -normal.y), [normal])
+
+  // Get room ID from segment sides (use sideA's roomId, or sideB's, or segment ID as fallback)
+  const roomId = segment.sideA.roomId || segment.sideB.roomId || `segment-${segment.id}`
+
+  // Register wall meshes with WallMeshContext
+  useEffect(() => {
+    if (sideAMeshRef.current) {
+      // Set userData for PlacementGhost raycasting
+      sideAMeshRef.current.userData.roomId = roomId
+      sideAMeshRef.current.userData.wallSide = sideADirection
+      sideAMeshRef.current.userData.segmentId = segment.id
+      sideAMeshRef.current.userData.wallSegmentSide = 'A'
+      sideAMeshRef.current.userData.surfaceType = 'wall'
+      registerWall(roomId, sideADirection, sideAMeshRef.current)
+    }
+    if (sideBMeshRef.current) {
+      // Use a unique key for side B to avoid overwriting side A
+      const sideBRoomId = `${roomId}-B`
+      sideBMeshRef.current.userData.roomId = sideBRoomId
+      sideBMeshRef.current.userData.wallSide = sideBDirection
+      sideBMeshRef.current.userData.segmentId = segment.id
+      sideBMeshRef.current.userData.wallSegmentSide = 'B'
+      sideBMeshRef.current.userData.surfaceType = 'wall'
+      registerWall(sideBRoomId, sideBDirection, sideBMeshRef.current)
+    }
+
+    return () => {
+      unregisterWall(roomId, sideADirection)
+      unregisterWall(`${roomId}-B`, sideBDirection)
+    }
+  }, [roomId, segment.id, sideADirection, sideBDirection, registerWall, unregisterWall])
 
   // Create geometry with door holes (shared between both sides)
   const geometry = useMemo(() => {
@@ -231,6 +291,7 @@ export function TwoSidedWallSegment({
     <group position={position3D} rotation={rotation3D}>
       {/* Side A - faces positive normal */}
       <mesh
+        ref={sideAMeshRef}
         position={sideAOffset}
         onClick={handleSideAClick}
         onPointerOver={handleSideAPointerOver}
@@ -250,6 +311,7 @@ export function TwoSidedWallSegment({
 
       {/* Side B - faces negative normal (rotated 180° around local Y) */}
       <mesh
+        ref={sideBMeshRef}
         position={sideBOffset}
         rotation={[0, Math.PI, 0]}
         onClick={handleSideBClick}

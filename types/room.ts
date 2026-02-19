@@ -24,15 +24,57 @@ export type ItemCategory = 'seating' | 'table' | 'storage' | 'bed' | 'decoration
 export type PlacementType = 'floor' | 'wall' | 'ceiling'
 
 /**
- * ParametricShape: A user-drawn 2D polygon that gets extruded to 3D
+ * ExtrusionShape: A user-drawn 2D polygon that gets extruded to 3D
  * This allows users to create custom items without needing 3D modeling tools
  */
-export interface ParametricShape {
+export interface ExtrusionShape {
   type: 'extrusion'
   points: Array<{ x: number; y: number }>  // 2D polygon vertices (closed, in feet)
   height: number                            // Extrusion depth in feet
   color: string                             // Hex color (e.g., "#FF5733")
 }
+
+/**
+ * RugShape: A flat rectangular rug with an image texture on top
+ */
+export interface RugShape {
+  type: 'rug'
+  width: number           // feet (X-axis)
+  depth: number           // feet (Z-axis)
+  thickness: number       // feet (Y-axis, typically 0.02-0.1)
+  texturePath: string     // URL to uploaded texture image
+}
+
+/**
+ * FrameShape: A picture frame with image, mat, and frame layers
+ */
+export interface FrameShape {
+  type: 'frame'
+  imagePath: string       // URL to uploaded image
+  imageWidth: number      // feet
+  imageHeight: number     // feet
+  matWidth: number        // feet (mat border width)
+  matColor: string        // hex color
+  frameWidth: number      // feet (frame border width)
+  frameDepth: number      // feet (frame thickness)
+  frameColor: string      // hex color
+}
+
+/**
+ * ShelfShape: A simple floating shelf (box)
+ */
+export interface ShelfShape {
+  type: 'shelf'
+  width: number           // feet (X-axis)
+  height: number          // feet (Y-axis, shelf thickness)
+  depth: number           // feet (Z-axis)
+  color: string           // hex color
+}
+
+/**
+ * ParametricShape: Union of all procedurally-generated shape types
+ */
+export type ParametricShape = ExtrusionShape | RugShape | FrameShape | ShelfShape
 
 /**
  * MaterialOverride: Customization for a specific material in a 3D model
@@ -98,10 +140,25 @@ export interface Item {
   // Customization
   materialOverrides?: MaterialOverride[] // Custom colors/materials
 
+  // Surface capability
+  isSurface?: boolean           // Can other items be placed on this? (rugs, shelves)
+
   // Metadata
   createdAt: string
   updatedAt: string
   isCustom: boolean             // User-uploaded vs built-in
+}
+
+/**
+ * WallPlacement: Position data for wall-mounted items
+ * Uses wall-relative coordinates for intuitive editing
+ */
+export interface WallPlacement {
+  roomId: string
+  wallSide: 'north' | 'south' | 'east' | 'west'
+  heightFromFloor: number    // feet (Y position relative to floor)
+  lateralOffset: number      // feet (offset from wall center, positive = right when facing wall)
+  normalOffset: number       // feet (distance from wall surface, typically item depth/2)
 }
 
 /**
@@ -114,9 +171,16 @@ export interface ItemInstance {
   roomId: string                // Which room this is in
 
   // Transform in 3D space
-  position: Vector3             // feet
+  position: Vector3             // feet (world coords for floor items, relative for surface children)
   rotation: Vector3             // radians
   scaleMultiplier: Vector3      // User scale adjustment (default: {x:1, y:1, z:1})
+
+  // Surface hierarchy
+  parentSurfaceId?: string      // 'floor' or instance ID of parent surface
+  parentSurfaceType?: 'floor' | 'item'  // Discriminator for parent type
+
+  // Wall placement (only for wall-mounted items)
+  wallPlacement?: WallPlacement
 
   // Optional overrides
   customName?: string           // "Mom's chair" (overrides Item.name for display)

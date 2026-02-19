@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { FurnitureItem, Item, ItemInstance, ParametricShape } from '@/types/room'
-import { ParametricShapeRenderer } from '@/components/items/ParametricShapeRenderer'
+import { ParametricShapeRenderer, calculateShapeDimensions } from '@/components/items/ParametricShapeRenderer'
 import { useFurnitureHover } from '@/lib/furniture-hover-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useSelection } from '@/lib/selection-context'
@@ -12,6 +12,7 @@ import { useItemLibrary } from '@/lib/item-library-context'
 import { useResizeMode } from '@/lib/resize-mode-context'
 import { useInteractionMode } from '@/lib/interaction-mode-context'
 import { ResizeHandles } from './ResizeHandles'
+import { WallItemInstance } from './WallItemInstance'
 import * as THREE from 'three'
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber'
 
@@ -724,29 +725,12 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
 
   const shape = item.parametricShape!
 
-  // Calculate bounding box for outline
+  // Calculate bounding box for outline using the unified dimension calculator
   const { boundingSize, boundingCenter } = useMemo(() => {
-    if (!shape.points || shape.points.length < 3) {
-      return { boundingSize: new THREE.Vector3(1, shape.height, 1), boundingCenter: new THREE.Vector3(0, shape.height / 2, 0) }
-    }
-
-    let minX = Infinity, maxX = -Infinity
-    let minY = Infinity, maxY = -Infinity
-
-    for (const point of shape.points) {
-      minX = Math.min(minX, point.x)
-      maxX = Math.max(maxX, point.x)
-      minY = Math.min(minY, point.y)
-      maxY = Math.max(maxY, point.y)
-    }
-
-    const width = maxX - minX
-    const depth = maxY - minY
-    const height = shape.height
-
+    const dimensions = calculateShapeDimensions(shape)
     return {
-      boundingSize: new THREE.Vector3(width, height, depth),
-      boundingCenter: new THREE.Vector3(0, height / 2, 0)
+      boundingSize: new THREE.Vector3(dimensions.width, dimensions.height, dimensions.depth),
+      boundingCenter: new THREE.Vector3(0, dimensions.height / 2, 0)
     }
   }, [shape])
 
@@ -951,8 +935,19 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     }
   }
 
-  // Create geometry
+  // Check if this is a simple shape type that should use ParametricShapeRenderer
+  // (rug, frame, shelf) vs extrusion which we render manually for highlight effects
+  const isSimpleShape = shape.type !== 'extrusion'
+
+  // Create geometry (only for extrusion shapes - others use ParametricShapeRenderer)
   const geometry = useMemo(() => {
+    if (shape.type !== 'extrusion') {
+      // For non-extrusion shapes, create a placeholder geometry
+      // The actual rendering is handled by ParametricShapeRenderer
+      const dims = calculateShapeDimensions(shape)
+      return new THREE.BoxGeometry(dims.width, dims.height, dims.depth)
+    }
+
     if (!shape.points || shape.points.length < 3) {
       return new THREE.BoxGeometry(1, shape.height, 1)
     }
@@ -981,14 +976,17 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     return extrudeGeometry
   }, [shape])
 
-  // Create material
+  // Create material (only for extrusion shapes)
   const material = useMemo(() => {
+    if (shape.type !== 'extrusion') {
+      return new THREE.MeshStandardMaterial({ color: '#808080', roughness: 0.7, metalness: 0.1 })
+    }
     return new THREE.MeshStandardMaterial({
       color: shape.color || '#808080',
       roughness: 0.7,
       metalness: 0.1
     })
-  }, [shape.color])
+  }, [shape])
 
   return (
     <>
@@ -1021,13 +1019,22 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
         onPointerMove={handlePointerMove}
         onClick={(e) => e.stopPropagation()} // Prevent floor click from firing
       >
-        <mesh
-          ref={meshRef}
-          geometry={geometry}
-          material={material}
-          castShadow
-          receiveShadow
-        />
+        {isSimpleShape ? (
+          <ParametricShapeRenderer
+            shape={shape}
+            instanceId={instance.id}
+            castShadow
+            receiveShadow
+          />
+        ) : (
+          <mesh
+            ref={meshRef}
+            geometry={geometry}
+            material={material}
+            castShadow
+            receiveShadow
+          />
+        )}
 
         {/* Outline border when hovered or selected (not in resize mode) */}
         {/* raycast={() => null} prevents these visual elements from intercepting clicks */}
@@ -1068,6 +1075,7 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
 
 /**
  * ItemInstanceRenderer: Renders an item instance by fetching the item from the library
+ * Routes wall-mounted items to WallItemInstance for wall-relative positioning
  */
 export function ItemInstanceRenderer({ instance }: { instance: ItemInstance }) {
   const { getItem } = useItemLibrary()
@@ -1076,6 +1084,14 @@ export function ItemInstanceRenderer({ instance }: { instance: ItemInstance }) {
   if (!item) {
     console.warn(`Item not found for instance ${instance.id}: ${instance.itemId}`)
     return null
+  }
+
+  // Route wall-mounted items to WallItemInstance
+  // Check both item placement type and whether instance has wall placement data
+  const isWallItem = item.placementType === 'wall' || instance.wallPlacement
+
+  if (isWallItem) {
+    return <WallItemInstance instance={instance} item={item} />
   }
 
   // If item has a parametric shape, render it using ParametricShapeInstanceModel (with full drag support)

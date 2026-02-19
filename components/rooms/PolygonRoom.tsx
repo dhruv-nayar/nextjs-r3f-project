@@ -1,11 +1,15 @@
 'use client'
 
 import * as THREE from 'three'
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ThreeEvent } from '@react-three/fiber'
 import { useSelection } from '@/lib/selection-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useRoomHover } from '@/lib/room-hover-context'
+import { useSurfaceMesh } from '@/lib/contexts/surface-mesh-context'
+import { useWallMesh } from '@/lib/contexts/wall-mesh-context'
+
+type WallDirection = 'north' | 'south' | 'east' | 'west'
 
 interface Door {
   wall: 'north' | 'south' | 'east' | 'west'  // Which wall (north=+Z, south=-Z, east=+X, west=-X)
@@ -106,10 +110,46 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
   const { selectFloor, selectWall, isFloorSelected, isWallSelected, hoveredItem, setHoveredItem } = useSelection()
   const { setSelectedFurnitureId } = useFurnitureSelection()
   const { hoveredRoomId, setHoveredRoomId } = useRoomHover()
+  const { registerFloorSurface, unregisterFloorSurface } = useSurfaceMesh()
+  const { registerWall, unregisterWall } = useWallMesh()
+
+  // Floor mesh ref for surface registration
+  const floorMeshRef = useRef<THREE.Mesh>(null)
+
+  // Wall mesh refs for wall registration (keyed by wall direction)
+  const wallMeshRefs = useRef<Map<WallDirection, THREE.Mesh>>(new Map())
 
   const isFloorSelectedHere = roomId ? isFloorSelected(roomId) : false
   const isFloorHovered = hoveredItem?.type === 'floor' && hoveredItem.roomId === roomId
   const isHovered = roomId && hoveredRoomId === roomId
+
+  // Register floor surface with SurfaceMeshContext
+  useEffect(() => {
+    if (floorMeshRef.current && roomId) {
+      registerFloorSurface(roomId, floorMeshRef.current)
+      return () => unregisterFloorSurface(roomId)
+    }
+  }, [roomId, registerFloorSurface, unregisterFloorSurface])
+
+  // Callback to set wall mesh ref and register with WallMeshContext
+  const setWallMeshRef = useCallback((direction: WallDirection, mesh: THREE.Mesh | null) => {
+    if (mesh && roomId) {
+      wallMeshRefs.current.set(direction, mesh)
+      registerWall(roomId, direction, mesh)
+    }
+  }, [roomId, registerWall])
+
+  // Cleanup wall registrations on unmount
+  useEffect(() => {
+    return () => {
+      if (roomId) {
+        wallMeshRefs.current.forEach((_, direction) => {
+          unregisterWall(roomId, direction)
+        })
+        wallMeshRefs.current.clear()
+      }
+    }
+  }, [roomId, unregisterWall])
 
   // Click handler for floor
   const handleFloorClick = useCallback((e: ThreeEvent<MouseEvent>) => {
@@ -312,6 +352,7 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
     <group position={position}>
       {/* Floor */}
       <mesh
+        ref={floorMeshRef}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
         receiveShadow
@@ -335,6 +376,7 @@ export function PolygonRoom({ polygon, height, position = [0, 0, 0], roomId, doo
       {wallGeometries.map((wall, index) => (
         <mesh
           key={`wall-${index}`}
+          ref={(mesh) => setWallMeshRef(wall.direction, mesh)}
           position={wall.position}
           rotation={wall.rotation}
           receiveShadow

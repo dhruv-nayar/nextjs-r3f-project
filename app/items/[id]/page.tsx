@@ -14,7 +14,7 @@ import Input from '@/components/ui/Input'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
-import { PlacementType, MaterialOverride, ImagePair } from '@/types/room'
+import { PlacementType, MaterialOverride, ImagePair, RugShape, FrameShape, ShelfShape } from '@/types/room'
 import { ImageGallery } from '@/components/items/ImageGallery'
 import { MaskCorrectionModal } from '@/components/items/MaskCorrectionModal'
 import { GenerateModelPanel } from '@/components/items/GenerateModelPanel'
@@ -23,6 +23,9 @@ import { ThumbnailGenerator } from '@/components/items/ThumbnailGenerator'
 import { MaterialInfo } from '@/lib/material-utils'
 import { MaterialExtractor } from '@/hooks/useMaterialExtraction'
 import { useTrellisJobs } from '@/lib/trellis-job-context'
+import { RugCreator } from '@/components/items/RugCreator'
+import { FrameCreator } from '@/components/items/FrameCreator'
+import { ShelfCreator } from '@/components/items/ShelfCreator'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -88,6 +91,9 @@ export default function ItemDetailPage() {
   const [showMaskCorrection, setShowMaskCorrection] = useState(false)
   const [maskCorrectionIndex, setMaskCorrectionIndex] = useState<number | null>(null)
   const [maskCorrectionKey, setMaskCorrectionKey] = useState(0) // Key to force remount
+
+  // Shape editor modal state
+  const [showShapeEditor, setShowShapeEditor] = useState(false)
 
   // Dimension state (feet and inches)
   const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
@@ -536,6 +542,26 @@ export default function ItemDetailPage() {
       (o) => o.materialName === materialName || o.materialIndex === materialIndex
     )
     return override?.baseColor || originalColor
+  }
+
+  // Handle shape edit save
+  const handleShapeEditSave = (updates: {
+    name: string
+    parametricShape: RugShape | FrameShape | ShelfShape
+    dimensions: { width: number; height: number; depth: number }
+    thumbnailPath?: string
+  }) => {
+    updateItem(itemId, {
+      name: updates.name,
+      parametricShape: updates.parametricShape,
+      dimensions: updates.dimensions,
+      thumbnailPath: updates.thumbnailPath || editThumbnailPath || undefined
+    })
+    setEditName(updates.name)
+    setShowShapeEditor(false)
+    setToastMessage('Shape updated!')
+    setToastType('success')
+    setShowToast(true)
   }
 
   return (
@@ -1101,6 +1127,40 @@ export default function ItemDetailPage() {
                   </div>
                 </div>
 
+                {/* Shape Settings Section (for rug/frame/shelf items) */}
+                {item.parametricShape && ['rug', 'frame', 'shelf'].includes(item.parametricShape.type) && (
+                  <div>
+                    <h3 className="text-white font-medium text-sm mb-2">
+                      Shape Settings
+                    </h3>
+                    <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white/80 text-sm font-body capitalize">
+                            {item.parametricShape.type === 'rug' && 'Rug'}
+                            {item.parametricShape.type === 'frame' && 'Picture Frame'}
+                            {item.parametricShape.type === 'shelf' && 'Floating Shelf'}
+                          </p>
+                          <p className="text-white/40 text-xs font-body">
+                            {item.parametricShape.type === 'rug' && `${(item.parametricShape as { width: number }).width.toFixed(1)}' × ${(item.parametricShape as { depth: number }).depth.toFixed(1)}'`}
+                            {item.parametricShape.type === 'frame' && `${(item.parametricShape as { imageWidth: number }).imageWidth.toFixed(1)}' × ${(item.parametricShape as { imageHeight: number }).imageHeight.toFixed(1)}' image`}
+                            {item.parametricShape.type === 'shelf' && `${(item.parametricShape as { width: number }).width.toFixed(1)}' × ${(item.parametricShape as { depth: number }).depth.toFixed(1)}' × ${(item.parametricShape as { height: number }).height.toFixed(1)}'`}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowShapeEditor(true)}
+                          className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          title="Edit shape"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Materials & Colors Section */}
                 {extractedMaterials.length > 0 && (
                   <div>
@@ -1450,6 +1510,44 @@ export default function ItemDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Shape Editor Modals */}
+      {showShapeEditor && item.parametricShape?.type === 'rug' && (
+        <RugCreator
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: itemId,
+            name: editName,
+            parametricShape: item.parametricShape as RugShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
+      {showShapeEditor && item.parametricShape?.type === 'frame' && (
+        <FrameCreator
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: itemId,
+            name: editName,
+            parametricShape: item.parametricShape as FrameShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
+      {showShapeEditor && item.parametricShape?.type === 'shelf' && (
+        <ShelfCreator
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: itemId,
+            name: editName,
+            parametricShape: item.parametricShape as ShelfShape
+          }}
+          onSave={handleShapeEditSave}
+        />
       )}
 
         {/* Delete Confirmation Modal */}
