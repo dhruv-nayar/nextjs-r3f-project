@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
+import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei'
 import { ParametricShape } from '@/types/room'
 import { ParametricShapeRenderer } from './ParametricShapeRenderer'
 
@@ -41,13 +41,17 @@ export function ParametricShapePreview({ shape, dimensions }: ParametricShapePre
       />
 
       {/* Lighting */}
-      <ambientLight intensity={0.6} />
+      <ambientLight intensity={0.5} />
       <directionalLight
-        position={[5, 10, 5]}
-        intensity={0.8}
+        position={[10, 15, 10]}
+        intensity={1}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
+      />
+      <directionalLight
+        position={[-5, 10, -5]}
+        intensity={0.3}
       />
 
       {/* The parametric shape - lifted so bottom is at Y=0 */}
@@ -70,6 +74,8 @@ export function ParametricShapePreview({ shape, dimensions }: ParametricShapePre
         <shadowMaterial opacity={0.15} />
       </mesh>
 
+      {/* Environment for reflections */}
+      <Environment preset="city" />
     </Canvas>
   )
 }

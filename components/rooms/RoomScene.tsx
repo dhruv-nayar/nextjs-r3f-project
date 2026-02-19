@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { CameraControls, PerspectiveCamera } from '@react-three/drei'
+import { CameraControls, PerspectiveCamera, Environment } from '@react-three/drei'
 import { useControls } from '@/lib/controls-context'
 import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
@@ -315,10 +315,10 @@ export function RoomScene() {
       />
 
       {/* Lighting */}
-      <ambientLight intensity={currentRoom.lighting?.ambient.intensity || 0.5} />
+      <ambientLight intensity={currentRoom.lighting?.ambient.intensity || Math.PI / 2} />
       <directionalLight
         position={[10, 25, 15]}
-        intensity={0.7}
+        intensity={1}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -421,6 +421,9 @@ export function RoomScene() {
           position={placementState.previewPosition}
         />
       )}
+
+      {/* Environment */}
+      <Environment preset="city" />
 
       {/* Auto-capture thumbnail for project */}
       {currentHome && (
