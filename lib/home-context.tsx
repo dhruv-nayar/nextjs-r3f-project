@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react'
 import { Home, Room, ItemInstance, Vector3 } from '@/types/room'
 import { FloorplanData } from '@/types/floorplan'
 import { FloorplanDataV2, FloorplanDataV3 } from '@/types/floorplan-v2'
@@ -310,7 +310,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
   }
 
   // V3 Floorplan methods (two-sided wall segments with styles/doors)
-  const setFloorplanDataV3 = (homeId: string, data: FloorplanDataV3) => {
+  const setFloorplanDataV3 = useCallback((homeId: string, data: FloorplanDataV3) => {
     console.log('[HomeContext] setFloorplanDataV3 called for home:', homeId)
     setHomes(prev =>
       prev.map(home =>
@@ -323,7 +323,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
           : home
       )
     )
-  }
+  }, [])
 
   const getFloorplanDataV3 = (homeId: string): FloorplanDataV3 | undefined => {
     const home = homes.find(h => h.id === homeId)
