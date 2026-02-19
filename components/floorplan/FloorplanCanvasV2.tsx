@@ -33,6 +33,7 @@ import {
   findNearbyDoor,
   splitWallAtPoint,
   detectRoomFromDrawing,
+  detectAllRooms,
   getRoomPolygon,
   wallExists,
 } from '@/lib/utils/floorplan-geometry'
@@ -367,6 +368,33 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     return room
   }, [rooms.length])
 
+  // Auto-detect and create rooms for any new closed shapes
+  const autoDetectRooms = useCallback((currentWalls: FloorplanWallV2[], currentVertices: FloorplanVertex[]) => {
+    // Detect all closed shapes
+    const detectedCycles = detectAllRooms(currentWalls, currentVertices)
+
+    if (detectedCycles.length === 0) return
+
+    // Helper to normalize a wall ID array for comparison (sort it)
+    const normalizeWallIds = (wallIds: string[]) => [...wallIds].sort().join(',')
+
+    // Get all existing room wall ID sets
+    const existingRoomWallSets = new Set(
+      rooms.map(room => normalizeWallIds(room.wallIds))
+    )
+
+    // Find new cycles that don't already have rooms
+    const newCycles = detectedCycles.filter(cycle => {
+      const normalizedCycle = normalizeWallIds(cycle)
+      return !existingRoomWallSets.has(normalizedCycle)
+    })
+
+    // Create rooms for new cycles
+    newCycles.forEach(wallIds => {
+      createRoom(wallIds)
+    })
+  }, [rooms, createRoom])
+
   // Move a vertex (updates in place)
   const moveVertex = useCallback((vertexId: string, x: number, y: number) => {
     setVertices((prev) =>
@@ -564,20 +592,15 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     const lastVertexId = drawingVertexIds[drawingVertexIds.length - 1]
 
     if (nearVertex && nearVertex.id !== lastVertexId) {
-      // Clicking existing vertex - create wall and check for room
+      // Clicking existing vertex - create wall and auto-detect any closed shapes
       const { updatedWalls } = createWall(lastVertexId, nearVertex.id, walls)
 
-      // Check if this closes a shape
+      // Auto-detect any closed shapes formed by this wall
+      autoDetectRooms(updatedWalls, vertices)
+
+      // Check if this closes the current drawing path
       if (drawingVertexIds.includes(nearVertex.id)) {
-        // Shape closed! Detect and create room
-        const roomWallIds = detectRoomFromDrawing(
-          drawingVertexIds,
-          nearVertex.id,
-          updatedWalls
-        )
-        if (roomWallIds) {
-          createRoom(roomWallIds)
-        }
+        // Drawing path closed - reset to start fresh
         setDrawingVertexIds([])
         // Stay in DRAW_WALLS mode to continue drawing
       } else {
@@ -605,8 +628,10 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         setWalls(wallsAfterSplit)
         setRooms(updatedRooms)
 
-        const { wall: newWall } = createWall(lastVertexId, newVertex.id, wallsAfterSplit)
+        const { wall: newWall, updatedWalls: wallsAfterNewWall } = createWall(lastVertexId, newVertex.id, wallsAfterSplit)
         if (newWall) {
+          // Auto-detect any closed shapes formed by this wall
+          autoDetectRooms(wallsAfterNewWall, [...vertices, newVertex])
           setDrawingVertexIds([...drawingVertexIds, newVertex.id])
         }
       } else {
@@ -614,7 +639,9 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         const snappedX = snapToGrid(clickX)
         const snappedY = snapToGrid(clickY)
         const newVertex = createVertex(snappedX, snappedY)
-        createWall(lastVertexId, newVertex.id, walls)
+        const { updatedWalls: wallsAfterNewWall } = createWall(lastVertexId, newVertex.id, walls)
+        // Auto-detect any closed shapes formed by this wall
+        autoDetectRooms(wallsAfterNewWall, [...vertices, newVertex])
         setDrawingVertexIds([...drawingVertexIds, newVertex.id])
       }
     }
@@ -627,7 +654,8 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
     snapTo45Degrees,
     createVertex,
     createWall,
-    createRoom
+    createRoom,
+    autoDetectRooms
   ])
 
   // Handle canvas click - route to appropriate mode handler
