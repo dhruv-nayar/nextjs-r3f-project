@@ -155,3 +155,29 @@ export type MaskCorrectionInsert = Partial<Omit<MaskCorrectionRow, 'id' | 'creat
 }
 
 export type MaskCorrectionUpdate = Partial<Omit<MaskCorrectionRow, 'id' | 'created_at'>>
+
+// ============================================
+// Homes table types
+// ============================================
+
+import { Room, SharedWall } from './room'
+import { FloorplanData } from './floorplan'
+import { FloorplanDataV2, FloorplanDataV3 } from './floorplan-v2'
+
+export interface HomeRow {
+  id: string
+  name: string
+  description: string | null
+  thumbnail_path: string | null
+  rooms: Room[]
+  shared_walls: SharedWall[] | null
+  floorplan_data: FloorplanData | null
+  floorplan_data_v2: FloorplanDataV2 | null
+  floorplan_data_v3: FloorplanDataV3 | null
+  created_at: string
+  updated_at: string
+}
+
+export type HomeInsert = Omit<HomeRow, 'created_at' | 'updated_at'>
+
+export type HomeUpdate = Partial<Omit<HomeRow, 'id' | 'created_at'>>

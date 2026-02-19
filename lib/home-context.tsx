@@ -1,9 +1,11 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react'
 import { Home, Room, ItemInstance, Vector3 } from '@/types/room'
 import { FloorplanData } from '@/types/floorplan'
 import { FloorplanDataV2, FloorplanDataV3 } from '@/types/floorplan-v2'
+import { HomeRow } from '@/types/database'
+import { createClient } from '@/lib/supabase/client'
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from './storage'
 import { convertFloorplanTo3D } from './floorplan/floorplan-converter'
 import { convertV2To3D } from './utils/floorplan-geometry'
@@ -12,6 +14,7 @@ interface HomeContextType {
   homes: Home[]
   currentHomeId: string | null
   currentHome: Home | null
+  isLoading: boolean
   createHome: (name: string, rooms: Room[]) => void
   deleteHome: (homeId: string) => void
   switchHome: (homeId: string) => void
@@ -47,48 +50,216 @@ interface HomeContextType {
   setFloorplanDataV3: (homeId: string, data: FloorplanDataV3) => void
   getFloorplanDataV3: (homeId: string) => FloorplanDataV3 | undefined
 
-  // Force immediate save to localStorage (bypasses debounce)
+  // Force immediate save (bypasses debounce)
   flushHomesToStorage: () => void
 }
 
 const HomeContext = createContext<HomeContextType | undefined>(undefined)
 
+// Convert database row to Home interface
+function rowToHome(row: HomeRow): Home {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || undefined,
+    thumbnailPath: row.thumbnail_path || undefined,
+    rooms: row.rooms || [],
+    sharedWalls: row.shared_walls || undefined,
+    floorplanData: row.floorplan_data || undefined,
+    floorplanDataV2: row.floorplan_data_v2 || undefined,
+    floorplanDataV3: row.floorplan_data_v3 || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+// Convert Home interface to database row format
+function homeToRow(home: Home): Omit<HomeRow, 'created_at' | 'updated_at'> {
+  return {
+    id: home.id,
+    name: home.name,
+    description: home.description || null,
+    thumbnail_path: home.thumbnailPath || null,
+    rooms: home.rooms || [],
+    shared_walls: home.sharedWalls || null,
+    floorplan_data: home.floorplanData || null,
+    floorplan_data_v2: home.floorplanDataV2 || null,
+    floorplan_data_v3: home.floorplanDataV3 || null,
+  }
+}
+
 export function HomeProvider({ children }: { children: ReactNode }) {
   const [homes, setHomes] = useState<Home[]>([])
   const [currentHomeId, setCurrentHomeId] = useState<string>('')
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Load homes from localStorage on mount
+  // Debounce timer ref for Supabase updates
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const pendingUpdatesRef = useRef<Map<string, Partial<Home>>>(new Map())
+
+  // Load homes from Supabase on mount
   useEffect(() => {
-    const loadedHomes = loadFromStorage<Home[]>(STORAGE_KEYS.HOMES, [])
-    const loadedCurrentHomeId = loadFromStorage<string>(STORAGE_KEYS.CURRENT_HOME_ID, '')
+    const supabase = createClient()
 
-    setHomes(loadedHomes)
+    async function loadHomes() {
+      try {
+        const { data, error } = await supabase
+          .from('homes')
+          .select('*')
+          .order('updated_at', { ascending: false })
+
+        if (error) {
+          console.error('[HomeContext] Supabase error, falling back to localStorage:', error)
+          loadFromLocalStorage()
+          return
+        }
+
+        if (data && data.length > 0) {
+          console.log('[HomeContext] Loaded', data.length, 'homes from Supabase')
+          setHomes(data.map(rowToHome))
+        } else {
+          // Supabase is empty - check for localStorage migration
+          await migrateFromLocalStorage(supabase)
+        }
+      } catch (err) {
+        console.error('[HomeContext] Error loading homes:', err)
+        loadFromLocalStorage()
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    function loadFromLocalStorage() {
+      const localHomes = loadFromStorage<Home[]>(STORAGE_KEYS.HOMES, [])
+      console.log('[HomeContext] Loaded', localHomes.length, 'homes from localStorage')
+      setHomes(localHomes)
+      setIsLoading(false)
+    }
+
+    async function migrateFromLocalStorage(supabase: ReturnType<typeof createClient>) {
+      const localHomes = loadFromStorage<Home[]>(STORAGE_KEYS.HOMES, [])
+
+      if (localHomes.length === 0) {
+        console.log('[HomeContext] No homes to migrate')
+        setHomes([])
+        return
+      }
+
+      console.log('[HomeContext] Migrating', localHomes.length, 'homes from localStorage to Supabase')
+
+      // Insert all homes
+      const { data, error } = await supabase
+        .from('homes')
+        .upsert(localHomes.map(homeToRow))
+        .select()
+
+      if (error) {
+        console.error('[HomeContext] Migration failed:', error)
+        setHomes(localHomes)
+      } else if (data) {
+        setHomes(data.map(rowToHome))
+        // Clear localStorage after successful migration
+        saveToStorage(STORAGE_KEYS.HOMES, [])
+        console.log('[HomeContext] Migration complete, localStorage cleared')
+      }
+    }
+
+    // Load current home ID from localStorage (simple preference, no need to migrate)
+    const loadedCurrentHomeId = loadFromStorage<string>(STORAGE_KEYS.CURRENT_HOME_ID, '')
     setCurrentHomeId(loadedCurrentHomeId)
-    setIsLoaded(true)
+
+    loadHomes()
   }, [])
 
-  // Save homes to localStorage whenever they change (debounced)
+  // Subscribe to realtime updates for multi-tab sync
   useEffect(() => {
-    if (!isLoaded) return // Don't save on initial load
+    const supabase = createClient()
 
-    const timeoutId = setTimeout(() => {
-      saveToStorage(STORAGE_KEYS.HOMES, homes)
-    }, 500) // Debounce for 500ms
+    const channel = supabase
+      .channel('homes_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'homes' },
+        (payload) => {
+          console.log('[HomeContext] Realtime update:', payload.eventType)
 
-    return () => clearTimeout(timeoutId)
-  }, [homes, isLoaded])
+          if (payload.eventType === 'INSERT') {
+            const newHome = rowToHome(payload.new as HomeRow)
+            setHomes(prev => {
+              // Avoid duplicates (might already have it from optimistic update)
+              if (prev.some(h => h.id === newHome.id)) {
+                return prev.map(h => h.id === newHome.id ? newHome : h)
+              }
+              return [newHome, ...prev]
+            })
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedHome = rowToHome(payload.new as HomeRow)
+            setHomes(prev => prev.map(home =>
+              home.id === updatedHome.id ? updatedHome : home
+            ))
+          } else if (payload.eventType === 'DELETE') {
+            const deletedHome = payload.old as HomeRow
+            setHomes(prev => prev.filter(home => home.id !== deletedHome.id))
+          }
+        }
+      )
+      .subscribe()
 
-  // Save current home ID whenever it changes
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  // Save current home ID to localStorage whenever it changes
   useEffect(() => {
-    if (!isLoaded) return
+    if (!isLoading) {
+      saveToStorage(STORAGE_KEYS.CURRENT_HOME_ID, currentHomeId)
+    }
+  }, [currentHomeId, isLoading])
 
-    saveToStorage(STORAGE_KEYS.CURRENT_HOME_ID, currentHomeId)
-  }, [currentHomeId, isLoaded])
+  // Helper to save a home to Supabase (debounced)
+  const saveHomeToSupabase = useCallback((homeId: string, updates: Partial<Home>) => {
+    // Accumulate updates
+    const existing = pendingUpdatesRef.current.get(homeId) || {}
+    pendingUpdatesRef.current.set(homeId, { ...existing, ...updates })
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    // Set new timeout (500ms debounce)
+    saveTimeoutRef.current = setTimeout(async () => {
+      const supabase = createClient()
+
+      for (const [id, partialHome] of pendingUpdatesRef.current) {
+        // Get the full home to convert properly
+        const fullHome = homes.find(h => h.id === id)
+        if (!fullHome) continue
+
+        const mergedHome = { ...fullHome, ...partialHome }
+        const row = homeToRow(mergedHome)
+
+        const { error } = await supabase
+          .from('homes')
+          .update({
+            ...row,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+
+        if (error) {
+          console.error('[HomeContext] Failed to save home to Supabase:', error)
+        }
+      }
+
+      pendingUpdatesRef.current.clear()
+    }, 500)
+  }, [homes])
 
   const currentHome = homes.find(h => h.id === currentHomeId) || null
 
-  const createHome = (name: string, rooms: Room[]) => {
+  const createHome = useCallback((name: string, rooms: Room[]) => {
     const newHome: Home = {
       id: `home-${Date.now()}`,
       name,
@@ -96,12 +267,27 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
+
+    // Optimistic update
     setHomes(prev => [...prev, newHome])
     setCurrentHomeId(newHome.id)
-    return newHome.id
-  }
 
-  const deleteHome = (homeId: string) => {
+    // Insert into Supabase
+    const supabase = createClient()
+    supabase
+      .from('homes')
+      .insert(homeToRow(newHome))
+      .then(({ error }) => {
+        if (error) {
+          console.error('[HomeContext] Failed to create home in Supabase:', error)
+        }
+      })
+
+    return newHome.id
+  }, [])
+
+  const deleteHome = useCallback((homeId: string) => {
+    // Optimistic update
     setHomes(prev => {
       const filtered = prev.filter(h => h.id !== homeId)
       if (homeId === currentHomeId && filtered.length > 0) {
@@ -109,47 +295,78 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       }
       return filtered
     })
-  }
 
-  const switchHome = (homeId: string) => {
+    // Delete from Supabase
+    const supabase = createClient()
+    supabase
+      .from('homes')
+      .delete()
+      .eq('id', homeId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[HomeContext] Failed to delete home from Supabase:', error)
+        }
+      })
+  }, [currentHomeId])
+
+  const switchHome = useCallback((homeId: string) => {
     if (homes.find(h => h.id === homeId)) {
       setCurrentHomeId(homeId)
     }
-  }
+  }, [homes])
 
-  const updateHome = (homeId: string, updates: Partial<Home>) => {
+  const updateHome = useCallback((homeId: string, updates: Partial<Home>) => {
+    const updatedAt = new Date().toISOString()
+
+    // Optimistic update
     setHomes(prev =>
       prev.map(home =>
         home.id === homeId
-          ? { ...home, ...updates, updatedAt: new Date().toISOString() }
+          ? { ...home, ...updates, updatedAt }
           : home
       )
     )
-  }
 
-  const renameHome = (homeId: string, newName: string) => {
+    // Save to Supabase (debounced)
+    saveHomeToSupabase(homeId, { ...updates, updatedAt })
+  }, [saveHomeToSupabase])
+
+  const renameHome = useCallback((homeId: string, newName: string) => {
     if (!newName.trim()) return
+
+    const updatedAt = new Date().toISOString()
+
+    // Optimistic update
     setHomes(prev =>
       prev.map(home =>
         home.id === homeId
-          ? { ...home, name: newName.trim(), updatedAt: new Date().toISOString() }
+          ? { ...home, name: newName.trim(), updatedAt }
           : home
       )
     )
-  }
 
-  const updateHomeThumbnail = (homeId: string, thumbnailPath: string) => {
+    // Save to Supabase (debounced)
+    saveHomeToSupabase(homeId, { name: newName.trim(), updatedAt })
+  }, [saveHomeToSupabase])
+
+  const updateHomeThumbnail = useCallback((homeId: string, thumbnailPath: string) => {
+    const updatedAt = new Date().toISOString()
+
+    // Optimistic update
     setHomes(prev =>
       prev.map(home =>
         home.id === homeId
-          ? { ...home, thumbnailPath, updatedAt: new Date().toISOString() }
+          ? { ...home, thumbnailPath, updatedAt }
           : home
       )
     )
-  }
 
-  // NEW: Instance management methods
-  const addInstanceToRoom = (roomId: string, itemId: string, position: Vector3): string => {
+    // Save to Supabase (debounced)
+    saveHomeToSupabase(homeId, { thumbnailPath, updatedAt })
+  }, [saveHomeToSupabase])
+
+  // Instance management methods
+  const addInstanceToRoom = useCallback((roomId: string, itemId: string, position: Vector3): string => {
     const instanceId = `instance-${Date.now()}`
     const newInstance: ItemInstance = {
       id: instanceId,
@@ -161,52 +378,70 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       placedAt: new Date().toISOString()
     }
 
+    const updatedAt = new Date().toISOString()
+
+    // Optimistic update
     setHomes(prev =>
-      prev.map(home => ({
-        ...home,
-        rooms: home.rooms.map(room =>
+      prev.map(home => {
+        const hasRoom = home.rooms.some(r => r.id === roomId)
+        if (!hasRoom) return home
+
+        const updatedRooms = home.rooms.map(room =>
           room.id === roomId
-            ? {
-                ...room,
-                instances: [...(room.instances || []), newInstance]
-              }
+            ? { ...room, instances: [...(room.instances || []), newInstance] }
             : room
-        ),
-        updatedAt: new Date().toISOString()
-      }))
+        )
+
+        // Also trigger Supabase save for this home
+        saveHomeToSupabase(home.id, { rooms: updatedRooms, updatedAt })
+
+        return { ...home, rooms: updatedRooms, updatedAt }
+      })
     )
 
     return instanceId
-  }
+  }, [saveHomeToSupabase])
 
-  const updateInstance = (instanceId: string, updates: Partial<ItemInstance>) => {
+  const updateInstance = useCallback((instanceId: string, updates: Partial<ItemInstance>) => {
+    const updatedAt = new Date().toISOString()
+
     setHomes(prev =>
-      prev.map(home => ({
-        ...home,
-        rooms: home.rooms.map(room => ({
+      prev.map(home => {
+        const hasInstance = home.rooms.some(r =>
+          (r.instances || []).some(i => i.id === instanceId)
+        )
+        if (!hasInstance) return home
+
+        const updatedRooms = home.rooms.map(room => ({
           ...room,
           instances: (room.instances || []).map(instance =>
             instance.id === instanceId
               ? { ...instance, ...updates }
               : instance
           )
-        })),
-        updatedAt: new Date().toISOString()
-      }))
+        }))
+
+        saveHomeToSupabase(home.id, { rooms: updatedRooms, updatedAt })
+
+        return { ...home, rooms: updatedRooms, updatedAt }
+      })
     )
-  }
+  }, [saveHomeToSupabase])
 
-  const deleteInstance = (instanceId: string) => {
+  const deleteInstance = useCallback((instanceId: string) => {
+    const updatedAt = new Date().toISOString()
+
     setHomes(prev =>
-      prev.map(home => ({
-        ...home,
-        rooms: home.rooms.map(room => {
-          const instances = room.instances || []
+      prev.map(home => {
+        const hasInstance = home.rooms.some(r =>
+          (r.instances || []).some(i => i.id === instanceId)
+        )
+        if (!hasInstance) return home
 
-          // Find the instance being deleted to get its position
+        const updatedRooms = home.rooms.map(room => {
+          const instances = room.instances || []
           const deletedInstance = instances.find(inst => inst.id === instanceId)
 
-          // If no instance found or instance doesn't exist in this room, just filter
           if (!deletedInstance) {
             return {
               ...room,
@@ -214,21 +449,16 @@ export function HomeProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          // Reparent children: Find all instances that have this instance as parent
+          // Reparent children
           const updatedInstances = instances
-            .filter(instance => instance.id !== instanceId) // Remove the deleted instance
+            .filter(instance => instance.id !== instanceId)
             .map(instance => {
-              // If this instance's parent is the deleted instance
               if (instance.parentSurfaceId === instanceId) {
-                // Convert relative position to world position
-                // Add parent's position to child's relative position
                 const worldPosition = {
                   x: instance.position.x + deletedInstance.position.x,
-                  y: instance.position.y, // Y is typically floor level (0) for floor items
+                  y: instance.position.y,
                   z: instance.position.z + deletedInstance.position.z
                 }
-
-                // Reparent to floor
                 return {
                   ...instance,
                   position: worldPosition,
@@ -239,17 +469,17 @@ export function HomeProvider({ children }: { children: ReactNode }) {
               return instance
             })
 
-          return {
-            ...room,
-            instances: updatedInstances
-          }
-        }),
-        updatedAt: new Date().toISOString()
-      }))
-    )
-  }
+          return { ...room, instances: updatedInstances }
+        })
 
-  const getInstancesForItem = (itemId: string) => {
+        saveHomeToSupabase(home.id, { rooms: updatedRooms, updatedAt })
+
+        return { ...home, rooms: updatedRooms, updatedAt }
+      })
+    )
+  }, [saveHomeToSupabase])
+
+  const getInstancesForItem = useCallback((itemId: string) => {
     const results: Array<{
       instance: ItemInstance
       room: Room
@@ -268,116 +498,104 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     })
 
     return results
-  }
+  }, [homes])
 
-  // Delete all instances of a given item across all homes
-  const deleteAllInstancesOfItem = (itemId: string) => {
+  const deleteAllInstancesOfItem = useCallback((itemId: string) => {
+    const updatedAt = new Date().toISOString()
+
     setHomes(prev =>
-      prev.map(home => ({
-        ...home,
-        rooms: home.rooms.map(room => ({
+      prev.map(home => {
+        const hasItem = home.rooms.some(r =>
+          (r.instances || []).some(i => i.itemId === itemId)
+        )
+        if (!hasItem) return home
+
+        const updatedRooms = home.rooms.map(room => ({
           ...room,
           instances: (room.instances || []).filter(instance => instance.itemId !== itemId)
-        })),
-        updatedAt: new Date().toISOString()
-      }))
-    )
-  }
+        }))
 
-  // NEW: Floorplan integration methods
-  const setFloorplanData = (homeId: string, floorplan: FloorplanData) => {
+        saveHomeToSupabase(home.id, { rooms: updatedRooms, updatedAt })
+
+        return { ...home, rooms: updatedRooms, updatedAt }
+      })
+    )
+  }, [saveHomeToSupabase])
+
+  // Floorplan V1 methods
+  const setFloorplanData = useCallback((homeId: string, floorplan: FloorplanData) => {
+    const updatedAt = new Date().toISOString()
+
     setHomes(prev =>
       prev.map(home =>
         home.id === homeId
-          ? {
-              ...home,
-              floorplanData: floorplan,
-              updatedAt: new Date().toISOString()
-            }
+          ? { ...home, floorplanData: floorplan, updatedAt }
           : home
       )
     )
-  }
 
-  const getFloorplanData = (homeId: string): FloorplanData | undefined => {
+    saveHomeToSupabase(homeId, { floorplanData: floorplan, updatedAt })
+  }, [saveHomeToSupabase])
+
+  const getFloorplanData = useCallback((homeId: string): FloorplanData | undefined => {
     const home = homes.find(h => h.id === homeId)
     return home?.floorplanData
-  }
+  }, [homes])
 
-  const buildRoomsFromFloorplan = (homeId: string, floorplan: FloorplanData) => {
+  const buildRoomsFromFloorplan = useCallback((homeId: string, floorplan: FloorplanData) => {
     console.log('[buildRoomsFromFloorplan] Starting conversion for home:', homeId)
-    console.log('[buildRoomsFromFloorplan] Floorplan data:', floorplan)
 
-    // Convert 2D floorplan to 3D rooms and shared walls
     const { rooms: rooms3D, sharedWalls } = convertFloorplanTo3D(floorplan)
-
-    console.log('[buildRoomsFromFloorplan] Converted rooms:', rooms3D)
-    console.log('[buildRoomsFromFloorplan] Number of rooms:', rooms3D.length)
-    console.log('[buildRoomsFromFloorplan] Number of shared walls:', sharedWalls.length)
+    const updatedAt = new Date().toISOString()
 
     setHomes(prev =>
       prev.map(home =>
         home.id === homeId
-          ? {
-              ...home,
-              rooms: rooms3D,
-              sharedWalls,  // NEW: Store shared walls
-              floorplanData: floorplan,
-              updatedAt: new Date().toISOString()
-            }
+          ? { ...home, rooms: rooms3D, sharedWalls, floorplanData: floorplan, updatedAt }
           : home
       )
     )
 
-    console.log('[buildRoomsFromFloorplan] Homes updated successfully')
-  }
+    // Immediate save for navigation
+    const supabase = createClient()
+    const home = homes.find(h => h.id === homeId)
+    if (home) {
+      const updatedHome = { ...home, rooms: rooms3D, sharedWalls, floorplanData: floorplan, updatedAt }
+      supabase
+        .from('homes')
+        .update({ ...homeToRow(updatedHome), updated_at: updatedAt })
+        .eq('id', homeId)
+        .then(({ error }) => {
+          if (error) console.error('[HomeContext] Failed to save floorplan:', error)
+        })
+    }
 
-  // V2 Floorplan methods (wall-first architecture)
-  const setFloorplanDataV2 = (homeId: string, data: FloorplanDataV2) => {
+    console.log('[buildRoomsFromFloorplan] Completed')
+  }, [homes])
+
+  // Floorplan V2 methods
+  const setFloorplanDataV2 = useCallback((homeId: string, data: FloorplanDataV2) => {
+    const updatedAt = new Date().toISOString()
+
     setHomes(prev =>
       prev.map(home =>
         home.id === homeId
-          ? {
-              ...home,
-              floorplanDataV2: data,
-              updatedAt: new Date().toISOString()
-            }
+          ? { ...home, floorplanDataV2: data, updatedAt }
           : home
       )
     )
-  }
 
-  const getFloorplanDataV2 = (homeId: string): FloorplanDataV2 | undefined => {
+    saveHomeToSupabase(homeId, { floorplanDataV2: data, updatedAt })
+  }, [saveHomeToSupabase])
+
+  const getFloorplanDataV2 = useCallback((homeId: string): FloorplanDataV2 | undefined => {
     const home = homes.find(h => h.id === homeId)
     return home?.floorplanDataV2
-  }
+  }, [homes])
 
-  // V3 Floorplan methods (two-sided wall segments with styles/doors)
-  const setFloorplanDataV3 = useCallback((homeId: string, data: FloorplanDataV3) => {
-    console.log('[HomeContext] setFloorplanDataV3 called for home:', homeId)
-    setHomes(prev =>
-      prev.map(home =>
-        home.id === homeId
-          ? {
-              ...home,
-              floorplanDataV3: data,
-              updatedAt: new Date().toISOString()
-            }
-          : home
-      )
-    )
-  }, [])
-
-  const getFloorplanDataV3 = (homeId: string): FloorplanDataV3 | undefined => {
-    const home = homes.find(h => h.id === homeId)
-    return home?.floorplanDataV3
-  }
-
-  const buildRoomsFromFloorplanV2 = (homeId: string, data: FloorplanDataV2) => {
+  const buildRoomsFromFloorplanV2 = useCallback((homeId: string, data: FloorplanDataV2) => {
     console.log('[buildRoomsFromFloorplanV2] Starting conversion for home:', homeId)
-    console.log('[buildRoomsFromFloorplanV2] V2 data:', data)
 
-    // Convert V2 floorplan to 3D rooms
     const { rooms: rooms3D, sharedWalls } = convertV2To3D(
       data.vertices,
       data.walls,
@@ -385,122 +603,149 @@ export function HomeProvider({ children }: { children: ReactNode }) {
       homeId
     )
 
-    console.log('[buildRoomsFromFloorplanV2] Converted rooms:', rooms3D.length)
-    console.log('[buildRoomsFromFloorplanV2] Shared walls:', sharedWalls.length)
+    const roomsWithHomeId = rooms3D.map(room => ({ ...room, homeId }))
+    const updatedAt = new Date().toISOString()
 
-    // Update rooms with the correct homeId
-    const roomsWithHomeId = rooms3D.map(room => ({
-      ...room,
-      homeId
-    }))
-
-    // Use functional update to get LATEST homes state (avoid stale closure)
-    // Also immediately save to localStorage after computing the update
-    setHomes(prevHomes => {
-      const updatedHomes = prevHomes.map(home =>
+    // Optimistic update
+    setHomes(prev =>
+      prev.map(home =>
         home.id === homeId
-          ? {
-              ...home,
-              rooms: roomsWithHomeId,
-              sharedWalls,
-              floorplanDataV2: data,
-              updatedAt: new Date().toISOString()
-            }
+          ? { ...home, rooms: roomsWithHomeId, sharedWalls, floorplanDataV2: data, updatedAt }
           : home
       )
+    )
 
-      // CRITICAL: Immediately save to localStorage to prevent race condition
-      // The normal debounced save (500ms) won't complete before navigation (100ms)
-      console.log('[buildRoomsFromFloorplanV2] Immediately saving to localStorage')
-      saveToStorage(STORAGE_KEYS.HOMES, updatedHomes)
-
-      console.log('[buildRoomsFromFloorplanV2] Homes updated and saved successfully')
-      return updatedHomes
-    })
-  }
-
-  // Two-way sync: Sync room changes from 3D back to V2 floorplan data
-  const syncRoomChangesToFloorplanV2 = (homeId: string, roomId: string, updates: Partial<Room>) => {
+    // Immediate save to Supabase (critical for navigation)
+    const supabase = createClient()
     const home = homes.find(h => h.id === homeId)
-    if (!home || !home.floorplanDataV2) {
-      // No V2 data to sync to
-      return
+    if (home) {
+      const updatedHome = {
+        ...home,
+        rooms: roomsWithHomeId,
+        sharedWalls,
+        floorplanDataV2: data,
+        updatedAt
+      }
+      supabase
+        .from('homes')
+        .update({ ...homeToRow(updatedHome), updated_at: updatedAt })
+        .eq('id', homeId)
+        .then(({ error }) => {
+          if (error) console.error('[HomeContext] Failed to save V2 floorplan:', error)
+          else console.log('[buildRoomsFromFloorplanV2] Saved to Supabase')
+        })
     }
+
+    console.log('[buildRoomsFromFloorplanV2] Completed')
+  }, [homes])
+
+  // V3 Floorplan methods
+  const setFloorplanDataV3 = useCallback((homeId: string, data: FloorplanDataV3) => {
+    console.log('[HomeContext] setFloorplanDataV3 called for home:', homeId)
+    const updatedAt = new Date().toISOString()
+
+    setHomes(prev =>
+      prev.map(home =>
+        home.id === homeId
+          ? { ...home, floorplanDataV3: data, updatedAt }
+          : home
+      )
+    )
+
+    saveHomeToSupabase(homeId, { floorplanDataV3: data, updatedAt })
+  }, [saveHomeToSupabase])
+
+  const getFloorplanDataV3 = useCallback((homeId: string): FloorplanDataV3 | undefined => {
+    const home = homes.find(h => h.id === homeId)
+    return home?.floorplanDataV3
+  }, [homes])
+
+  // Two-way sync: 3D → V2
+  const syncRoomChangesToFloorplanV2 = useCallback((homeId: string, roomId: string, updates: Partial<Room>) => {
+    const home = homes.find(h => h.id === homeId)
+    if (!home || !home.floorplanDataV2) return
 
     const v2Data = home.floorplanDataV2
     let hasChanges = false
 
-    // Find the room in V2 data
     const v2RoomIndex = v2Data.rooms.findIndex(r => r.id === roomId)
-    if (v2RoomIndex === -1) {
-      console.log('[syncRoomChangesToFloorplanV2] Room not found in V2 data:', roomId)
-      return
-    }
+    if (v2RoomIndex === -1) return
 
     const updatedRooms = [...v2Data.rooms]
     const v2Room = { ...updatedRooms[v2RoomIndex] }
 
     // Sync room name
     if (updates.name && updates.name !== v2Room.name) {
-      console.log('[syncRoomChangesToFloorplanV2] Syncing room name:', updates.name)
       v2Room.name = updates.name
       hasChanges = true
     }
 
-    // Sync wall height (applies to all walls of the room)
+    // Sync wall height
     if (updates.dimensions?.height) {
       const newHeight = updates.dimensions.height
       const updatedWalls = v2Data.walls.map(wall => {
-        // Check if this wall belongs to the room
-        if (v2Room.wallIds.includes(wall.id)) {
-          if (wall.height !== newHeight) {
-            hasChanges = true
-            return { ...wall, height: newHeight }
-          }
+        if (v2Room.wallIds.includes(wall.id) && wall.height !== newHeight) {
+          hasChanges = true
+          return { ...wall, height: newHeight }
         }
         return wall
       })
 
       if (hasChanges) {
-        console.log('[syncRoomChangesToFloorplanV2] Syncing wall heights:', newHeight)
-        setHomes(prev =>
-          prev.map(h =>
-            h.id === homeId
-              ? {
-                  ...h,
-                  floorplanDataV2: {
-                    ...v2Data,
-                    rooms: updatedRooms.map((r, i) => (i === v2RoomIndex ? v2Room : r)),
-                    walls: updatedWalls,
-                    updatedAt: new Date().toISOString(),
-                  },
-                }
-              : h
-          )
-        )
+        const updatedV2Data: FloorplanDataV2 = {
+          ...v2Data,
+          rooms: updatedRooms.map((r, i) => (i === v2RoomIndex ? v2Room : r)),
+          walls: updatedWalls,
+          updatedAt: new Date().toISOString(),
+        }
+        setFloorplanDataV2(homeId, updatedV2Data)
         return
       }
     }
 
-    // If only room properties changed (not walls)
     if (hasChanges) {
       updatedRooms[v2RoomIndex] = v2Room
-      setHomes(prev =>
-        prev.map(h =>
-          h.id === homeId
-            ? {
-                ...h,
-                floorplanDataV2: {
-                  ...v2Data,
-                  rooms: updatedRooms,
-                  updatedAt: new Date().toISOString(),
-                },
-              }
-            : h
-        )
-      )
+      const updatedV2Data: FloorplanDataV2 = {
+        ...v2Data,
+        rooms: updatedRooms,
+        updatedAt: new Date().toISOString(),
+      }
+      setFloorplanDataV2(homeId, updatedV2Data)
     }
-  }
+  }, [homes, setFloorplanDataV2])
+
+  // Force flush - now just triggers immediate Supabase save
+  const flushHomesToStorage = useCallback(() => {
+    console.log('[HomeContext] Flushing homes to Supabase immediately')
+
+    // Clear pending debounce
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    // Save all pending updates immediately
+    const supabase = createClient()
+    for (const [id, partialHome] of pendingUpdatesRef.current) {
+      const fullHome = homes.find(h => h.id === id)
+      if (!fullHome) continue
+
+      const mergedHome = { ...fullHome, ...partialHome }
+      const row = homeToRow(mergedHome)
+
+      supabase
+        .from('homes')
+        .update({ ...row, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('[HomeContext] Flush failed:', error)
+        })
+    }
+
+    pendingUpdatesRef.current.clear()
+
+    // Also save to localStorage as backup
+    saveToStorage(STORAGE_KEYS.HOMES, homes)
+  }, [homes])
 
   return (
     <HomeContext.Provider
@@ -508,6 +753,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         homes,
         currentHomeId,
         currentHome,
+        isLoading,
         createHome,
         deleteHome,
         switchHome,
@@ -528,10 +774,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         syncRoomChangesToFloorplanV2,
         setFloorplanDataV3,
         getFloorplanDataV3,
-        flushHomesToStorage: () => {
-          console.log('[HomeContext] Flushing homes to storage immediately')
-          saveToStorage(STORAGE_KEYS.HOMES, homes)
-        }
+        flushHomesToStorage
       }}
     >
       {children}

@@ -89,3 +89,43 @@ CREATE TRIGGER mask_corrections_updated_at
   BEFORE UPDATE ON mask_corrections
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
+
+-- ============================================
+-- Homes table (for project/home data)
+-- ============================================
+
+-- Create the homes table
+CREATE TABLE homes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  thumbnail_path TEXT,
+
+  -- Nested data as JSONB (mirrors localStorage structure)
+  rooms JSONB NOT NULL DEFAULT '[]',
+  shared_walls JSONB,
+  floorplan_data JSONB,        -- V1: Rectangle-based
+  floorplan_data_v2 JSONB,     -- V2: Wall-first polygon
+  floorplan_data_v3 JSONB,     -- V3: Two-sided wall segments
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for homes
+CREATE INDEX idx_homes_updated ON homes(updated_at DESC);
+
+-- Enable Row Level Security
+ALTER TABLE homes ENABLE ROW LEVEL SECURITY;
+
+-- Allow all operations (single-user mode, no auth)
+CREATE POLICY "Allow all operations" ON homes FOR ALL USING (true);
+
+-- Enable Realtime for live updates (multi-tab sync)
+ALTER PUBLICATION supabase_realtime ADD TABLE homes;
+
+-- Auto-update updated_at timestamp
+CREATE TRIGGER homes_updated_at
+  BEFORE UPDATE ON homes
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
