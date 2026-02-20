@@ -22,6 +22,8 @@ import { WallMeshProvider } from '@/lib/contexts/wall-mesh-context'
 import { SurfaceMeshProvider } from '@/lib/contexts/surface-mesh-context'
 import { ProjectThumbnailCapture } from '../homes/ProjectThumbnailCapture'
 import { useWallSegments } from '@/lib/use-wall-segments'
+import { useMobile } from '@/lib/mobile-context'
+import { usePermissions } from '@/lib/hooks/use-permissions'
 
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
@@ -32,6 +34,8 @@ export function RoomScene() {
   const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
   const { mode, setMode, isDraggingObject, isPlacing, placementState } = useInteractionMode()
   const [spaceHeld, setSpaceHeld] = useState(false)
+  const { isMobile } = useMobile()
+  const { canMoveObjects, canInspectFurniture } = usePermissions()
 
   // V3 Wall Segments - two-sided wall rendering
   const {
@@ -102,7 +106,10 @@ export function RoomScene() {
   }, [selectedFurnitureId, selection, deleteInstance, clearAllSelections])
 
   // Space key handler for Figma-style camera pan + Escape to deselect + Delete to remove
+  // Skip on mobile (no keyboard, touch controls handle camera)
   useEffect(() => {
+    if (isMobile) return // No keyboard handlers on mobile
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't capture keys if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -116,8 +123,8 @@ export function RoomScene() {
         return
       }
 
-      // Delete or Backspace removes selected furniture
-      if (e.code === 'Delete' || e.code === 'Backspace') {
+      // Delete or Backspace removes selected furniture (only if can modify)
+      if ((e.code === 'Delete' || e.code === 'Backspace') && canMoveObjects) {
         e.preventDefault()
         deleteSelectedFurniture()
         return
@@ -147,7 +154,7 @@ export function RoomScene() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture])
+  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture, isMobile, canMoveObjects])
 
   // Update cursor when in camera mode and dragging
   useEffect(() => {
@@ -220,9 +227,10 @@ export function RoomScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoomId])
 
-  // Camera is ONLY fully enabled when Space is held
-  // No mouse interactions with camera otherwise (scroll zoom handled via effect)
-  const cameraEnabled = spaceHeld && !isDraggingObject && !isPlacing
+  // Camera control logic:
+  // - Desktop: Only fully enabled when Space is held
+  // - Mobile: Always enabled for touch pan/zoom (no Space key available)
+  const cameraEnabled = isMobile || (spaceHeld && !isDraggingObject && !isPlacing)
 
   // Handle scroll wheel zoom when camera is not in full control mode
   useEffect(() => {

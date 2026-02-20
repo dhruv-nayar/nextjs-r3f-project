@@ -2,10 +2,14 @@
 
 import { useControls } from '@/lib/controls-context'
 import { useRoom } from '@/lib/room-context'
+import { useMobile } from '@/lib/mobile-context'
+import { usePermissions } from '@/lib/hooks/use-permissions'
 
 export function Controls() {
   const { controls } = useControls()
   const { canUndo, canRedo, undo, redo } = useRoom()
+  const { isMobile } = useMobile()
+  const { canModifyProject } = usePermissions()
 
   const handleZoomIn = () => {
     if (controls) {
@@ -64,42 +68,84 @@ export function Controls() {
     }
   }
 
+  // Mobile: Simplified controls with larger touch targets (44x44px)
+  // Desktop: Full controls
+  if (isMobile) {
+    return (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-floral-white rounded-2xl px-4 py-3 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] z-40">
+        <div className="flex items-center gap-4">
+          {/* Zoom Controls - Larger for touch */}
+          <button
+            onClick={handleZoomIn}
+            className="w-11 h-11 rounded-xl bg-taupe/10 active:bg-taupe/30 transition-colors flex items-center justify-center text-graphite text-xl font-semibold font-body"
+            title="Zoom In"
+          >
+            +
+          </button>
+          <button
+            onClick={handleZoomOut}
+            className="w-11 h-11 rounded-xl bg-taupe/10 active:bg-taupe/30 transition-colors flex items-center justify-center text-graphite text-xl font-semibold font-body"
+            title="Zoom Out"
+          >
+            −
+          </button>
+
+          <div className="w-px h-8 bg-taupe/10" />
+
+          {/* Reset View */}
+          <button
+            onClick={handleReset}
+            className="w-11 h-11 rounded-xl bg-taupe/10 active:bg-taupe/30 transition-colors flex items-center justify-center text-graphite text-lg"
+            title="Reset View"
+          >
+            ⌂
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop: Full controls
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-floral-white rounded-2xl px-4 py-2.5 shadow-[0_2px_12px_-2px_rgba(72,57,42,0.06)] border border-taupe/[0.03] z-40">
       <div className="flex items-center gap-3">
-        {/* Undo/Redo */}
-        <button
-          onClick={undo}
-          disabled={!canUndo}
-          className={`w-7 h-7 rounded-lg transition-colors flex items-center justify-center ${
-            canUndo
-              ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
-              : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
-          }`}
-          title="Undo"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 7v6h6" />
-            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-          </svg>
-        </button>
-        <button
-          onClick={redo}
-          disabled={!canRedo}
-          className={`w-7 h-7 rounded-lg transition-colors flex items-center justify-center ${
-            canRedo
-              ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
-              : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
-          }`}
-          title="Redo"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 7v6h-6" />
-            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" />
-          </svg>
-        </button>
+        {/* Undo/Redo - Only show if can modify project */}
+        {canModifyProject && (
+          <>
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              className={`w-7 h-7 rounded-lg transition-colors flex items-center justify-center ${
+                canUndo
+                  ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
+                  : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
+              }`}
+              title="Undo"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 7v6h6" />
+                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+              </svg>
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              className={`w-7 h-7 rounded-lg transition-colors flex items-center justify-center ${
+                canRedo
+                  ? 'bg-taupe/10 text-graphite hover:bg-taupe/20'
+                  : 'bg-taupe/5 text-taupe/30 cursor-not-allowed'
+              }`}
+              title="Redo"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 7v6h-6" />
+                <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" />
+              </svg>
+            </button>
 
-        <div className="w-px h-5 bg-taupe/10" />
+            <div className="w-px h-5 bg-taupe/10" />
+          </>
+        )}
 
         {/* Zoom Controls */}
         <button

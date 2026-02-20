@@ -35,7 +35,7 @@ export function WallSegmentPropertiesPanel() {
   }
 
   return (
-    <div className="fixed right-6 top-24 bottom-6 bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 w-80 overflow-hidden flex flex-col z-50">
+    <div className="desktop-panel fixed right-6 top-24 bottom-6 bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 w-80 overflow-hidden flex flex-col z-50">
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/10 flex-shrink-0 flex items-center justify-between">
         <h2 className="text-white font-semibold text-sm">Wall Properties</h2>

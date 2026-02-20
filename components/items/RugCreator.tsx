@@ -5,6 +5,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { RugShape } from '@/types/room'
 import { useItemLibrary } from '@/lib/item-library-context'
+import { useMobile } from '@/lib/mobile-context'
 import { RugShapeRenderer, calculateRugDimensions } from './RugShapeRenderer'
 
 // Component to capture the 3D scene as an image
@@ -37,6 +38,7 @@ interface RugCreatorProps {
 
 export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProps) {
   const { addItem } = useItemLibrary()
+  const { isMobile } = useMobile()
 
   const isEditMode = !!editItem
 
@@ -219,25 +221,53 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${isMobile ? '' : ''}`}>
+      <div className={`bg-white shadow-xl w-full overflow-hidden flex flex-col ${isMobile ? 'h-full rounded-none' : 'rounded-2xl max-w-3xl mx-4 max-h-[90vh]'}`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">{isEditMode ? 'Edit Rug' : 'Create Rug'}</h2>
+        <div className={`flex items-center justify-between border-b border-gray-200 flex-shrink-0 ${isMobile ? 'px-4 py-3' : 'px-6 py-4'}`}>
+          <h2 className={`font-semibold text-gray-900 ${isMobile ? 'text-lg' : 'text-xl'}`}>{isEditMode ? 'Edit Rug' : 'Create Rug'}</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 active:bg-gray-100 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`text-gray-500 ${isMobile ? 'w-6 h-6' : 'w-5 h-5'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 grid grid-cols-2 gap-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {/* Left: Form */}
-          <div className="space-y-5">
+        <div className={`flex-1 overflow-y-auto ${isMobile ? 'p-4' : 'p-6 grid grid-cols-2 gap-6'}`}>
+          {/* 3D Preview - Show at top on mobile */}
+          {isMobile && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">3D Preview</label>
+              <div className="h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                {rugShape ? (
+                  <Canvas gl={{ preserveDrawingBuffer: true }}>
+                    <ambientLight intensity={0.6} />
+                    <directionalLight position={[5, 10, 5]} intensity={0.8} />
+                    <PerspectiveCamera makeDefault position={[width * 0.8, width * 0.6, depth * 0.8]} />
+                    <OrbitControls enablePan={false} />
+                    <Suspense fallback={null}>
+                      <RugShapeRenderer shape={rugShape} />
+                    </Suspense>
+                    <gridHelper args={[10, 10, '#cccccc', '#e5e5e5']} />
+                    {shouldCaptureThumbnail && (
+                      <ThumbnailCapture onCapture={handleThumbnailCapture} />
+                    )}
+                  </Canvas>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                    Upload an image to see preview
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Form */}
+          <div className={isMobile ? 'space-y-4' : 'space-y-5'}>
             {/* Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -245,7 +275,7 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isMobile ? 'px-4 py-3 text-base' : 'px-3 py-2'}`}
               />
             </div>
 
@@ -256,14 +286,15 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                 <input
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   onChange={handleFileChange}
                   className="hidden"
                   id="rug-texture-upload"
                 />
                 <label
                   htmlFor="rug-texture-upload"
-                  className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                    texturePreview ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+                  className={`flex flex-col items-center justify-center w-full border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isMobile ? 'h-40' : 'h-32'} ${
+                    texturePreview ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-gray-400 active:border-gray-400 bg-gray-50'
                   }`}
                 >
                   {texturePreview ? (
@@ -272,10 +303,10 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                     <div className="text-gray-500">Uploading...</div>
                   ) : (
                     <>
-                      <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className={`text-gray-400 mb-2 ${isMobile ? 'w-10 h-10' : 'w-8 h-8'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span className="text-sm text-gray-500">Click to upload rug texture</span>
+                      <span className={`text-gray-500 ${isMobile ? 'text-base' : 'text-sm'}`}>{isMobile ? 'Tap to upload or take photo' : 'Click to upload rug texture'}</span>
                     </>
                   )}
                 </label>
@@ -298,7 +329,7 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                       max="20"
                       value={widthFeet}
                       onChange={(e) => setWidthFeet(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isMobile ? 'px-3 py-3 text-base' : 'px-3 py-2'}`}
                     />
                     <span className="text-xs text-gray-500">ft</span>
                   </div>
@@ -309,7 +340,7 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                       max="11"
                       value={widthInches}
                       onChange={(e) => setWidthInches(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isMobile ? 'px-3 py-3 text-base' : 'px-3 py-2'}`}
                     />
                     <span className="text-xs text-gray-500">in</span>
                   </div>
@@ -327,7 +358,7 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                       max="20"
                       value={depthFeet}
                       onChange={(e) => setDepthFeet(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isMobile ? 'px-3 py-3 text-base' : 'px-3 py-2'}`}
                     />
                     <span className="text-xs text-gray-500">ft</span>
                   </div>
@@ -338,7 +369,7 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                       max="11"
                       value={depthInches}
                       onChange={(e) => setDepthInches(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isMobile ? 'px-3 py-3 text-base' : 'px-3 py-2'}`}
                     />
                     <span className="text-xs text-gray-500">in</span>
                   </div>
@@ -358,7 +389,7 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
                 step="0.01"
                 value={thickness}
                 onChange={(e) => setThickness(parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 ${isMobile ? 'h-3' : 'h-2'}`}
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
                 <span>0.5"</span>
@@ -372,49 +403,51 @@ export function RugCreator({ isOpen, onClose, editItem, onSave }: RugCreatorProp
             </div>
           </div>
 
-          {/* Right: 3D Preview */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">3D Preview</label>
-            <div className="h-64 bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
-              {rugShape ? (
-                <Canvas gl={{ preserveDrawingBuffer: true }}>
-                  <ambientLight intensity={0.6} />
-                  <directionalLight position={[5, 10, 5]} intensity={0.8} />
-                  <PerspectiveCamera makeDefault position={[width * 0.8, width * 0.6, depth * 0.8]} />
-                  <OrbitControls enablePan={false} />
-                  <Suspense fallback={null}>
-                    <RugShapeRenderer shape={rugShape} />
-                  </Suspense>
-                  <gridHelper args={[10, 10, '#cccccc', '#e5e5e5']} />
-                  {shouldCaptureThumbnail && (
-                    <ThumbnailCapture onCapture={handleThumbnailCapture} />
-                  )}
-                </Canvas>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                  Upload an image to see preview
-                </div>
-              )}
-            </div>
+          {/* Right: 3D Preview - Desktop only (mobile version is at top) */}
+          {!isMobile && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">3D Preview</label>
+              <div className="h-64 bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                {rugShape ? (
+                  <Canvas gl={{ preserveDrawingBuffer: true }}>
+                    <ambientLight intensity={0.6} />
+                    <directionalLight position={[5, 10, 5]} intensity={0.8} />
+                    <PerspectiveCamera makeDefault position={[width * 0.8, width * 0.6, depth * 0.8]} />
+                    <OrbitControls enablePan={false} />
+                    <Suspense fallback={null}>
+                      <RugShapeRenderer shape={rugShape} />
+                    </Suspense>
+                    <gridHelper args={[10, 10, '#cccccc', '#e5e5e5']} />
+                    {shouldCaptureThumbnail && (
+                      <ThumbnailCapture onCapture={handleThumbnailCapture} />
+                    )}
+                  </Canvas>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                    Upload an image to see preview
+                  </div>
+                )}
+              </div>
 
-            <p className="text-xs text-gray-400 mt-2">
-              The image will be displayed on the top surface of the rug.
-            </p>
-          </div>
+              <p className="text-xs text-gray-400 mt-2">
+                The image will be displayed on the top surface of the rug.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className={`flex items-center gap-3 border-t border-gray-200 bg-gray-50 flex-shrink-0 ${isMobile ? 'flex-col p-4' : 'justify-end px-6 py-4'}`}>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+            className={`font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-200 rounded-lg transition-colors ${isMobile ? 'w-full px-4 py-4 text-base order-2' : 'px-4 py-2 text-sm'}`}
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!rugShape || isUploading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`font-medium text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isMobile ? 'w-full px-4 py-4 text-base order-1' : 'px-4 py-2 text-sm'}`}
           >
             {isEditMode ? 'Save Changes' : 'Create Rug'}
           </button>

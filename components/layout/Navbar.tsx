@@ -10,6 +10,7 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { useHome } from '@/lib/home-context'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { getStorageInfo, clearAllStorage } from '@/lib/storage'
+import { useMobile } from '@/lib/mobile-context'
 
 /**
  * Navbar Component
@@ -41,8 +42,10 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel, 
   const { items } = useItemLibrary()
   const router = useRouter()
   const pathname = usePathname()
+  const { isMobile } = useMobile()
   const isFloorplanPage = pathname === '/floorplan'
   const currentHome = homes.find(h => h.id === currentHomeId)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   // Auto-save indicator state
   const [showSaving, setShowSaving] = useState(false)
@@ -124,6 +127,89 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel, 
     }
   }
 
+  // Mobile Navbar
+  if (isMobile) {
+    return (
+      <nav className={cn('sticky top-0 z-50 bg-porcelain border-b border-taupe/5', className)}>
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            {/* Logo/Brand */}
+            <div className="flex items-center gap-2">
+              <span className="text-taupe text-lg">△</span>
+              <span className="font-display text-base text-graphite font-semibold">OMHU</span>
+            </div>
+
+            {/* Current Context + Menu */}
+            <div className="flex items-center gap-3">
+              {/* Current page indicator */}
+              <span className="text-sm font-body text-taupe/70">
+                {activeTab === 'inventory' ? 'Inventory' : currentHome?.name || 'Projects'}
+              </span>
+
+              {/* Hamburger Menu */}
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-2 hover:bg-taupe/5 rounded-lg transition-colors"
+                aria-label="Menu"
+              >
+                <svg className="w-6 h-6 text-graphite" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  {showMobileMenu ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Menu Dropdown */}
+          {showMobileMenu && (
+            <div className="absolute top-full left-0 right-0 bg-porcelain border-b border-taupe/10 shadow-lg z-50">
+              <div className="p-4 space-y-2">
+                <Link
+                  href="/items"
+                  onClick={() => setShowMobileMenu(false)}
+                  className={cn(
+                    'block px-4 py-3 rounded-lg font-body text-sm transition-colors',
+                    activeTab === 'inventory'
+                      ? 'bg-sage/10 text-sage font-medium'
+                      : 'text-graphite hover:bg-taupe/5'
+                  )}
+                >
+                  Inventory
+                </Link>
+                <Link
+                  href="/homes"
+                  onClick={() => setShowMobileMenu(false)}
+                  className={cn(
+                    'block px-4 py-3 rounded-lg font-body text-sm transition-colors',
+                    activeTab === 'projects'
+                      ? 'bg-sage/10 text-sage font-medium'
+                      : 'text-graphite hover:bg-taupe/5'
+                  )}
+                >
+                  Projects
+                </Link>
+                {currentHome && activeTab !== 'inventory' && (
+                  <div className="border-t border-taupe/10 pt-2 mt-2">
+                    <span className="block px-4 py-2 text-xs text-taupe/60 font-body uppercase tracking-wide">
+                      Current Project
+                    </span>
+                    <span className="block px-4 py-2 text-sm text-graphite font-body font-medium">
+                      {currentHome.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+    )
+  }
+
+  // Desktop Navbar
   return (
     <nav className={cn('sticky top-0 z-50 bg-porcelain border-b border-taupe/5', className)}>
       <div className="px-6 py-4">

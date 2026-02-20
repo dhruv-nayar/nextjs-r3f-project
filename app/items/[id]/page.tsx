@@ -26,6 +26,7 @@ import { useTrellisJobs } from '@/lib/trellis-job-context'
 import { RugCreator } from '@/components/items/RugCreator'
 import { FrameCreator } from '@/components/items/FrameCreator'
 import { ShelfCreator } from '@/components/items/ShelfCreator'
+import { useMobile } from '@/lib/mobile-context'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -36,6 +37,7 @@ export default function ItemDetailPage() {
   const { items, getItem, updateItem, deleteItem } = useItemLibrary()
   const { getInstancesForItem, deleteAllInstancesOfItem, switchHome } = useHome()
   const { toastMessage: trellisToast, toastType: trellisToastType, clearToast: clearTrellisToast } = useTrellisJobs()
+  const { isMobile } = useMobile()
 
   // Parse return context for "Back to Project" navigation
   const returnToParam = searchParams.get('returnTo')
@@ -667,10 +669,13 @@ export default function ItemDetailPage() {
       <Navbar activeTab="inventory" breadcrumb={item.name} isSaving={isSaving} lastSavedAt={lastSavedAt} />
 
       {/* Main Content Layout */}
-      <div className="flex">
+      <div className="flex flex-col lg:flex-row">
         {/* Left Side - 3D Viewer / Image Viewer */}
-        <main className="flex-1 p-6">
-          <div className="w-full h-[calc(100vh-88px)] bg-porcelain relative">
+        <main className="flex-1 p-4 lg:p-6">
+          <div className={cn(
+            "w-full bg-porcelain relative",
+            isMobile ? "h-[50vh]" : "h-[calc(100vh-88px)]"
+          )}>
             {/* Main Viewer Content - with bottom padding to avoid floating gallery */}
             {selectedViewerType === 'model' ? (
               // 3D Model Viewer
@@ -1176,8 +1181,16 @@ export default function ItemDetailPage() {
         </main>
 
         {/* Right Side - Sidebar Panel */}
-        <aside className="w-[400px] flex-shrink-0">
-          <div className="fixed right-6 top-24 bottom-6 w-[376px] bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col">
+        <aside className={cn(
+          "flex-shrink-0",
+          isMobile ? "w-full" : "w-[400px]"
+        )}>
+          <div className={cn(
+            "bg-black/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col",
+            isMobile
+              ? "mx-4 mb-4 max-h-[60vh]"
+              : "fixed right-6 top-24 bottom-6 w-[376px]"
+          )}>
             {/* Pinned Header */}
             <div className="px-4 py-3 border-b border-white/10 flex-shrink-0">
               <div className="flex items-center justify-between">

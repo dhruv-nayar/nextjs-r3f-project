@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useItemLibrary } from '@/lib/item-library-context'
+import { usePermissions } from '@/lib/hooks/use-permissions'
+import { useMobile } from '@/lib/mobile-context'
 import { ItemCategory, GLBUploadResult, ImageUploadResult, ImagePair } from '@/types/room'
 import { GLBUpload } from '@/components/items/GLBUpload'
 import { ImageUpload } from '@/components/items/ImageUpload'
@@ -22,6 +24,8 @@ import Image from 'next/image'
 export default function ItemsPage() {
   const router = useRouter()
   const { items, addItem, deleteItem, updateItem } = useItemLibrary()
+  const { canUseShelfCreator, canUseCustomCreator } = usePermissions()
+  const { isMobile } = useMobile()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -234,27 +238,29 @@ export default function ItemsPage() {
       <Navbar activeTab="inventory" />
 
       {/* Main Content */}
-      <div className="px-6 py-8">
+      <div className={isMobile ? 'px-4 py-4' : 'px-6 py-8'}>
         <div className="flex gap-6 items-start">
           {/* Main Content - Left Side */}
           <main className="flex-1 min-w-0">
             {/* Search Bar & Filters Row */}
-            <div className="flex items-center justify-between gap-3 mb-6">
-              <div className="flex items-center gap-3">
+            <div className={`flex gap-3 mb-6 ${isMobile ? 'flex-col' : 'items-center justify-between'}`}>
+              <div className={`flex items-center gap-3 ${isMobile ? 'w-full' : ''}`}>
                 <SearchInput
                   value={searchQuery}
                   onChange={setSearchQuery}
                   placeholder="Search inventory..."
-                  width="w-80"
+                  width={isMobile ? "w-full" : "w-80"}
                 />
 
-                <button className="px-4 py-2 bg-floral-white text-taupe/60 font-body text-sm hover:text-graphite transition-colors flex items-center gap-2 rounded-lg">
-                  <span className="text-xs">▼</span>
-                  <span>Filters</span>
-                </button>
+                {!isMobile && (
+                  <button className="px-4 py-2 bg-floral-white text-taupe/60 font-body text-sm hover:text-graphite transition-colors flex items-center gap-2 rounded-lg">
+                    <span className="text-xs">▼</span>
+                    <span>Filters</span>
+                  </button>
+                )}
               </div>
 
-              <div className="flex items-baseline gap-6">
+              <div className={`flex items-baseline gap-3 ${isMobile ? 'justify-between' : 'gap-6'}`}>
                 <SectionHeader>Sort by</SectionHeader>
                 <Dropdown
                   label="Recently Added"
@@ -340,11 +346,11 @@ export default function ItemsPage() {
 
       {/* Create Item Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-porcelain rounded-3xl p-8 max-w-2xl w-full my-8 shadow-2xl border border-taupe/10">
-            <div className="flex items-start justify-between mb-6">
+        <div className={`fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 overflow-y-auto ${isMobile ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-porcelain shadow-2xl border border-taupe/10 w-full ${isMobile ? 'min-h-screen rounded-none p-4' : 'rounded-3xl p-8 max-w-2xl my-8'}`}>
+            <div className="flex items-start justify-between mb-4 md:mb-6">
               <div>
-                <h3 className="text-2xl font-display font-semibold text-graphite">Add New Item</h3>
+                <h3 className={`font-display font-semibold text-graphite ${isMobile ? 'text-xl' : 'text-2xl'}`}>Add New Item</h3>
                 <p className="text-taupe/70 font-body text-sm mt-1">
                   {uploadStep === 'choose' && 'Choose how to add your 3D model'}
                   {uploadStep === 'upload' && 'Upload your file'}
@@ -353,7 +359,7 @@ export default function ItemsPage() {
               </div>
               <button
                 onClick={handleCloseModal}
-                className="text-taupe/50 hover:text-taupe text-3xl leading-none transition-colors"
+                className="text-taupe/50 hover:text-taupe text-3xl leading-none transition-colors p-2 -mr-2 -mt-2"
               >
                 ×
               </button>
@@ -368,10 +374,10 @@ export default function ItemsPage() {
                     handleCloseModal()
                     await handleCreateBlankItem()
                   }}
-                  className="w-full p-6 bg-white border-2 border-taupe/20 hover:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md"
+                  className={`w-full bg-white border-2 border-taupe/20 hover:border-sage active:border-sage rounded-2xl text-left transition-all group shadow-sm hover:shadow-md ${isMobile ? 'p-5' : 'p-6'}`}
                 >
                   <div className="flex items-start gap-4">
-                    <div className="text-4xl">🪑</div>
+                    <div className={isMobile ? 'text-5xl' : 'text-4xl'}>🪑</div>
                     <div className="flex-1">
                       <h4 className="text-graphite text-lg font-display font-semibold mb-1 group-hover:text-sage transition-colors">
                         Normal Furniture
@@ -390,17 +396,17 @@ export default function ItemsPage() {
                   <div className="flex-1 h-px bg-taupe/20" />
                 </div>
 
-                {/* Quick Create Options - Rug, Frame, Shelf, Custom Shape */}
-                <div className="grid grid-cols-4 gap-3">
+                {/* Quick Create Options - Rug, Frame, Shelf (desktop only), Custom (desktop only) */}
+                <div className={`grid gap-3 ${canUseShelfCreator && canUseCustomCreator ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'}`}>
                   {/* Create Rug */}
                   <button
                     onClick={() => {
                       handleCloseModal()
                       setShowRugCreator(true)
                     }}
-                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
+                    className={`bg-white border-2 border-taupe/20 hover:border-sage active:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md ${isMobile ? 'p-5' : 'p-4'}`}
                   >
-                    <div className="text-3xl mb-2">🧶</div>
+                    <div className={`mb-2 ${isMobile ? 'text-4xl' : 'text-3xl'}`}>🧶</div>
                     <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
                       Rug
                     </h4>
@@ -412,41 +418,45 @@ export default function ItemsPage() {
                       handleCloseModal()
                       setShowFrameCreator(true)
                     }}
-                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
+                    className={`bg-white border-2 border-taupe/20 hover:border-sage active:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md ${isMobile ? 'p-5' : 'p-4'}`}
                   >
-                    <div className="text-3xl mb-2">🖼️</div>
+                    <div className={`mb-2 ${isMobile ? 'text-4xl' : 'text-3xl'}`}>🖼️</div>
                     <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
                       Frame
                     </h4>
                   </button>
 
-                  {/* Create Shelf */}
-                  <button
-                    onClick={() => {
-                      handleCloseModal()
-                      setShowShelfCreator(true)
-                    }}
-                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
-                  >
-                    <div className="text-3xl mb-2">📚</div>
-                    <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
-                      Shelf
-                    </h4>
-                  </button>
+                  {/* Create Shelf - Desktop only */}
+                  {canUseShelfCreator && (
+                    <button
+                      onClick={() => {
+                        handleCloseModal()
+                        setShowShelfCreator(true)
+                      }}
+                      className={`bg-white border-2 border-taupe/20 hover:border-sage active:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md ${isMobile ? 'p-5' : 'p-4'}`}
+                    >
+                      <div className={`mb-2 ${isMobile ? 'text-4xl' : 'text-3xl'}`}>📚</div>
+                      <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                        Shelf
+                      </h4>
+                    </button>
+                  )}
 
-                  {/* Draw Custom Shape */}
-                  <button
-                    onClick={() => {
-                      handleCloseModal()
-                      setShowCustomCreator(true)
-                    }}
-                    className="p-4 bg-white border-2 border-taupe/20 hover:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md"
-                  >
-                    <div className="text-3xl mb-2">✏️</div>
-                    <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
-                      Custom
-                    </h4>
-                  </button>
+                  {/* Draw Custom Shape - Desktop only */}
+                  {canUseCustomCreator && (
+                    <button
+                      onClick={() => {
+                        handleCloseModal()
+                        setShowCustomCreator(true)
+                      }}
+                      className={`bg-white border-2 border-taupe/20 hover:border-sage active:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md ${isMobile ? 'p-5' : 'p-4'}`}
+                    >
+                      <div className={`mb-2 ${isMobile ? 'text-4xl' : 'text-3xl'}`}>✏️</div>
+                      <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                        Custom
+                      </h4>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -477,7 +487,7 @@ export default function ItemsPage() {
 
                 <button
                   onClick={() => setUploadStep('choose')}
-                  className="w-full px-4 py-3 bg-white border border-taupe/20 hover:bg-floral-white text-taupe rounded-xl font-body font-medium transition-colors"
+                  className={`w-full px-4 bg-white border border-taupe/20 hover:bg-floral-white active:bg-floral-white text-taupe rounded-xl font-body font-medium transition-colors ${isMobile ? 'py-4 text-base' : 'py-3'}`}
                 >
                   ← Back to Upload Options
                 </button>
@@ -683,7 +693,7 @@ export default function ItemsPage() {
                     <>
                       <button
                         disabled
-                        className="w-full px-4 py-3 bg-taupe/20 text-taupe/50 rounded-xl font-body font-medium cursor-not-allowed"
+                        className={`w-full px-4 bg-taupe/20 text-taupe/50 rounded-xl font-body font-medium cursor-not-allowed ${isMobile ? 'py-4 text-base' : 'py-3'}`}
                       >
                         Generate 3D Model (Coming Soon)
                       </button>
@@ -693,20 +703,20 @@ export default function ItemsPage() {
                     </>
                   )}
 
-                  <div className="flex gap-3">
+                  <div className={`flex gap-3 ${isMobile ? 'flex-col' : ''}`}>
                     <button
                       onClick={() => setUploadStep('upload')}
-                      className="flex-1 px-4 py-3 bg-white border border-taupe/20 hover:bg-floral-white text-taupe rounded-xl font-body font-medium transition-colors"
+                      className={`flex-1 px-4 bg-white border border-taupe/20 hover:bg-floral-white active:bg-floral-white text-taupe rounded-xl font-body font-medium transition-colors ${isMobile ? 'py-4 text-base' : 'py-3'}`}
                     >
                       ← Back
                     </button>
                     <button
                       onClick={handleCreateItem}
                       disabled={uploadMethod === 'images'}
-                      className={`flex-1 px-4 py-3 rounded-xl font-body font-medium transition-colors ${
+                      className={`flex-1 px-4 rounded-xl font-body font-medium transition-colors ${isMobile ? 'py-4 text-base' : 'py-3'} ${
                         uploadMethod === 'images'
                           ? 'bg-taupe/20 text-taupe/50 cursor-not-allowed'
-                          : 'bg-sage hover:bg-sage/90 text-white'
+                          : 'bg-sage hover:bg-sage/90 active:bg-sage/90 text-white'
                       }`}
                     >
                       {uploadMethod === 'glb' ? 'Create Item' : 'Save Item (Generate Model First)'}

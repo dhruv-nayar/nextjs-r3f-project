@@ -73,3 +73,10 @@ body {
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
 }
+
+/* Mobile: Hide desktop-only panels */
+@media (max-width: 768px) {
+  .desktop-panel {
+    display: none !important;
+  }
+}

@@ -4,7 +4,7 @@ import { useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useHome } from '@/lib/home-context'
 import { useSelection } from '@/lib/selection-context'
-import { usePermissions } from '@/lib/hooks/use-permissions'
+import { useMobile } from '@/lib/mobile-context'
 import { RoomScene } from "@/components/rooms/RoomScene";
 import { RoomNavigation } from "@/components/rooms/RoomNavigation";
 import { Controls } from "@/components/Controls";
@@ -18,12 +18,9 @@ function HomeContent() {
   const searchParams = useSearchParams()
   const { switchHome } = useHome()
   const { selectFurniture } = useSelection()
-  const { canModifyProject, canMoveObjects, canPlaceObjects } = usePermissions()
+  const { isMobile } = useMobile()
   const homeId = searchParams.get('homeId')
   const selectInstance = searchParams.get('selectInstance')
-
-  // Determine if we're in view-only mode (mobile)
-  const isViewOnly = !canModifyProject && !canMoveObjects && !canPlaceObjects
 
   // Switch to the home specified in the URL query param
   useEffect(() => {
@@ -54,12 +51,15 @@ function HomeContent() {
         <RoomScene />
       </main>
 
-      {/* UI Overlays */}
+      {/* View-only indicator for mobile */}
+      {isMobile && <ViewModeIndicator />}
+
+      {/* UI Overlays - hidden on mobile */}
       <RoomNavigation />
       <Controls />
-      <SceneHierarchyPanel />
-      <PropertiesPanel />
-      <WallSegmentPropertiesPanel />
+      {!isMobile && <SceneHierarchyPanel />}
+      {!isMobile && <PropertiesPanel />}
+      {!isMobile && <WallSegmentPropertiesPanel />}
     </div>
   );
 }
