@@ -15,6 +15,7 @@ import { InteractionModeProvider } from "@/lib/interaction-mode-context";
 import { ControlsProvider } from "@/lib/controls-context";
 import { WallSegmentsProvider } from "@/lib/use-wall-segments";
 import { GlobalBackgroundJobManager } from "@/components/GlobalBackgroundJobManager";
+import { MobileProvider } from "@/lib/mobile-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -55,6 +56,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${inter.variable} antialiased`}
       >
+        <MobileProvider>
         <ItemLibraryProvider>
           <TrellisJobProvider>
             <HomeProvider>
@@ -83,6 +85,7 @@ export default function RootLayout({
           </HomeProvider>
           </TrellisJobProvider>
         </ItemLibraryProvider>
+        </MobileProvider>
       </body>
     </html>
   );

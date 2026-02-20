@@ -1262,6 +1262,52 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
       }
     }
 
+    // Draw wall length badges while dragging a vertex
+    if (isDragging && selectedVertexId) {
+      // Find all walls connected to the dragged vertex
+      const connectedWalls = walls.filter(
+        (w) => w.startVertexId === selectedVertexId || w.endVertexId === selectedVertexId
+      )
+
+      for (const wall of connectedWalls) {
+        const start = vertexMap.get(wall.startVertexId)
+        const end = vertexMap.get(wall.endVertexId)
+
+        if (start && end) {
+          // Calculate wall length
+          const dx = end.x - start.x
+          const dy = end.y - start.y
+          const lengthFeet = Math.sqrt(dx * dx + dy * dy)
+
+          // Draw length label at midpoint
+          const midX = (start.x + end.x) / 2
+          const midY = (start.y + end.y) / 2
+          const label = formatFeetInches(lengthFeet)
+
+          ctx.font = `bold ${14 / viewport.scale}px sans-serif`
+          const metrics = ctx.measureText(label)
+          const padding = 6 / viewport.scale
+          const labelX = feetToPixels(midX)
+          const labelY = feetToPixels(midY) - 10 / viewport.scale
+
+          // Background box (green for dragging)
+          ctx.fillStyle = '#4CAF50'
+          ctx.fillRect(
+            labelX - metrics.width / 2 - padding,
+            labelY - 16 / viewport.scale,
+            metrics.width + padding * 2,
+            24 / viewport.scale
+          )
+
+          // Text
+          ctx.fillStyle = '#FFFFFF'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(label, labelX, labelY - 4 / viewport.scale)
+        }
+      }
+    }
+
     // Draw vertices (scaled for zoom)
     for (const vertex of vertices) {
       const px = feetToPixels(vertex.x)

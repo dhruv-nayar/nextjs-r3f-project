@@ -13,6 +13,7 @@ interface ProjectCardProps {
   onRename: (newName: string) => void
   onCopy: () => void
   canDelete?: boolean
+  readOnly?: boolean  // Mobile mode: hide copy/delete, disable rename
   className?: string
 }
 
@@ -23,6 +24,7 @@ export function ProjectCard({
   onRename,
   onCopy,
   canDelete = true,
+  readOnly = false,
   className = ''
 }: ProjectCardProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -90,18 +92,20 @@ export function ProjectCard({
             }}
             className="px-4 py-2 bg-sage hover:bg-sage/90 text-white rounded-lg text-sm font-medium font-body transition-colors"
           >
-            Open
+            {readOnly ? 'View' : 'Open'}
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onCopy()
-            }}
-            className="px-4 py-2 bg-taupe/90 hover:bg-taupe text-white rounded-lg text-sm font-medium font-body transition-colors"
-          >
-            Copy
-          </button>
-          {canDelete && (
+          {!readOnly && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onCopy()
+              }}
+              className="px-4 py-2 bg-taupe/90 hover:bg-taupe text-white rounded-lg text-sm font-medium font-body transition-colors"
+            >
+              Copy
+            </button>
+          )}
+          {!readOnly && canDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation()
@@ -117,8 +121,8 @@ export function ProjectCard({
 
       {/* Info Section */}
       <div className="pt-2">
-        {/* Editable name */}
-        {isEditing ? (
+        {/* Editable name (disabled in readOnly mode) */}
+        {!readOnly && isEditing ? (
           <input
             ref={inputRef}
             type="text"
@@ -128,6 +132,10 @@ export function ProjectCard({
             onKeyDown={handleKeyDown}
             className="w-full font-display text-base text-graphite bg-transparent border-b border-sage focus:outline-none focus:border-sage/80 pb-0.5"
           />
+        ) : readOnly ? (
+          <p className="w-full font-display text-base text-graphite truncate">
+            {home.name}
+          </p>
         ) : (
           <button
             onClick={() => setIsEditing(true)}

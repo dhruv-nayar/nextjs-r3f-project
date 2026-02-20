@@ -8,10 +8,12 @@ import { ProjectCard, AddProjectCard } from '@/components/homes/ProjectCard'
 import { CopyProjectModal } from '@/components/homes/CopyProjectModal'
 import { PageTitle } from '@/components/ui/Typography'
 import { CopyMode } from '@/lib/utils/copy-home'
+import { usePermissions } from '@/lib/hooks/use-permissions'
 
 export default function HomesPage() {
   const router = useRouter()
   const { homes, createHome, copyHome, deleteHome, switchHome, renameHome } = useHome()
+  const { canCreateProject, canCopyProject, canDeleteProject, canRenameProject } = usePermissions()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [showCopyModal, setShowCopyModal] = useState<string | null>(null)
@@ -70,26 +72,32 @@ export default function HomesPage() {
               {homes.length} project{homes.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-5 py-2.5 bg-sage hover:bg-sage/90 text-white font-medium font-body rounded-lg transition-colors flex items-center gap-2"
-          >
-            <span className="text-lg">+</span>
-            New Project
-          </button>
+          {canCreateProject && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-5 py-2.5 bg-sage hover:bg-sage/90 text-white font-medium font-body rounded-lg transition-colors flex items-center gap-2"
+            >
+              <span className="text-lg">+</span>
+              New Project
+            </button>
+          )}
         </div>
 
         {/* Projects Grid */}
         {homes.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-4 opacity-30">🏠</div>
-            <p className="text-taupe/60 text-lg font-body mb-4">No projects yet</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-sage hover:bg-sage/90 text-white font-medium font-body rounded-lg transition-colors"
-            >
-              Create Your First Project
-            </button>
+            <p className="text-taupe/60 text-lg font-body mb-4">
+              {canCreateProject ? 'No projects yet' : 'No projects available'}
+            </p>
+            {canCreateProject && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-6 py-3 bg-sage hover:bg-sage/90 text-white font-medium font-body rounded-lg transition-colors"
+              >
+                Create Your First Project
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -102,9 +110,12 @@ export default function HomesPage() {
                 onRename={(newName) => renameHome(home.id, newName)}
                 onCopy={() => setShowCopyModal(home.id)}
                 canDelete={home.id !== 'example-home'}
+                readOnly={!canCopyProject && !canDeleteProject && !canRenameProject}
               />
             ))}
-            <AddProjectCard onClick={() => setShowCreateModal(true)} />
+            {canCreateProject && (
+              <AddProjectCard onClick={() => setShowCreateModal(true)} />
+            )}
           </div>
         )}
       </div>
