@@ -48,8 +48,8 @@ export const SCALE = {
   CAMERA: {
     DEFAULT_HEIGHT: 5.5,     // 5.5 feet (eye level)
     DEFAULT_DISTANCE: 20,    // 20 feet from target
-    MIN_DISTANCE: 5,         // 5 feet minimum
-    MAX_DISTANCE: 50,        // 50 feet maximum
+    MIN_DISTANCE: 3,         // 3 feet minimum (closer zoom in)
+    MAX_DISTANCE: 100,       // 100 feet maximum (further zoom out)
   }
 } as const
 
