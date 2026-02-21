@@ -14,7 +14,7 @@ import Input from '@/components/ui/Input'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { Navbar } from '@/components/layout/Navbar'
 import { cn } from '@/lib/design-system'
-import { PlacementType, MaterialOverride, ImagePair, RugShape, FrameShape, ShelfShape } from '@/types/room'
+import { PlacementType, MaterialOverride, ImagePair, RugShape, FrameShape, ShelfShape, CompositeShape, ItemCategory } from '@/types/room'
 import { ImageGallery } from '@/components/items/ImageGallery'
 import { MaskCorrectionModal } from '@/components/items/MaskCorrectionModal'
 import { GenerateModelPanel } from '@/components/items/GenerateModelPanel'
@@ -26,6 +26,7 @@ import { useTrellisJobs } from '@/lib/trellis-job-context'
 import { RugCreator } from '@/components/items/RugCreator'
 import { FrameCreator } from '@/components/items/FrameCreator'
 import { ShelfCreator } from '@/components/items/ShelfCreator'
+import { CustomItemCreatorV2 } from '@/components/items/CustomItemCreatorV2'
 import { useMobile } from '@/lib/mobile-context'
 
 export default function ItemDetailPage() {
@@ -598,15 +599,17 @@ export default function ItemDetailPage() {
   // Handle shape edit save
   const handleShapeEditSave = (updates: {
     name: string
-    parametricShape: RugShape | FrameShape | ShelfShape
+    parametricShape: RugShape | FrameShape | ShelfShape | CompositeShape
     dimensions: { width: number; height: number; depth: number }
     thumbnailPath?: string
+    category?: ItemCategory
   }) => {
     updateItem(itemId, {
       name: updates.name,
       parametricShape: updates.parametricShape,
       dimensions: updates.dimensions,
-      thumbnailPath: updates.thumbnailPath || editThumbnailPath || undefined
+      thumbnailPath: updates.thumbnailPath || editThumbnailPath || undefined,
+      ...(updates.category && { category: updates.category }),
     })
     setEditName(updates.name)
     setShowShapeEditor(false)
@@ -1389,8 +1392,8 @@ export default function ItemDetailPage() {
                   </div>
                 </div>
 
-                {/* Shape Settings Section (for rug/frame/shelf items) */}
-                {item.parametricShape && ['rug', 'frame', 'shelf'].includes(item.parametricShape.type) && (
+                {/* Shape Settings Section (for rug/frame/shelf/composite items) */}
+                {item.parametricShape && ['rug', 'frame', 'shelf', 'composite'].includes(item.parametricShape.type) && (
                   <div>
                     <h3 className="text-white font-medium text-sm mb-2">
                       Shape Settings
@@ -1402,11 +1405,13 @@ export default function ItemDetailPage() {
                             {item.parametricShape.type === 'rug' && 'Rug'}
                             {item.parametricShape.type === 'frame' && 'Picture Frame'}
                             {item.parametricShape.type === 'shelf' && 'Floating Shelf'}
+                            {item.parametricShape.type === 'composite' && 'Custom Shape'}
                           </p>
                           <p className="text-white/40 text-xs font-body">
                             {item.parametricShape.type === 'rug' && `${(item.parametricShape as { width: number }).width.toFixed(1)}' × ${(item.parametricShape as { depth: number }).depth.toFixed(1)}'`}
                             {item.parametricShape.type === 'frame' && `${(item.parametricShape as { imageWidth: number }).imageWidth.toFixed(1)}' × ${(item.parametricShape as { imageHeight: number }).imageHeight.toFixed(1)}' image`}
                             {item.parametricShape.type === 'shelf' && `${(item.parametricShape as { width: number }).width.toFixed(1)}' × ${(item.parametricShape as { depth: number }).depth.toFixed(1)}' × ${(item.parametricShape as { height: number }).height.toFixed(1)}'`}
+                            {item.parametricShape.type === 'composite' && `${(item.parametricShape as CompositeShape).parts.length} part${(item.parametricShape as CompositeShape).parts.length !== 1 ? 's' : ''}`}
                           </p>
                         </div>
                         <button
@@ -1807,6 +1812,19 @@ export default function ItemDetailPage() {
             id: itemId,
             name: editName,
             parametricShape: item.parametricShape as ShelfShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
+      {showShapeEditor && item.parametricShape?.type === 'composite' && (
+        <CustomItemCreatorV2
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: itemId,
+            name: editName,
+            category: item.category,
+            parametricShape: item.parametricShape as CompositeShape
           }}
           onSave={handleShapeEditSave}
         />
