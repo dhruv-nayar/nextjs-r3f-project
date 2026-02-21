@@ -2,10 +2,12 @@
 
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { ParametricShape, ExtrusionShape, RugShape, FrameShape, ShelfShape, Vector3 } from '@/types/room'
+import { ParametricShape, ExtrusionShape, ExtrusionShapeV2, CompositeShape, RugShape, FrameShape, ShelfShape, Vector3 } from '@/types/room'
 import { RugShapeRenderer, calculateRugDimensions } from './RugShapeRenderer'
 import { FrameShapeRenderer, calculateFrameDimensions } from './FrameShapeRenderer'
 import { ShelfShapeRenderer, calculateShelfDimensions } from './ShelfShapeRenderer'
+import { ExtrusionShapeV2Renderer, calculateExtrusionV2Dimensions } from './ExtrusionShapeV2Renderer'
+import { CompositeShapeRenderer, calculateCompositeDimensions } from './CompositeShapeRenderer'
 
 interface ParametricShapeRendererProps {
   shape: ParametricShape
@@ -177,6 +179,36 @@ export function ParametricShapeRenderer({
         />
       )
 
+    case 'extrusion-v2':
+      return (
+        <ExtrusionShapeV2Renderer
+          shape={shape}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          onClick={onClick}
+          onPointerOver={onPointerOver}
+          onPointerOut={onPointerOut}
+        />
+      )
+
+    case 'composite':
+      return (
+        <CompositeShapeRenderer
+          shape={shape}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          onClick={onClick}
+          onPointerOver={onPointerOver}
+          onPointerOut={onPointerOut}
+        />
+      )
+
     case 'extrusion':
     default:
       return (
@@ -213,6 +245,12 @@ export function calculateShapeDimensions(shape: ParametricShape): {
 
     case 'shelf':
       return calculateShelfDimensions(shape)
+
+    case 'extrusion-v2':
+      return calculateExtrusionV2Dimensions(shape)
+
+    case 'composite':
+      return calculateCompositeDimensions(shape)
 
     case 'extrusion':
     default: {

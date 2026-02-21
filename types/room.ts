@@ -71,10 +71,94 @@ export interface ShelfShape {
   color: string           // hex color
 }
 
+// ============================================
+// Enhanced Shapes with Per-Face Materials
+// ============================================
+
+/**
+ * How a texture should be applied to a face
+ */
+export type TextureFitMode = 'stretch' | 'tile'
+
+/**
+ * Material definition for a single face
+ */
+export interface FaceMaterial {
+  color: string                    // Hex color (base color, also used as fallback)
+  texturePath?: string             // URL to texture image (optional)
+  textureMode?: TextureFitMode     // How to apply texture (default: 'stretch')
+  textureRepeat?: {                // Only used when textureMode === 'tile'
+    x: number                      // Repeat count on X axis
+    y: number                      // Repeat count on Y axis
+  }
+  metalness?: number               // 0-1 (default: 0.1)
+  roughness?: number               // 0-1 (default: 0.7)
+}
+
+/**
+ * Face identifiers for an extruded polygon
+ * For an N-sided polygon, there are N+2 faces:
+ * - 'top' and 'bottom' caps
+ * - 'side-0' through 'side-(N-1)' for each edge
+ */
+export type ExtrusionFaceId = 'top' | 'bottom' | `side-${number}`
+
+/**
+ * Per-face material mapping for an extrusion shape
+ * Key is the face identifier, value is the material
+ */
+export type ExtrusionFaceMaterials = {
+  [key in ExtrusionFaceId]?: FaceMaterial
+}
+
+/**
+ * ExtrusionShapeV2: Enhanced extrusion with per-face materials
+ * Replaces single-color ExtrusionShape for new creations
+ */
+export interface ExtrusionShapeV2 {
+  type: 'extrusion-v2'
+  points: Array<{ x: number; y: number }>  // 2D polygon vertices (closed, in feet)
+  height: number                            // Extrusion depth in feet
+  defaultMaterial: FaceMaterial             // Fallback for faces without specific materials
+  faceMaterials?: ExtrusionFaceMaterials    // Per-face material overrides
+}
+
+/**
+ * A single positioned/rotated shape within a composite item
+ */
+export interface CompositeShapePart {
+  id: string                                // Unique identifier within the composite
+  name: string                              // Display name (e.g., "Base", "Top section")
+  shape: ExtrusionShapeV2                   // The shape data
+
+  // Transform relative to composite origin
+  position: { x: number; y: number; z: number }
+  rotation: { x: number; y: number; z: number }  // Radians
+
+  // Editing state
+  locked: boolean                           // If true, cannot be selected/edited
+  visible: boolean                          // If false, hidden in preview
+}
+
+/**
+ * CompositeShape: Multiple shapes combined into one item
+ * Allows building complex furniture from simple extruded parts
+ */
+export interface CompositeShape {
+  type: 'composite'
+  parts: CompositeShapePart[]
+}
+
 /**
  * ParametricShape: Union of all procedurally-generated shape types
  */
-export type ParametricShape = ExtrusionShape | RugShape | FrameShape | ShelfShape
+export type ParametricShape =
+  | ExtrusionShape      // Legacy single-color extrusion
+  | ExtrusionShapeV2    // Enhanced per-face materials
+  | CompositeShape      // Multi-shape composition
+  | RugShape
+  | FrameShape
+  | ShelfShape
 
 /**
  * MaterialOverride: Customization for a specific material in a 3D model

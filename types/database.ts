@@ -48,6 +48,8 @@ export interface TrellisWebhookPayload {
 // Items table types
 // ============================================
 
+import { ParametricShape } from './room'
+
 export interface ItemRow {
   id: string
   name: string
@@ -55,34 +57,8 @@ export interface ItemRow {
   model_path: string | null
   thumbnail_path: string | null
   images: Array<{ original: string; processed: string | null }> | null
-  parametric_shape: {
-    type: 'extrusion'
-    points: Array<{ x: number; y: number }>
-    height: number
-    color: string
-  } | {
-    type: 'rug'
-    width: number
-    depth: number
-    thickness: number
-    texturePath: string
-  } | {
-    type: 'frame'
-    imagePath: string
-    imageWidth: number
-    imageHeight: number
-    matWidth: number
-    matColor: string
-    frameWidth: number
-    frameDepth: number
-    frameColor: string
-  } | {
-    type: 'shelf'
-    width: number
-    height: number
-    depth: number
-    color: string
-  } | null
+  // Use the actual ParametricShape type from room.ts for type safety
+  parametric_shape: ParametricShape | null
   generation_status: {
     isGenerating: boolean
     startedAt?: string

@@ -16,6 +16,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { CategoryFilterSidebar } from '@/components/items/CategoryFilterSidebar'
 import { ItemCard, AddItemCard } from '@/components/items/ItemCard'
 import { CustomItemCreator } from '@/components/items/CustomItemCreator'
+import { CustomItemCreatorV2 } from '@/components/items/CustomItemCreatorV2'
 import { RugCreator } from '@/components/items/RugCreator'
 import { FrameCreator } from '@/components/items/FrameCreator'
 import { ShelfCreator } from '@/components/items/ShelfCreator'
@@ -39,6 +40,7 @@ export default function ItemsPage() {
   const [showRugCreator, setShowRugCreator] = useState(false)
   const [showFrameCreator, setShowFrameCreator] = useState(false)
   const [showShelfCreator, setShowShelfCreator] = useState(false)
+  const [showCompositeCreator, setShowCompositeCreator] = useState(false)
   const [uploadedModelPath, setUploadedModelPath] = useState('')
   const [uploadedThumbnailPath, setUploadedThumbnailPath] = useState('')
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
@@ -397,7 +399,7 @@ export default function ItemsPage() {
                 </div>
 
                 {/* Quick Create Options - Rug, Frame, Shelf (desktop only), Custom (desktop only) */}
-                <div className={`grid gap-3 ${canUseShelfCreator && canUseCustomCreator ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'}`}>
+                <div className={`grid gap-3 ${canUseShelfCreator && canUseCustomCreator ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2'}`}>
                   {/* Create Rug */}
                   <button
                     onClick={() => {
@@ -454,6 +456,22 @@ export default function ItemsPage() {
                       <div className={`mb-2 ${isMobile ? 'text-4xl' : 'text-3xl'}`}>✏️</div>
                       <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
                         Custom
+                      </h4>
+                    </button>
+                  )}
+
+                  {/* Composite Shape Creator - Desktop only */}
+                  {canUseCustomCreator && (
+                    <button
+                      onClick={() => {
+                        handleCloseModal()
+                        setShowCompositeCreator(true)
+                      }}
+                      className={`bg-white border-2 border-taupe/20 hover:border-sage active:border-sage rounded-xl text-center transition-all group shadow-sm hover:shadow-md ${isMobile ? 'p-5' : 'p-4'}`}
+                    >
+                      <div className={`mb-2 ${isMobile ? 'text-4xl' : 'text-3xl'}`}>🧱</div>
+                      <h4 className="text-graphite text-sm font-display font-semibold group-hover:text-sage transition-colors">
+                        Composite
                       </h4>
                     </button>
                   )}
@@ -751,6 +769,12 @@ export default function ItemsPage() {
       <ShelfCreator
         isOpen={showShelfCreator}
         onClose={() => setShowShelfCreator(false)}
+      />
+
+      {/* Composite Item Creator Modal */}
+      <CustomItemCreatorV2
+        isOpen={showCompositeCreator}
+        onClose={() => setShowCompositeCreator(false)}
       />
 
       {/* Delete Confirmation Modal */}
