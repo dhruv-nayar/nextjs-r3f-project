@@ -606,17 +606,12 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
 
   return (
     <>
-      {/* Main model group with scaling */}
+      {/* Outer group: position and rotation only */}
       {/* Y position includes yOffset to place model bottom at Y=0 after scaling */}
       <group
         ref={groupRef}
         position={[instance.position.x, instance.position.y + yOffset, instance.position.z]}
         rotation={[instance.rotation.x, instance.rotation.y, instance.rotation.z]}
-        scale={[
-          instance.scaleMultiplier.x * autoScale.x,
-          instance.scaleMultiplier.y * autoScale.y,
-          instance.scaleMultiplier.z * autoScale.z
-        ]}
         onPointerOver={(e) => {
           e.stopPropagation()
           setHoveredFurnitureId(instance.id)
@@ -642,32 +637,42 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
         onPointerMove={handlePointerMove}
         onClick={(e) => e.stopPropagation()} // Prevent floor click from firing
       >
-        <primitive object={clonedScene} castShadow receiveShadow />
+        {/* Inner group: non-uniform scaling only */}
+        {/* Scaling is applied first (in local space), then rotation is applied to the scaled result */}
+        <group
+          scale={[
+            instance.scaleMultiplier.x * autoScale.x,
+            instance.scaleMultiplier.y * autoScale.y,
+            instance.scaleMultiplier.z * autoScale.z
+          ]}
+        >
+          <primitive object={clonedScene} castShadow receiveShadow />
 
-        {/* Outline border when hovered or selected (not in resize mode) */}
-        {/* raycast={null} prevents these visual elements from intercepting clicks */}
-        {/* Position at center.y (model's actual center) since we don't center Y in clonedScene */}
-        {(isHovered || isSelected) && !isResizeMode && (
-          <>
-            <mesh position={[0, center.y, 0]} raycast={() => null}>
-              <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
-              <meshBasicMaterial
-                color={isSelected ? "#ffa500" : "#00ffff"}
-                wireframe
-                transparent
-                opacity={0.6}
-              />
-            </mesh>
-            <lineSegments position={[0, center.y, 0]} raycast={() => null}>
-              <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
-              <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
-            </lineSegments>
-            <lineSegments position={[0, center.y, 0]} raycast={() => null}>
-              <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
-              <lineBasicMaterial color="#ffffff" />
-            </lineSegments>
-          </>
-        )}
+          {/* Outline border when hovered or selected (not in resize mode) */}
+          {/* raycast={null} prevents these visual elements from intercepting clicks */}
+          {/* Position at center.y (model's actual center) since we don't center Y in clonedScene */}
+          {(isHovered || isSelected) && !isResizeMode && (
+            <>
+              <mesh position={[0, center.y, 0]} raycast={() => null}>
+                <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
+                <meshBasicMaterial
+                  color={isSelected ? "#ffa500" : "#00ffff"}
+                  wireframe
+                  transparent
+                  opacity={0.6}
+                />
+              </mesh>
+              <lineSegments position={[0, center.y, 0]} raycast={() => null}>
+                <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.03, size.y * 1.03, size.z * 1.03)]} />
+                <lineBasicMaterial color={isSelected ? "#ffa500" : "#00ffff"} />
+              </lineSegments>
+              <lineSegments position={[0, center.y, 0]} raycast={() => null}>
+                <edgesGeometry args={[new THREE.BoxGeometry(size.x * 1.01, size.y * 1.01, size.z * 1.01)]} />
+                <lineBasicMaterial color="#ffffff" />
+              </lineSegments>
+            </>
+          )}
+        </group>
       </group>
 
       {/* Resize handles rendered outside the scaled group at world-space positions */}
