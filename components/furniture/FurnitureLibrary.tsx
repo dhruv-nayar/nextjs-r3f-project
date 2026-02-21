@@ -365,49 +365,39 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const { clonedScene, size, center, autoScale, yOffset } = useMemo(() => {
     const cloned = scene.clone()
 
-    // Apply the item's defaultRotation (X and Z) before calculating bounding box
-    // This ensures dimensions match what the user sees in the item viewer
-    const defaultRotX = item.defaultRotation?.x || 0
-    const defaultRotZ = item.defaultRotation?.z || 0
-
-    if (defaultRotX !== 0 || defaultRotZ !== 0) {
-      // Create a container group to apply the default rotation
-      const rotationGroup = new THREE.Group()
-      rotationGroup.rotation.set(defaultRotX, 0, defaultRotZ)
-      rotationGroup.add(cloned)
-      rotationGroup.updateMatrixWorld(true)
-
-      // Calculate bounding box of the rotated model
-      const box = new THREE.Box3().setFromObject(rotationGroup)
-      const centerVec = box.getCenter(new THREE.Vector3())
-      const sizeVec = box.getSize(new THREE.Vector3())
-
-      // Calculate auto-scale based on item dimensions
-      const scale = {
-        x: item.dimensions.width / sizeVec.x,
-        y: item.dimensions.height / sizeVec.y,
-        z: item.dimensions.depth / sizeVec.z
-      }
-
-      // Center X and Z only - Y offset will be applied outside the scaled group
-      rotationGroup.position.set(-centerVec.x, 0, -centerVec.z)
-
-      // Calculate the Y offset needed to place bottom at Y=0 AFTER scaling
-      const bottomOffset = -box.min.y * scale.y
-
-      return { clonedScene: rotationGroup, size: sizeVec, center: centerVec, autoScale: scale, yOffset: bottomOffset }
-    }
-
-    // No default rotation - original behavior
+    // Get the original (un-rotated) bounding box
     const box = new THREE.Box3().setFromObject(cloned)
     const centerVec = box.getCenter(new THREE.Vector3())
     const sizeVec = box.getSize(new THREE.Vector3())
 
-    // Calculate auto-scale based on item dimensions
+    // The item's defaultRotation affects how the user views the model in the item editor
+    // When they set dimensions, they're relative to that rotated view
+    // We need to transform the dimensions to match the original model axes
+    const defaultRotX = item.defaultRotation?.x || 0
+    const defaultRotZ = item.defaultRotation?.z || 0
+
+    // Create dimension vector and apply INVERSE rotation to map from viewed dimensions to original axes
+    // User sets: width=viewedX, height=viewedY, depth=viewedZ
+    // We need to find: what original axis each viewed axis corresponds to
+    const dimVec = new THREE.Vector3(item.dimensions.width, item.dimensions.height, item.dimensions.depth)
+
+    if (defaultRotX !== 0 || defaultRotZ !== 0) {
+      // Create inverse rotation matrix
+      const euler = new THREE.Euler(-defaultRotX, 0, -defaultRotZ, 'ZYX') // Inverse rotation, reverse order
+      const rotMatrix = new THREE.Matrix4().makeRotationFromEuler(euler)
+
+      // Apply inverse rotation to dimensions to get them in original model space
+      dimVec.applyMatrix4(rotMatrix)
+
+      // Take absolute values since dimensions should be positive
+      dimVec.set(Math.abs(dimVec.x), Math.abs(dimVec.y), Math.abs(dimVec.z))
+    }
+
+    // Calculate auto-scale based on transformed dimensions
     const scale = {
-      x: item.dimensions.width / sizeVec.x,
-      y: item.dimensions.height / sizeVec.y,
-      z: item.dimensions.depth / sizeVec.z
+      x: dimVec.x / sizeVec.x,
+      y: dimVec.y / sizeVec.y,
+      z: dimVec.z / sizeVec.z
     }
 
     // Center X and Z only - Y offset will be applied outside the scaled group
