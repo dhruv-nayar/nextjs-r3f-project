@@ -11,6 +11,7 @@ interface ShapePartListProps {
   onRemovePart: (partId: string) => void
   onRenamePart: (partId: string, name: string) => void
   onAddPart: () => void
+  onEditPart?: (partId: string) => void
 }
 
 /**
@@ -33,6 +34,7 @@ export function ShapePartList({
   onRemovePart,
   onRenamePart,
   onAddPart,
+  onEditPart,
 }: ShapePartListProps) {
   return (
     <div className="space-y-2">
@@ -65,6 +67,7 @@ export function ShapePartList({
               onToggleVisible={() => onToggleVisible(part.id)}
               onRemove={() => onRemovePart(part.id)}
               onRename={(name) => onRenamePart(part.id, name)}
+              onEdit={onEditPart ? () => onEditPart(part.id) : undefined}
             />
           ))}
         </div>
@@ -81,6 +84,7 @@ interface PartListItemProps {
   onToggleVisible: () => void
   onRemove: () => void
   onRename: (name: string) => void
+  onEdit?: () => void
 }
 
 function PartListItem({
@@ -91,6 +95,7 @@ function PartListItem({
   onToggleVisible,
   onRemove,
   onRename,
+  onEdit,
 }: PartListItemProps) {
   return (
     <div
@@ -184,6 +189,27 @@ function PartListItem({
         }`}
         disabled={part.locked}
       />
+
+      {/* Edit button (pencil) */}
+      {onEdit && !part.locked && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit()
+          }}
+          className="p-1 hover:bg-blue-100 rounded transition-colors text-gray-400 hover:text-blue-600"
+          title="Edit part shape"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Delete button */}
       <button

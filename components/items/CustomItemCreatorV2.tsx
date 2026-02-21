@@ -64,13 +64,14 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
   const [selectedFace, setSelectedFace] = useState<{ partId: string; faceId: ExtrusionFaceId } | null>(null)
 
-  // Drawing state (for creating new parts)
+  // Drawing state (for creating/editing parts)
   const [drawingPoints, setDrawingPoints] = useState<Point2D[]>([])
   const [isDrawing, setIsDrawing] = useState(true)
   const [newPartHeight, setNewPartHeight] = useState(2)
   const [newPartHeightInput, setNewPartHeightInput] = useState("2'") // Local input state for flexible editing
   const [newPartColor, setNewPartColor] = useState('#6366f1')
   const [newPartName, setNewPartName] = useState('Part')
+  const [editingPartId, setEditingPartId] = useState<string | null>(null) // Track which part is being edited
 
   // Thumbnail
   const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null)
@@ -113,6 +114,7 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
     setNewPartHeightInput("2'")
     setNewPartColor('#6366f1')
     setNewPartName(`Part ${compositeShape.parts.length + 1}`)
+    setEditingPartId(null)
   }
 
   // Handle height input with flexible formats (like floorplan editor)
@@ -152,6 +154,22 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
     setMode('drawing')
   }
 
+  // Edit an existing part - load its data into drawing mode
+  const handleEditPart = (partId: string) => {
+    const part = compositeShape.parts.find((p) => p.id === partId)
+    if (!part || part.locked) return
+
+    // Load the part's shape data into drawing state
+    setDrawingPoints(part.shape.points)
+    setIsDrawing(false) // Shape is already complete
+    setNewPartHeight(part.shape.height)
+    setNewPartHeightInput(formatFeetForDisplay(part.shape.height))
+    setNewPartColor(part.shape.defaultMaterial?.color || '#6366f1')
+    setNewPartName(part.name)
+    setEditingPartId(partId)
+    setMode('drawing')
+  }
+
   const handleFinishDrawing = useCallback(() => {
     if (drawingPoints.length < 3 || isDrawing) return
 
@@ -166,13 +184,35 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
       },
     }
 
-    const newPart = createCompositeShapePart(newShape, newPartName)
+    if (editingPartId) {
+      // Update existing part
+      setCompositeShape((prev) => ({
+        ...prev,
+        parts: prev.parts.map((p) =>
+          p.id === editingPartId
+            ? {
+                ...p,
+                name: newPartName,
+                shape: {
+                  ...newShape,
+                  // Preserve existing face materials
+                  faceMaterials: p.shape.faceMaterials,
+                },
+              }
+            : p
+        ),
+      }))
+      setSelectedPartId(editingPartId)
+    } else {
+      // Create new part
+      const newPart = createCompositeShapePart(newShape, newPartName)
+      setCompositeShape((prev) => addPart(prev, newPart))
+      setSelectedPartId(newPart.id)
+    }
 
-    setCompositeShape((prev) => addPart(prev, newPart))
-    setSelectedPartId(newPart.id)
     setMode('parts')
     resetDrawingState()
-  }, [drawingPoints, isDrawing, newPartHeight, newPartColor, newPartName])
+  }, [drawingPoints, isDrawing, newPartHeight, newPartColor, newPartName, editingPartId])
 
   const handleCancelDrawing = () => {
     setMode('parts')
@@ -299,7 +339,7 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 className="text-xl font-semibold text-gray-900">
-            {mode === 'drawing' ? 'Draw Part Shape' : isEditMode ? 'Edit Custom Item' : 'Create Custom Item'}
+            {mode === 'drawing' ? (editingPartId ? 'Edit Part Shape' : 'Draw Part Shape') : isEditMode ? 'Edit Custom Item' : 'Create Custom Item'}
           </h2>
           <button
             onClick={onClose}
@@ -405,7 +445,7 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
                       disabled={drawingPoints.length < 3 || isDrawing}
                       className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Add Part
+                      {editingPartId ? 'Update Part' : 'Add Part'}
                     </button>
                   </div>
                 </div>
@@ -429,6 +469,7 @@ export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: Custo
                   onRemovePart={handleRemovePart}
                   onRenamePart={handleRenamePart}
                   onAddPart={handleAddPartClick}
+                  onEditPart={handleEditPart}
                 />
 
                 {selectedPart && !selectedPart.locked && (
