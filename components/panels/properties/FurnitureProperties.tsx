@@ -29,24 +29,24 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
     })
   }
 
-  const handleRotationYChange = (degrees: number) => {
+  const handleRotationChange = (axis: 'x' | 'y' | 'z', degrees: number) => {
     // Convert degrees to radians, normalize to 0-360 range
     const normalizedDegrees = ((degrees % 360) + 360) % 360
     const radians = (normalizedDegrees * Math.PI) / 180
     updateInstance(instance.id, {
       rotation: {
         ...instance.rotation,
-        y: radians,
+        [axis]: radians,
       },
     })
   }
 
   const handleRotate90CW = () => {
-    handleRotationYChange(rotationYDegrees + 90)
+    handleRotationChange('y', rotationDegrees.y + 90)
   }
 
   const handleRotate90CCW = () => {
-    handleRotationYChange(rotationYDegrees - 90)
+    handleRotationChange('y', rotationDegrees.y - 90)
   }
 
   const handleEditItem = () => {
@@ -69,7 +69,11 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
   }
 
   // Convert rotation to degrees for display
-  const rotationYDegrees = (instance.rotation.y * 180) / Math.PI
+  const rotationDegrees = {
+    x: (instance.rotation.x * 180) / Math.PI,
+    y: (instance.rotation.y * 180) / Math.PI,
+    z: (instance.rotation.z * 180) / Math.PI,
+  }
 
   return (
     <div>
@@ -142,13 +146,13 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
       </PropertySection>
 
       {/* Rotation */}
-      <PropertySection title="Rotation">
-        <div className="flex items-center gap-2">
-          {/* Counter-clockwise button */}
+      <PropertySection title="Rotation (degrees)">
+        {/* Quick rotate buttons for Y axis */}
+        <div className="flex items-center gap-2 mb-3">
           <button
             onClick={handleRotate90CCW}
             className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors group"
-            title="Rotate 90° counter-clockwise"
+            title="Rotate 90° counter-clockwise (Y axis)"
           >
             <svg
               className="w-4 h-4 text-white/70 group-hover:text-white"
@@ -163,24 +167,11 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
               <polyline points="3 3 3 9 9 9" />
             </svg>
           </button>
-
-          {/* Degree input */}
-          <div className="flex-1">
-            <NumberInput
-              label=""
-              value={Math.round(rotationYDegrees)}
-              onChange={handleRotationYChange}
-              step={15}
-              suffix="°"
-              labelWidth="w-0"
-            />
-          </div>
-
-          {/* Clockwise button */}
+          <span className="text-white/50 text-xs flex-1 text-center">Quick Y rotation</span>
           <button
             onClick={handleRotate90CW}
             className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors group"
-            title="Rotate 90° clockwise"
+            title="Rotate 90° clockwise (Y axis)"
           >
             <svg
               className="w-4 h-4 text-white/70 group-hover:text-white"
@@ -196,6 +187,31 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
             </svg>
           </button>
         </div>
+        {/* Individual axis controls */}
+        <NumberInput
+          label="X"
+          value={Math.round(rotationDegrees.x)}
+          onChange={(v) => handleRotationChange('x', v)}
+          step={15}
+          suffix="°"
+          labelWidth="w-8"
+        />
+        <NumberInput
+          label="Y"
+          value={Math.round(rotationDegrees.y)}
+          onChange={(v) => handleRotationChange('y', v)}
+          step={15}
+          suffix="°"
+          labelWidth="w-8"
+        />
+        <NumberInput
+          label="Z"
+          value={Math.round(rotationDegrees.z)}
+          onChange={(v) => handleRotationChange('z', v)}
+          step={15}
+          suffix="°"
+          labelWidth="w-8"
+        />
       </PropertySection>
 
       {/* Dimensions - Editable */}
