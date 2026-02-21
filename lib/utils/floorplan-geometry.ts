@@ -327,12 +327,14 @@ export function detectAllRooms(
 
   // Convert back to arrays and filter out outer boundary
   const allCycles = Array.from(cycles).map(s => s.split(','))
+  console.log('[detectAllRooms] All raw cycles:', allCycles.length)
 
   // Filter: Keep only cycles with >= 3 walls that form simple (non-self-intersecting) polygons
   const validCycles = allCycles.filter(cycle => {
     if (cycle.length < 3) return false
     return isSimplePolygon(cycle, walls, vertices)
   })
+  console.log('[detectAllRooms] Valid simple polygons:', validCycles.length)
 
   // Remove outer boundary (cycle with largest perimeter)
   let innerCycles = validCycles
@@ -340,10 +342,12 @@ export function detectAllRooms(
     const perimeters = validCycles.map(cycle => calculateCyclePerimeter(cycle, walls, vertexMap))
     const maxPerimeter = Math.max(...perimeters)
     innerCycles = validCycles.filter((_, i) => perimeters[i] < maxPerimeter - 0.1)
+    console.log('[detectAllRooms] After removing outer (max perimeter):', innerCycles.length)
   }
 
   // Filter out cycles that contain other cycles (keep only elementary/minimal cycles)
   const elementaryCycles = filterElementaryCycles(innerCycles, walls, vertices)
+  console.log('[detectAllRooms] Final elementary cycles:', elementaryCycles.length, elementaryCycles.map(c => c.length + '-wall'))
 
   return elementaryCycles
 }

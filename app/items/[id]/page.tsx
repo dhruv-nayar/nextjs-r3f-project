@@ -693,8 +693,8 @@ export default function ItemDetailPage() {
                   }}
                   showDimensionLines={showDimensionLines}
                 />
-                {/* Floating action buttons on 3D model */}
-                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover/canvas:opacity-100 transition-opacity">
+                {/* Floating action buttons on 3D model - semi-visible by default, full on hover */}
+                <div className="absolute top-4 right-4 flex gap-2 opacity-60 group-hover/canvas:opacity-100 transition-opacity">
                   {/* Use as thumbnail button */}
                   <button
                     onClick={() => {

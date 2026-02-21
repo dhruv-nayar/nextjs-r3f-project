@@ -370,8 +370,18 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
 
   // Auto-detect and create rooms for any new closed shapes
   const autoDetectRooms = useCallback((currentWalls: FloorplanWallV2[], currentVertices: FloorplanVertex[]) => {
+    // Debug: Log current state
+    console.log('[autoDetectRooms] Walls:', currentWalls.length, currentWalls.map(w => ({
+      id: w.id.slice(-4),
+      from: w.startVertexId.slice(-4),
+      to: w.endVertexId.slice(-4)
+    })))
+    console.log('[autoDetectRooms] Vertices:', currentVertices.length)
+
     // Detect all closed shapes
     const detectedCycles = detectAllRooms(currentWalls, currentVertices)
+
+    console.log('[autoDetectRooms] Detected cycles:', detectedCycles.length, detectedCycles.map(c => c.map(id => id.slice(-4))))
 
     if (detectedCycles.length === 0) return
 
@@ -997,8 +1007,10 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
 
     // Draw room fills
     const vertexMap = new Map(vertices.map((v) => [v.id, v]))
+    console.log('[render] Rooms:', rooms.length, 'Walls:', walls.length, 'Vertices:', vertices.length)
     for (const room of rooms) {
       const polygon = getRoomPolygon(room, walls, vertices)
+      console.log(`[render] Room ${room.name}: wallIds=${room.wallIds.map(id => id.slice(-4)).join(',')} polygon=${polygon?.length || 0} points`)
       if (polygon && polygon.length >= 3) {
         ctx.fillStyle = room.color
         ctx.beginPath()
@@ -1474,51 +1486,6 @@ export function FloorplanCanvasV2({ initialData, onChange }: FloorplanCanvasV2Pr
         />
       )}
 
-      {/* Instructions */}
-      <div className="text-sm text-gray-500 space-y-1">
-        <p><strong>Keyboard Shortcuts:</strong> V = Select, W = Draw Walls, Escape = Cancel/Return to Select</p>
-        <p><strong>Navigation:</strong> Mouse wheel to zoom (25%-400%). Hold Space + drag to pan.</p>
-        <p><strong>Note:</strong> Door placement is available in the 3D view after building.</p>
-
-        {editorMode === EditorMode.SELECT && (
-          <>
-            <p><strong>Select:</strong> Click objects to select them (vertices, walls). Drag vertices to move them.</p>
-            <p><strong>Delete:</strong> Select an object, then press Delete to remove it.</p>
-          </>
-        )}
-
-        {editorMode === EditorMode.DRAW_WALLS && (
-          <>
-            <p><strong>Draw:</strong> Click to place vertices. Click an existing vertex to close the shape and create a room.</p>
-            <p><strong>Shift:</strong> Hold Shift while drawing to snap lines to 45° angles.</p>
-            <p><strong>Shared walls:</strong> Click on an existing vertex to share corners. Click on a wall to split it.</p>
-          </>
-        )}
-      </div>
-
-      {/* Room list */}
-      {rooms.length > 0 && (
-        <div className="border border-gray-200 rounded p-3">
-          <h3 className="font-medium mb-2">Rooms</h3>
-          <div className="space-y-1">
-            {rooms.map((room) => (
-              <div
-                key={room.id}
-                className="flex items-center gap-2 text-sm"
-              >
-                <div
-                  className="w-4 h-4 rounded"
-                  style={{ backgroundColor: room.color }}
-                />
-                <span>{room.name}</span>
-                <span className="text-gray-400">
-                  ({room.wallIds.length} walls)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

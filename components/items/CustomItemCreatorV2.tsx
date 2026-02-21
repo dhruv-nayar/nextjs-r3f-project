@@ -23,6 +23,19 @@ import { getEffectiveFaceMaterial, updateShapeFaceMaterial } from '@/lib/three/f
 interface CustomItemCreatorV2Props {
   isOpen: boolean
   onClose: () => void
+  editItem?: {
+    id: string
+    name: string
+    category?: ItemCategory
+    parametricShape: CompositeShape
+  }
+  onSave?: (updates: {
+    name: string
+    category: ItemCategory
+    parametricShape: CompositeShape
+    dimensions: { width: number; height: number; depth: number }
+    thumbnailPath?: string
+  }) => void
 }
 
 type EditorMode = 'parts' | 'drawing' | 'materials'
@@ -30,8 +43,9 @@ type EditorMode = 'parts' | 'drawing' | 'materials'
 /**
  * Enhanced Custom Item Creator with multi-shape composition and per-face materials
  */
-export function CustomItemCreatorV2({ isOpen, onClose }: CustomItemCreatorV2Props) {
+export function CustomItemCreatorV2({ isOpen, onClose, editItem, onSave }: CustomItemCreatorV2Props) {
   const { addItem } = useItemLibrary()
+  const isEditMode = !!editItem
 
   // Editor state
   const [mode, setMode] = useState<EditorMode>('parts')
@@ -62,19 +76,27 @@ export function CustomItemCreatorV2({ isOpen, onClose }: CustomItemCreatorV2Prop
   const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null)
   const [shouldCaptureThumbnail, setShouldCaptureThumbnail] = useState(false)
 
-  // Reset when modal opens
+  // Reset or load when modal opens
   useEffect(() => {
     if (isOpen) {
       setMode('parts')
-      setName('Custom Item')
-      setCategory('decoration')
-      setCompositeShape({ type: 'composite', parts: [] })
+      if (editItem) {
+        // Load existing item data
+        setName(editItem.name)
+        setCategory(editItem.category || 'decoration')
+        setCompositeShape(editItem.parametricShape)
+      } else {
+        // Reset for new item
+        setName('Custom Item')
+        setCategory('decoration')
+        setCompositeShape({ type: 'composite', parts: [] })
+      }
       setSelectedPartId(null)
       setSelectedFace(null)
       resetDrawingState()
       setCapturedThumbnail(null)
     }
-  }, [isOpen])
+  }, [isOpen, editItem])
 
   // Trigger thumbnail capture when composite shape changes
   useEffect(() => {
@@ -236,22 +258,34 @@ export function CustomItemCreatorV2({ isOpen, onClose }: CustomItemCreatorV2Prop
   const handleSave = () => {
     if (compositeShape.parts.length === 0) return
 
-    const newItem = {
-      id: `custom-${Date.now()}`,
-      name,
-      description: 'User-created composite shape',
-      parametricShape: compositeShape,
-      thumbnailPath: capturedThumbnail || undefined,
-      dimensions,
-      category,
-      tags: ['custom', category, 'composite'],
-      placementType: 'floor' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isCustom: true,
-    }
+    if (isEditMode && onSave) {
+      // Edit mode: call onSave callback
+      onSave({
+        name,
+        category,
+        parametricShape: compositeShape,
+        dimensions,
+        thumbnailPath: capturedThumbnail || undefined,
+      })
+    } else {
+      // Create mode: add new item
+      const newItem = {
+        id: `custom-${Date.now()}`,
+        name,
+        description: 'User-created composite shape',
+        parametricShape: compositeShape,
+        thumbnailPath: capturedThumbnail || undefined,
+        dimensions,
+        category,
+        tags: ['custom', category, 'composite'],
+        placementType: 'floor' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isCustom: true,
+      }
 
-    addItem(newItem)
+      addItem(newItem)
+    }
     onClose()
   }
 
@@ -265,7 +299,7 @@ export function CustomItemCreatorV2({ isOpen, onClose }: CustomItemCreatorV2Prop
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 className="text-xl font-semibold text-gray-900">
-            {mode === 'drawing' ? 'Draw Part Shape' : 'Create Custom Item'}
+            {mode === 'drawing' ? 'Draw Part Shape' : isEditMode ? 'Edit Custom Item' : 'Create Custom Item'}
           </h2>
           <button
             onClick={onClose}
@@ -497,7 +531,7 @@ export function CustomItemCreatorV2({ isOpen, onClose }: CustomItemCreatorV2Prop
               disabled={compositeShape.parts.length === 0}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Item
+              {isEditMode ? 'Update Item' : 'Save Item'}
             </button>
           </div>
         </div>

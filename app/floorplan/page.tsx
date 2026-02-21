@@ -203,9 +203,9 @@ function FloorplanV2PageWrapper({ homeId }: { homeId: string }) {
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Canvas area */}
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="bg-white rounded-lg shadow-sm p-6 max-w-4xl">
+        {/* Canvas area - takes up full left side */}
+        <div className="flex-1 flex items-center justify-center p-4 bg-gray-100">
+          <div className="bg-white rounded-lg shadow-sm p-4 w-full h-full flex items-center justify-center">
             <FloorplanCanvasV2
               initialData={initialData}
               onChange={handleDataChange}

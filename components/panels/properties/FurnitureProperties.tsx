@@ -1,12 +1,17 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ItemInstance, Item } from '@/types/room'
+import { ItemInstance, Item, RugShape, FrameShape, ShelfShape, CompositeShape, ItemCategory } from '@/types/room'
 import { useRoom } from '@/lib/room-context'
 import { useHome } from '@/lib/home-context'
 import { useItemLibrary } from '@/lib/item-library-context'
 import { useResizeMode } from '@/lib/resize-mode-context'
 import { PropertySection, NumberInput, MeasurementInput, PropertyRow } from '../shared'
+import { RugCreator } from '@/components/items/RugCreator'
+import { FrameCreator } from '@/components/items/FrameCreator'
+import { ShelfCreator } from '@/components/items/ShelfCreator'
+import { CustomItemCreatorV2 } from '@/components/items/CustomItemCreatorV2'
 
 interface FurniturePropertiesProps {
   instance: ItemInstance
@@ -15,6 +20,7 @@ interface FurniturePropertiesProps {
 
 export function FurnitureProperties({ instance, item }: FurniturePropertiesProps) {
   const router = useRouter()
+  const [showShapeEditor, setShowShapeEditor] = useState(false)
   const { updateInstance } = useRoom()
   const { currentHomeId } = useHome()
   const { updateItem } = useItemLibrary()
@@ -68,6 +74,27 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
     })
   }
 
+  // Handle shape edit save from creator modals
+  const handleShapeEditSave = (updates: {
+    name: string
+    parametricShape: RugShape | FrameShape | ShelfShape | CompositeShape
+    dimensions: { width: number; height: number; depth: number }
+    thumbnailPath?: string
+    category?: ItemCategory
+  }) => {
+    updateItem(item.id, {
+      name: updates.name,
+      parametricShape: updates.parametricShape,
+      dimensions: updates.dimensions,
+      ...(updates.thumbnailPath && { thumbnailPath: updates.thumbnailPath }),
+      ...(updates.category && { category: updates.category }),
+    })
+    setShowShapeEditor(false)
+  }
+
+  // Check if this is a parametric/composite item
+  const isParametricItem = item.parametricShape && ['rug', 'frame', 'shelf', 'composite'].includes(item.parametricShape.type)
+
   // Convert rotation to degrees for display
   const rotationYDegrees = (instance.rotation.y * 180) / Math.PI
 
@@ -109,6 +136,15 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
             >
               Resize
             </button>
+            {isParametricItem && (
+              <button
+                onClick={() => setShowShapeEditor(true)}
+                className="px-3 py-1.5 bg-blue-500/80 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+                title="Edit shape properties"
+              >
+                Edit Shape
+              </button>
+            )}
             <button
               onClick={handleEditItem}
               className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-sm rounded-lg transition-colors"
@@ -250,6 +286,57 @@ export function FurnitureProperties({ instance, item }: FurniturePropertiesProps
           Arrow keys to move, R to resize, Delete to remove
         </p>
       </div>
+
+      {/* Shape Editor Modals */}
+      {showShapeEditor && item.parametricShape?.type === 'rug' && (
+        <RugCreator
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: item.id,
+            name: item.name,
+            parametricShape: item.parametricShape as RugShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
+      {showShapeEditor && item.parametricShape?.type === 'frame' && (
+        <FrameCreator
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: item.id,
+            name: item.name,
+            parametricShape: item.parametricShape as FrameShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
+      {showShapeEditor && item.parametricShape?.type === 'shelf' && (
+        <ShelfCreator
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: item.id,
+            name: item.name,
+            parametricShape: item.parametricShape as ShelfShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
+      {showShapeEditor && item.parametricShape?.type === 'composite' && (
+        <CustomItemCreatorV2
+          isOpen={true}
+          onClose={() => setShowShapeEditor(false)}
+          editItem={{
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            parametricShape: item.parametricShape as CompositeShape
+          }}
+          onSave={handleShapeEditSave}
+        />
+      )}
     </div>
   )
 }
