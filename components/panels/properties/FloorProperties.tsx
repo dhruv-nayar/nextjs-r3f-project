@@ -22,15 +22,15 @@ export function FloorProperties({ room }: FloorPropertiesProps) {
 
   const updateFloorGrid = (updates: Partial<SurfaceGridSettings>) => {
     const currentGridState = room.gridSettings || createDefaultRoomGridState()
-    updateRoom(room.id, {
-      gridSettings: {
-        ...currentGridState,
-        floor: {
-          ...currentGridState.floor,
-          ...updates,
-        },
+    const newGridSettings = {
+      ...currentGridState,
+      floor: {
+        ...currentGridState.floor,
+        ...updates,
       },
-    })
+    }
+    console.log('[FloorProperties] updateFloorGrid:', { updates, newGridSettings })
+    updateRoom(room.id, { gridSettings: newGridSettings })
   }
 
   const dimensions = room.dimensions || { width: 10, depth: 10, height: 10 }

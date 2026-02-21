@@ -51,6 +51,10 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel, 
   const [showSaving, setShowSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
+  // Create stable keys for detecting actual data changes (avoid infinite loops)
+  const homesKey = homes.map(h => `${h.id}-${h.updatedAt || ''}`).join(',')
+  const itemsKey = items.map(i => `${i.id}-${i.updatedAt || ''}`).join(',')
+
   // Settings panel state
   const [showSettings, setShowSettings] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -62,7 +66,14 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel, 
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   // Show saving indicator when data changes
+  const isInitialMount = useRef(true)
   useEffect(() => {
+    // Skip on initial mount to avoid showing "saving" on page load
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+
     setShowSaving(true)
     setLastSaved(new Date())
 
@@ -71,7 +82,7 @@ export function Navbar({ activeTab, className = '', breadcrumb, onBuild3DModel, 
     }, 1500)
 
     return () => clearTimeout(timer)
-  }, [homes, items])
+  }, [homesKey, itemsKey])
 
   // Load storage info when settings panel opens
   useEffect(() => {

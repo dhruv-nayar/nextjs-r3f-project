@@ -6,12 +6,15 @@ import { ThreeEvent } from '@react-three/fiber'
 import { useSelection } from '@/lib/selection-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
 import { useRoomHover } from '@/lib/room-hover-context'
+import { RoomGridState, createDefaultRoomGridState } from '@/types/selection'
+import { FloorMeasurementGrid } from './MeasurementGrid'
 
 interface PolygonRoomFloorProps {
   // Polygon vertices in room-local coordinates (x = X axis, z = Z axis in 3D)
   polygon: Array<{ x: number; z: number }>
   position?: [number, number, number]
   roomId?: string
+  gridSettings?: RoomGridState
 }
 
 /**
@@ -24,7 +27,9 @@ export function PolygonRoomFloor({
   polygon,
   position = [0, 0, 0],
   roomId,
+  gridSettings,
 }: PolygonRoomFloorProps) {
+  const effectiveGridSettings = gridSettings || createDefaultRoomGridState()
   // Selection and hover state
   const { selectFloor, isFloorSelected, hoveredItem, setHoveredItem } = useSelection()
   const { setSelectedFurnitureId } = useFurnitureSelection()
@@ -103,6 +108,26 @@ export function PolygonRoomFloor({
     return new THREE.BufferGeometry().setFromPoints(points)
   }, [polygon])
 
+  // Calculate bounding box for the grid
+  const boundingBox = useMemo(() => {
+    if (polygon.length < 3) return { width: 0, depth: 0 }
+
+    let minX = Infinity, maxX = -Infinity
+    let minZ = Infinity, maxZ = -Infinity
+
+    for (const p of polygon) {
+      minX = Math.min(minX, p.x)
+      maxX = Math.max(maxX, p.x)
+      minZ = Math.min(minZ, p.z)
+      maxZ = Math.max(maxZ, p.z)
+    }
+
+    return {
+      width: maxX - minX,
+      depth: maxZ - minZ,
+    }
+  }, [polygon])
+
   if (!floorGeometry || polygon.length < 3) {
     return null
   }
@@ -129,6 +154,14 @@ export function PolygonRoomFloor({
           <lineBasicMaterial color="#333333" linewidth={2} />
         </line>
       )}
+
+      {/* Floor Measurement Grid */}
+      <FloorMeasurementGrid
+        width={boundingBox.width}
+        depth={boundingBox.depth}
+        settings={effectiveGridSettings.floor}
+        roomPosition={position}
+      />
     </group>
   )
 }

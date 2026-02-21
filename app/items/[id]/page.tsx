@@ -76,6 +76,8 @@ export default function ItemDetailPage() {
   const [editPlacementType, setEditPlacementType] = useState<PlacementType | undefined>(item?.placementType)
   const [editThumbnailPath, setEditThumbnailPath] = useState(item?.thumbnailPath || '')
   const [editImages, setEditImages] = useState<ImagePair[]>(item?.images || [])
+  const editImagesRef = useRef(editImages)
+  editImagesRef.current = editImages // Keep ref in sync
 
   // Viewer gallery state - 'model' for 3D viewer, or { pairIndex, version } for images
   const [selectedViewerType, setSelectedViewerType] = useState<'model' | { pairIndex: number; version: 'original' | 'processed' }>('model')
@@ -314,10 +316,9 @@ export default function ItemDetailPage() {
   const handleImageUpdate = useCallback((originalUrl: string, processedUrl: string) => {
     console.log('[ItemPage] handleImageUpdate called:', { originalUrl, processedUrl })
 
-    // Get current item from context (fresh, not from closure)
-    const currentItem = getItem(itemId)
-    const currentImages = currentItem?.images || []
-    console.log('[ItemPage] Current item images:', currentImages)
+    // Use ref for current images (avoids race condition with context)
+    const currentImages = editImagesRef.current
+    console.log('[ItemPage] Current images from ref:', currentImages)
 
     // Check if the original URL exists in the current images
     const imageExists = currentImages.some(pair => pair.original === originalUrl)
@@ -335,7 +336,7 @@ export default function ItemDetailPage() {
     setEditImages(updatedImages)
 
     // Update thumbnail if it was the original and we now have processed
-    const currentThumbnail = currentItem?.thumbnailPath || ''
+    const currentThumbnail = editThumbnailPath
     let newThumbnail = currentThumbnail
     if (currentThumbnail === originalUrl) {
       newThumbnail = processedUrl
@@ -353,7 +354,7 @@ export default function ItemDetailPage() {
     setToastMessage('Background removed!')
     setToastType('success')
     setShowToast(true)
-  }, [itemId, getItem, updateItem])
+  }, [itemId, editThumbnailPath, updateItem])
 
   // Handle mask correction saved - update the image pair with new processed URL
   // IMPORTANT: This must be defined before the early return to maintain hook order
@@ -520,29 +521,48 @@ export default function ItemDetailPage() {
                 body: JSON.stringify({ imageData: base64 })
               })
               const bgResult = await bgRes.json()
+              console.log('[paste] bgResult:', { success: bgResult.success, hasData: !!bgResult.processedImageData, dataLength: bgResult.processedImageData?.length })
 
-              if (bgResult.success) {
-                // Upload processed image
-                const processedBlob = await fetch(`data:image/png;base64,${bgResult.processedImageData}`).then(r => r.blob())
+              if (bgResult.success && bgResult.processedImageData) {
+                console.log('[paste] Converting base64 to blob...')
+                // Convert base64 to blob - strip data URL prefix if present
+                const base64Data = bgResult.processedImageData.includes(',')
+                  ? bgResult.processedImageData.split(',')[1]
+                  : bgResult.processedImageData
+                console.log('[paste] base64Data length:', base64Data.length)
+                const binaryString = atob(base64Data)
+                const bytes = new Uint8Array(binaryString.length)
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i)
+                }
+                const processedBlob = new Blob([bytes], { type: 'image/png' })
+                console.log('[paste] Blob created, size:', processedBlob.size)
                 const processedFile = new File([processedBlob], `processed-${Date.now()}.png`, { type: 'image/png' })
 
                 const processedFormData = new FormData()
                 processedFormData.append('files', processedFile)
                 processedFormData.append('itemId', `paste-processed-${Date.now()}`)
 
+                console.log('[paste] Uploading processed image...')
                 const processedUploadRes = await fetch('/api/items/upload-images', {
                   method: 'POST',
                   body: processedFormData
                 })
                 const processedUploadResult = await processedUploadRes.json()
+                console.log('[paste] Upload result:', processedUploadResult)
 
                 if (processedUploadResult.success) {
+                  console.log('[paste] Calling handleImageUpdate:', { originalUrl, processedUrl: processedUploadResult.imagePaths[0] })
                   // Update the image pair with processed version
                   handleImageUpdate(originalUrl, processedUploadResult.imagePaths[0])
+                } else {
+                  console.error('[paste] Upload failed:', processedUploadResult)
                 }
+              } else {
+                console.warn('[paste] bgResult not successful or no data:', bgResult)
               }
             } catch (err) {
-              console.error('Background removal failed:', err)
+              console.error('[paste] Background removal failed:', err)
             }
           }
           reader.readAsDataURL(file)

@@ -70,13 +70,28 @@ export function useJobStats(refreshInterval = 2000) {
   const [stats, setStats] = useState(() => getJobStats())
 
   useEffect(() => {
+    // Helper to only update if values changed
+    const updateStats = () => {
+      const newStats = getJobStats()
+      setStats(prev => {
+        if (
+          prev.total === newStats.total &&
+          prev.pending === newStats.pending &&
+          prev.processing === newStats.processing &&
+          prev.completed === newStats.completed &&
+          prev.failed === newStats.failed
+        ) {
+          return prev // No change, return same reference
+        }
+        return newStats
+      })
+    }
+
     // Initial load
-    setStats(getJobStats())
+    updateStats()
 
     // Set up polling
-    const interval = setInterval(() => {
-      setStats(getJobStats())
-    }, refreshInterval)
+    const interval = setInterval(updateStats, refreshInterval)
 
     return () => clearInterval(interval)
   }, [refreshInterval])

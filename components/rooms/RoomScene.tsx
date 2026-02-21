@@ -362,6 +362,7 @@ export function RoomScene() {
                   polygon={room.polygon}
                   position={roomPosition}
                   roomId={room.id}
+                  gridSettings={room.gridSettings}
                 />
               ) : (
                 // V2: Full PolygonRoom with walls
@@ -375,16 +376,16 @@ export function RoomScene() {
               )
             ) : (
               <Room
-                width={roomWidth}
-                height={roomHeight}
-                depth={roomDepth}
-                position={roomPosition}
-                doors={roomDoors}
-                roomId={room.id}
-                excludedWalls={room.excludedWalls}
-                wallHeights={room.wallHeights}
-                gridSettings={room.gridSettings}
-              />
+                  width={roomWidth}
+                  height={roomHeight}
+                  depth={roomDepth}
+                  position={roomPosition}
+                  doors={roomDoors}
+                  roomId={room.id}
+                  excludedWalls={room.excludedWalls}
+                  wallHeights={room.wallHeights}
+                  gridSettings={room.gridSettings}
+                />
             )}
 
             {/* Furniture in this room (OLD: legacy furniture items) */}

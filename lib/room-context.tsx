@@ -173,28 +173,31 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const setRooms = (newRooms: Room[]) => {
     setRoomsState(newRooms)
-    recordHistory(newRooms)
+    queueMicrotask(() => recordHistory(newRooms))
   }
 
   const addRoom = (room: Room) => {
     setRoomsState(prev => {
       const newState = [...prev, room]
-      recordHistory(newState)
+      // Defer history recording to next tick to avoid setState-during-render
+      queueMicrotask(() => recordHistory(newState))
       return newState
     })
   }
 
   const updateRoom = (roomId: string, updates: Partial<Room>) => {
     setRoomsState(prev => {
-      const newState = prev.map(room => (room.id === roomId ? { ...room, ...updates } : room))
-      recordHistory(newState)
+      const newState = prev.map(r => (r.id === roomId ? { ...r, ...updates } : r))
+      // Defer history recording and sync to next tick to avoid setState-during-render
+      queueMicrotask(() => {
+        recordHistory(newState)
+        // Two-way sync: Update V2 floorplan data when room properties change
+        if (homeContext.currentHomeId) {
+          homeContext.syncRoomChangesToFloorplanV2(homeContext.currentHomeId, roomId, updates)
+        }
+      })
       return newState
     })
-
-    // Two-way sync: Update V2 floorplan data when room properties change
-    if (homeContext.currentHomeId) {
-      homeContext.syncRoomChangesToFloorplanV2(homeContext.currentHomeId, roomId, updates)
-    }
   }
 
   const updateFurniture = (furnitureId: string, updates: any) => {
@@ -205,7 +208,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           item.id === furnitureId ? { ...item, ...updates } : item
         ) : undefined
       }))
-      recordHistory(newState)
+      queueMicrotask(() => recordHistory(newState))
       return newState
     })
   }
@@ -219,7 +222,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           instance.id === instanceId ? { ...instance, ...updates } : instance
         ) : undefined
       }))
-      recordHistory(newState)
+      queueMicrotask(() => recordHistory(newState))
       return newState
     })
   }
@@ -233,7 +236,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           instance.id !== instanceId
         ) : undefined
       }))
-      recordHistory(newState)
+      queueMicrotask(() => recordHistory(newState))
       return newState
     })
   }
@@ -245,7 +248,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       if (roomId === currentRoomId && filtered.length > 0) {
         setCurrentRoomId(filtered[0].id)
       }
-      recordHistory(filtered)
+      queueMicrotask(() => recordHistory(filtered))
       return filtered
     })
   }
@@ -259,10 +262,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // Undo/Redo functions
   const undo = () => {
     if (historyIndex > 0) {
-      isUndoRedoRef.current = true
       const newIndex = historyIndex - 1
+      const historyEntry = history[newIndex]
+      if (!historyEntry) {
+        console.warn('[RoomContext] undo: history entry is undefined at index', newIndex)
+        return
+      }
+      isUndoRedoRef.current = true
       setHistoryIndex(newIndex)
-      setRoomsState(JSON.parse(JSON.stringify(history[newIndex])))
+      setRoomsState(JSON.parse(JSON.stringify(historyEntry)))
       setTimeout(() => {
         isUndoRedoRef.current = false
       }, 0)
@@ -271,10 +279,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const redo = () => {
     if (historyIndex < history.length - 1) {
-      isUndoRedoRef.current = true
       const newIndex = historyIndex + 1
+      const historyEntry = history[newIndex]
+      if (!historyEntry) {
+        console.warn('[RoomContext] redo: history entry is undefined at index', newIndex)
+        return
+      }
+      isUndoRedoRef.current = true
       setHistoryIndex(newIndex)
-      setRoomsState(JSON.parse(JSON.stringify(history[newIndex])))
+      setRoomsState(JSON.parse(JSON.stringify(historyEntry)))
       setTimeout(() => {
         isUndoRedoRef.current = false
       }, 0)
