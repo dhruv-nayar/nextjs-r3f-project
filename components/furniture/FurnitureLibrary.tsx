@@ -364,6 +364,41 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   // Memoize the cloned scene and its transformations to prevent position drift
   const { clonedScene, size, center, autoScale, yOffset } = useMemo(() => {
     const cloned = scene.clone()
+
+    // Apply the item's defaultRotation (X and Z) before calculating bounding box
+    // This ensures dimensions match what the user sees in the item viewer
+    const defaultRotX = item.defaultRotation?.x || 0
+    const defaultRotZ = item.defaultRotation?.z || 0
+
+    if (defaultRotX !== 0 || defaultRotZ !== 0) {
+      // Create a container group to apply the default rotation
+      const rotationGroup = new THREE.Group()
+      rotationGroup.rotation.set(defaultRotX, 0, defaultRotZ)
+      rotationGroup.add(cloned)
+      rotationGroup.updateMatrixWorld(true)
+
+      // Calculate bounding box of the rotated model
+      const box = new THREE.Box3().setFromObject(rotationGroup)
+      const centerVec = box.getCenter(new THREE.Vector3())
+      const sizeVec = box.getSize(new THREE.Vector3())
+
+      // Calculate auto-scale based on item dimensions
+      const scale = {
+        x: item.dimensions.width / sizeVec.x,
+        y: item.dimensions.height / sizeVec.y,
+        z: item.dimensions.depth / sizeVec.z
+      }
+
+      // Center X and Z only - Y offset will be applied outside the scaled group
+      rotationGroup.position.set(-centerVec.x, 0, -centerVec.z)
+
+      // Calculate the Y offset needed to place bottom at Y=0 AFTER scaling
+      const bottomOffset = -box.min.y * scale.y
+
+      return { clonedScene: rotationGroup, size: sizeVec, center: centerVec, autoScale: scale, yOffset: bottomOffset }
+    }
+
+    // No default rotation - original behavior
     const box = new THREE.Box3().setFromObject(cloned)
     const centerVec = box.getCenter(new THREE.Vector3())
     const sizeVec = box.getSize(new THREE.Vector3())
@@ -385,7 +420,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     const bottomOffset = -box.min.y * scale.y
 
     return { clonedScene: cloned, size: sizeVec, center: centerVec, autoScale: scale, yOffset: bottomOffset }
-  }, [scene, item.dimensions.width, item.dimensions.height, item.dimensions.depth])
+  }, [scene, item.dimensions.width, item.dimensions.height, item.dimensions.depth, item.defaultRotation?.x, item.defaultRotation?.z])
 
   // After positioning: model is centered at X=0, Z=0, with bottom at Y=0
   // Bounding box center is at (0, size.y/2, 0) in local space
