@@ -1,8 +1,34 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, Component, ReactNode } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { FurnitureItem, Item, ItemInstance, ParametricShape } from '@/types/room'
+
+// Error boundary for catching GLB loading failures
+class ModelErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn('[FurnitureLibrary] Model loading failed:', error.message)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback
+    }
+    return this.props.children
+  }
+}
 import { ParametricShapeRenderer, calculateShapeDimensions } from '@/components/items/ParametricShapeRenderer'
 import { useFurnitureHover } from '@/lib/furniture-hover-context'
 import { useFurnitureSelection } from '@/lib/furniture-selection-context'
@@ -1121,7 +1147,13 @@ export function ItemInstanceRenderer({ instance }: { instance: ItemInstance }) {
   const isWallItem = item.placementType === 'wall' || instance.wallPlacement
 
   if (isWallItem) {
-    return <WallItemInstance instance={instance} item={item} />
+    return (
+      <ModelErrorBoundary fallback={<PlaceholderItemInstance instance={instance} item={item} />}>
+        <Suspense fallback={<PlaceholderItemInstance instance={instance} item={item} />}>
+          <WallItemInstance instance={instance} item={item} />
+        </Suspense>
+      </ModelErrorBoundary>
+    )
   }
 
   // If item has a parametric shape, render it using ParametricShapeInstanceModel (with full drag support)
@@ -1138,8 +1170,10 @@ export function ItemInstanceRenderer({ instance }: { instance: ItemInstance }) {
   }
 
   return (
-    <Suspense fallback={<PlaceholderItemInstance instance={instance} item={item} />}>
-      <ItemInstanceModel instance={instance} item={item} />
-    </Suspense>
+    <ModelErrorBoundary fallback={<PlaceholderItemInstance instance={instance} item={item} />}>
+      <Suspense fallback={<PlaceholderItemInstance instance={instance} item={item} />}>
+        <ItemInstanceModel instance={instance} item={item} />
+      </Suspense>
+    </ModelErrorBoundary>
   )
 }

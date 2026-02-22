@@ -73,12 +73,26 @@ function getMaterialColor(material: THREE.Material): string {
 }
 
 /**
+ * Extract all unique texture paths from material overrides
+ * Used to pre-load textures before applying overrides
+ */
+export function getTexturePathsFromOverrides(overrides: MaterialOverride[]): string[] {
+  if (!overrides) return []
+  const paths = overrides
+    .filter(o => o.texturePath)
+    .map(o => o.texturePath!)
+  return [...new Set(paths)] // Remove duplicates
+}
+
+/**
  * Apply material overrides to a THREE.js scene/group
  * Clones materials to avoid affecting other instances
+ * @param textureMap - Optional map of pre-loaded textures for reskin support
  */
 export function applyMaterialOverrides(
   object: THREE.Object3D,
-  overrides: MaterialOverride[]
+  overrides: MaterialOverride[],
+  textureMap?: Map<string, THREE.Texture>
 ): void {
   if (!overrides || overrides.length === 0) return
 
@@ -112,7 +126,7 @@ export function applyMaterialOverrides(
           if (override) {
             // Clone the material to avoid affecting other instances
             const clonedMaterial = material.clone()
-            applyOverrideToMaterial(clonedMaterial, override)
+            applyOverrideToMaterial(clonedMaterial, override, textureMap)
             child.material = clonedMaterial
           }
 
@@ -135,7 +149,7 @@ export function applyMaterialOverrides(
 
             if (override) {
               const clonedMaterial = mat.clone()
-              applyOverrideToMaterial(clonedMaterial, override)
+              applyOverrideToMaterial(clonedMaterial, override, textureMap)
               return clonedMaterial
             }
           }
@@ -151,10 +165,12 @@ export function applyMaterialOverrides(
 
 /**
  * Apply a single override to a material
+ * @param textureMap - Optional map of pre-loaded textures (path -> THREE.Texture)
  */
 function applyOverrideToMaterial(
   material: THREE.Material,
-  override: MaterialOverride
+  override: MaterialOverride,
+  textureMap?: Map<string, THREE.Texture>
 ): void {
   // Apply base color
   if (override.baseColor && 'color' in material) {
@@ -169,6 +185,34 @@ function applyOverrideToMaterial(
   // Apply roughness (if supported)
   if (override.roughness !== undefined && 'roughness' in material) {
     (material as any).roughness = override.roughness
+  }
+
+  // Apply texture (reskin) if specified
+  if (override.texturePath) {
+    console.log('[material-utils] Applying texture:', override.texturePath, 'textureMap:', textureMap, 'has map prop:', 'map' in material)
+    if (textureMap && 'map' in material) {
+      const texture = textureMap.get(override.texturePath)
+      console.log('[material-utils] Found texture in map:', !!texture)
+      if (texture) {
+        // Clone texture to avoid shared state issues
+        const clonedTexture = texture.clone()
+        clonedTexture.needsUpdate = true
+
+        // Configure wrapping based on mode
+        if (override.textureMode === 'tile' && override.textureRepeat) {
+          clonedTexture.wrapS = THREE.RepeatWrapping
+          clonedTexture.wrapT = THREE.RepeatWrapping
+          clonedTexture.repeat.set(override.textureRepeat.x, override.textureRepeat.y)
+        } else {
+          // Stretch mode (default)
+          clonedTexture.wrapS = THREE.ClampToEdgeWrapping
+          clonedTexture.wrapT = THREE.ClampToEdgeWrapping
+        }
+
+        (material as THREE.MeshStandardMaterial).map = clonedTexture
+        console.log('[material-utils] Texture applied to material')
+      }
+    }
   }
 
   // Mark material as needing update

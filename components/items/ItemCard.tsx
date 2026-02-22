@@ -17,6 +17,7 @@ interface ItemCardProps {
   onDelete: () => void
   onRename: (newName: string) => void
   canDelete?: boolean
+  variantCount?: number
   className?: string
 }
 
@@ -26,6 +27,7 @@ export function ItemCard({
   onDelete,
   onRename,
   canDelete = true,
+  variantCount = 0,
   className = ''
 }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -89,6 +91,20 @@ export function ItemCard({
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-taupe/5 to-taupe/10">
             <span className="text-6xl opacity-30">{getCategoryEmoji(item.category)}</span>
+          </div>
+        )}
+
+        {/* Variant Badge */}
+        {variantCount > 0 && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full shadow-lg">
+            +{variantCount}
+          </div>
+        )}
+
+        {/* Variant indicator for variant items */}
+        {item.parentItemId && (
+          <div className="absolute top-2 left-2 px-2 py-0.5 bg-taupe/60 text-white text-xs rounded-full">
+            Variant
           </div>
         )}
 

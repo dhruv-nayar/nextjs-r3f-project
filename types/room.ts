@@ -167,8 +167,12 @@ export interface MaterialOverride {
   materialName: string      // THREE.js material.name
   materialIndex?: number    // Fallback for unnamed materials
   baseColor?: string        // Hex color (e.g., "#FF5733")
-  metalness?: number        // 0-1 (optional, for future)
-  roughness?: number        // 0-1 (optional, for future)
+  metalness?: number        // 0-1 (optional)
+  roughness?: number        // 0-1 (optional)
+  // Texture override (reskin)
+  texturePath?: string              // URL to texture image
+  textureMode?: 'stretch' | 'tile'  // How to fit texture on surface
+  textureRepeat?: { x: number; y: number }  // Repeat count for tile mode
 }
 
 /**
@@ -226,6 +230,10 @@ export interface Item {
 
   // Surface capability
   isSurface?: boolean           // Can other items be placed on this? (rugs, shelves)
+
+  // Variant support
+  parentItemId?: string         // If set, this item is a variant of the parent item
+  variantName?: string          // Short label for this variant: "Red", "Large", "Oak"
 
   // Metadata
   createdAt: string

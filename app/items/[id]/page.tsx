@@ -27,6 +27,7 @@ import { RugCreator } from '@/components/items/RugCreator'
 import { FrameCreator } from '@/components/items/FrameCreator'
 import { ShelfCreator } from '@/components/items/ShelfCreator'
 import { CustomItemCreatorV2 } from '@/components/items/CustomItemCreatorV2'
+import { ReskinModal } from '@/components/items/ReskinModal'
 import { useMobile } from '@/lib/mobile-context'
 
 export default function ItemDetailPage() {
@@ -35,7 +36,7 @@ export default function ItemDetailPage() {
   const searchParams = useSearchParams()
   const itemId = params.id as string
 
-  const { items, getItem, updateItem, deleteItem } = useItemLibrary()
+  const { items, getItem, updateItem, deleteItem, getVariants, getParentItem, hasVariants, createVariant, linkAsVariant, unlinkVariant, getRootItems } = useItemLibrary()
   const { getInstancesForItem, deleteAllInstancesOfItem, switchHome } = useHome()
   const { toastMessage: trellisToast, toastType: trellisToastType, clearToast: clearTrellisToast } = useTrellisJobs()
   const { isMobile } = useMobile()
@@ -89,6 +90,8 @@ export default function ItemDetailPage() {
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [showRegenerateModal, setShowRegenerateModal] = useState(false)
   const [showAssetModal, setShowAssetModal] = useState(false)
+  const [showReskinModal, setShowReskinModal] = useState(false)
+  const [reskinTargetMaterial, setReskinTargetMaterial] = useState<string | null>(null)
   const [selectedRegenImages, setSelectedRegenImages] = useState<Set<number>>(new Set())
   const [isGeneratingModel, setIsGeneratingModel] = useState(false)
 
@@ -99,6 +102,9 @@ export default function ItemDetailPage() {
 
   // Shape editor modal state
   const [showShapeEditor, setShowShapeEditor] = useState(false)
+
+  // Variant management state
+  const [showLinkVariantModal, setShowLinkVariantModal] = useState(false)
 
   // Dimension state (feet and inches)
   const [widthFeet, setWidthFeet] = useState(Math.floor(item?.dimensions?.width || 0))
@@ -748,6 +754,20 @@ export default function ItemDetailPage() {
                       Regenerate
                     </button>
                   )}
+                  {/* Reskin button */}
+                  <button
+                    onClick={() => {
+                      setReskinTargetMaterial(null) // Apply to all materials
+                      setShowReskinModal(true)
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md text-graphite hover:bg-sage hover:text-white transition-colors text-sm font-body"
+                    title="Apply texture to model"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Reskin
+                  </button>
                 </div>
                 </div>
               ) : item.parametricShape ? (
@@ -1258,6 +1278,112 @@ export default function ItemDetailPage() {
                   />
                 </div>
 
+                {/* Variants Section */}
+                <div>
+                  <h3 className="text-white font-medium text-sm mb-2">
+                    Variants
+                  </h3>
+
+                  {/* If this is a variant, show parent info */}
+                  {item.parentItemId && (
+                    <div className="mb-3 p-3 bg-white/5 rounded-lg border border-white/10">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-white/40">Variant of:</span>
+                        <button
+                          onClick={() => unlinkVariant(itemId)}
+                          className="text-xs text-orange-400 hover:text-orange-300"
+                        >
+                          Make Standalone
+                        </button>
+                      </div>
+                      {(() => {
+                        const parent = getParentItem(itemId)
+                        return parent ? (
+                          <Link
+                            href={`/items/${parent.id}`}
+                            className="flex items-center gap-2 hover:bg-white/5 rounded p-1 -m-1"
+                          >
+                            {parent.thumbnailPath ? (
+                              <Image src={parent.thumbnailPath} alt={parent.name} width={32} height={32} className="rounded object-cover" />
+                            ) : (
+                              <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center text-sm">
+                                {parent.name.charAt(0)}
+                              </div>
+                            )}
+                            <span className="text-white text-sm">{parent.name}</span>
+                          </Link>
+                        ) : null
+                      })()}
+                      <div className="mt-2">
+                        <label className="text-xs text-white/40 block mb-1">Variant Name</label>
+                        <Input
+                          type="text"
+                          value={item.variantName || ''}
+                          onChange={(e) => updateItem(itemId, { variantName: e.target.value })}
+                          placeholder="e.g., Red, Large, Oak"
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show existing variants */}
+                  {!item.parentItemId && (
+                    <>
+                      {(() => {
+                        const variants = getVariants(itemId)
+                        return variants.length > 0 ? (
+                          <div className="space-y-2 mb-3">
+                            {variants.map(variant => (
+                              <Link
+                                key={variant.id}
+                                href={`/items/${variant.id}`}
+                                className="flex items-center gap-2 p-2 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                              >
+                                {variant.thumbnailPath ? (
+                                  <Image src={variant.thumbnailPath} alt={variant.name} width={32} height={32} className="rounded object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center text-sm">
+                                    {variant.name.charAt(0)}
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white text-sm truncate">{variant.variantName || variant.name}</p>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-white/40 text-xs mb-3">No variants yet</p>
+                        )
+                      })()}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={async () => {
+                            const newId = await createVariant(itemId)
+                            router.push(`/items/${newId}`)
+                          }}
+                          className="flex-1"
+                        >
+                          + Create Variant
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setShowLinkVariantModal(true)}
+                          className="flex-1"
+                        >
+                          Link Existing
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 {/* Metadata Section */}
                 <div>
                   <h3 className="text-white font-medium text-sm mb-2">
@@ -1471,9 +1597,11 @@ export default function ItemDetailPage() {
                       <div className="space-y-3">
                         {extractedMaterials.map((material, index) => {
                           const currentColor = getMaterialColor(material.name, material.index, material.originalColor)
-                          const isOverridden = editMaterialOverrides.some(
+                          const materialOverride = editMaterialOverrides.find(
                             (o) => o.materialName === material.name || o.materialIndex === material.index
                           )
+                          const isOverridden = !!materialOverride
+                          const hasTexture = materialOverride?.texturePath
 
                           return (
                             <div
@@ -1485,7 +1613,12 @@ export default function ItemDetailPage() {
                                   <span className="text-sm font-body font-medium text-graphite">
                                     {material.name}
                                   </span>
-                                  {isOverridden && (
+                                  {hasTexture && (
+                                    <span className="text-xs text-sky-400 bg-sky-400/10 px-2 py-0.5 rounded-full">
+                                      Textured
+                                    </span>
+                                  )}
+                                  {isOverridden && !hasTexture && (
                                     <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded-full">
                                       Modified
                                     </span>
@@ -1527,6 +1660,18 @@ export default function ItemDetailPage() {
                                     className="flex-1 px-2 py-1.5 bg-porcelain text-graphite font-mono text-xs rounded-lg border border-taupe/10 focus:outline-none focus:border-sage/50 transition-colors"
                                     placeholder="#FFFFFF"
                                   />
+                                  <button
+                                    onClick={() => {
+                                      setReskinTargetMaterial(material.name)
+                                      setShowReskinModal(true)
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center bg-porcelain hover:bg-sage hover:text-white text-graphite rounded-lg border border-taupe/10 transition-colors flex-shrink-0"
+                                    title={`Apply texture to ${material.name}`}
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -1799,6 +1944,22 @@ export default function ItemDetailPage() {
         </div>
       )}
 
+      {/* Reskin Modal */}
+      <ReskinModal
+        isOpen={showReskinModal}
+        onClose={() => setShowReskinModal(false)}
+        images={editImages}
+        materials={extractedMaterials}
+        currentOverrides={editMaterialOverrides}
+        onApply={(newOverrides) => {
+          setEditMaterialOverrides(newOverrides)
+          // Trigger autosave (reads from state so will pick up new overrides after state update)
+          setTimeout(() => triggerAutosave(), 0)
+        }}
+        targetMaterial={reskinTargetMaterial}
+        itemId={itemId}
+      />
+
       {/* Shape Editor Modals */}
       {showShapeEditor && item.parametricShape?.type === 'rug' && (
         <RugCreator
@@ -1895,6 +2056,64 @@ export default function ItemDetailPage() {
               >
                 Delete
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Existing Item as Variant Modal */}
+      {showLinkVariantModal && (
+        <div className="fixed inset-0 bg-graphite/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-porcelain rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-white/20 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-display font-semibold text-graphite">
+                Link Existing Item
+              </h3>
+              <button
+                onClick={() => setShowLinkVariantModal(false)}
+                className="p-2 text-taupe/60 hover:text-graphite rounded-full hover:bg-taupe/10"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-taupe/70 text-sm mb-4">
+              Select an item to link as a variant of <strong>{item.name}</strong>
+            </p>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {(() => {
+                // Get standalone items (not variants, not self, not already variants of this item)
+                const availableItems = getRootItems().filter(i =>
+                  i.id !== itemId && !getVariants(itemId).some(v => v.id === i.id)
+                )
+                return availableItems.length > 0 ? (
+                  availableItems.map(availableItem => (
+                    <button
+                      key={availableItem.id}
+                      onClick={() => {
+                        linkAsVariant(availableItem.id, itemId, availableItem.name)
+                        setShowLinkVariantModal(false)
+                      }}
+                      className="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-taupe/20 hover:border-graphite/40 hover:shadow-md transition-all text-left"
+                    >
+                      {availableItem.thumbnailPath ? (
+                        <Image src={availableItem.thumbnailPath} alt={availableItem.name} width={48} height={48} className="rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-12 h-12 bg-taupe/10 rounded-lg flex items-center justify-center text-lg text-taupe/40">
+                          {availableItem.name.charAt(0)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-graphite font-medium truncate">{availableItem.name}</p>
+                        <p className="text-taupe/60 text-xs capitalize">{availableItem.category}</p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-taupe/50 text-center py-8">No other items available to link</p>
+                )
+              })()}
             </div>
           </div>
         </div>

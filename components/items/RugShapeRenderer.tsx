@@ -1,10 +1,36 @@
 'use client'
 
-import { useRef, useEffect, useMemo, Suspense } from 'react'
+import { useRef, useEffect, useMemo, Suspense, Component, ReactNode } from 'react'
 import { useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
 import { RugShape, Vector3 } from '@/types/room'
 import { useOptionalSurfaceMesh } from '@/lib/contexts/surface-mesh-context'
+
+// Error boundary for catching texture loading failures
+class TextureErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn('[RugShapeRenderer] Texture loading failed:', error.message)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback
+    }
+    return this.props.children
+  }
+}
 
 interface RugShapeRendererProps {
   shape: RugShape
@@ -142,17 +168,19 @@ export function RugShapeRenderer({
       rotation={[rotation.x, rotation.y, rotation.z]}
       scale={[scale.x, scale.y, scale.z]}
     >
-      <Suspense fallback={<RugFallback shape={shape} />}>
-        <RugMesh
-          shape={shape}
-          instanceId={instanceId}
-          castShadow={castShadow}
-          receiveShadow={receiveShadow}
-          onClick={onClick}
-          onPointerOver={onPointerOver}
-          onPointerOut={onPointerOut}
-        />
-      </Suspense>
+      <TextureErrorBoundary fallback={<RugFallback shape={shape} />}>
+        <Suspense fallback={<RugFallback shape={shape} />}>
+          <RugMesh
+            shape={shape}
+            instanceId={instanceId}
+            castShadow={castShadow}
+            receiveShadow={receiveShadow}
+            onClick={onClick}
+            onPointerOver={onPointerOver}
+            onPointerOut={onPointerOut}
+          />
+        </Suspense>
+      </TextureErrorBoundary>
     </group>
   )
 }

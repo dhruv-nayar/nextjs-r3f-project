@@ -16,6 +16,14 @@ interface ItemLibraryContextType {
   getItemsByCategory: (category: ItemCategory) => Item[]
   searchItems: (query: string) => Item[]
   getItemsByTags: (tags: string[]) => Item[]
+  // Variant methods
+  getVariants: (parentItemId: string) => Item[]
+  getParentItem: (itemId: string) => Item | undefined
+  getRootItems: () => Item[]
+  hasVariants: (itemId: string) => boolean
+  createVariant: (parentItemId: string, variantName?: string) => Promise<string>
+  linkAsVariant: (itemId: string, parentItemId: string, variantName?: string) => void
+  unlinkVariant: (itemId: string) => void
 }
 
 const ItemLibraryContext = createContext<ItemLibraryContextType | undefined>(undefined)
@@ -41,6 +49,8 @@ function rowToItem(row: ItemRow): Item {
     materialOverrides: row.material_overrides || undefined,
     defaultRotation: row.default_rotation || undefined,
     productUrl: row.product_url || undefined,
+    parentItemId: row.parent_item_id || undefined,
+    variantName: row.variant_name || undefined,
     isCustom: row.is_custom,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -65,6 +75,8 @@ function itemToRow(item: Item): Omit<ItemRow, 'created_at' | 'updated_at'> {
     material_overrides: item.materialOverrides || null,
     default_rotation: item.defaultRotation || null,
     product_url: item.productUrl || null,
+    parent_item_id: item.parentItemId || null,
+    variant_name: item.variantName || null,
     is_custom: item.isCustom,
   }
 }
@@ -272,6 +284,8 @@ export function ItemLibraryProvider({ children }: { children: ReactNode }) {
     if (updates.materialOverrides !== undefined) dbUpdates.material_overrides = updates.materialOverrides
     if (updates.defaultRotation !== undefined) dbUpdates.default_rotation = updates.defaultRotation
     if (updates.productUrl !== undefined) dbUpdates.product_url = updates.productUrl
+    if (updates.parentItemId !== undefined) dbUpdates.parent_item_id = updates.parentItemId
+    if (updates.variantName !== undefined) dbUpdates.variant_name = updates.variantName
     if (updates.isCustom !== undefined) dbUpdates.is_custom = updates.isCustom
 
     supabase
@@ -326,6 +340,78 @@ export function ItemLibraryProvider({ children }: { children: ReactNode }) {
     )
   }, [items])
 
+  // Variant helper methods
+  const getVariants = useCallback((parentItemId: string) => {
+    return items.filter(item => item.parentItemId === parentItemId)
+  }, [items])
+
+  const getParentItem = useCallback((itemId: string) => {
+    const item = items.find(i => i.id === itemId)
+    if (!item?.parentItemId) return undefined
+    return items.find(i => i.id === item.parentItemId)
+  }, [items])
+
+  const getRootItems = useCallback(() => {
+    return items.filter(item => !item.parentItemId)
+  }, [items])
+
+  const hasVariants = useCallback((itemId: string) => {
+    return items.some(item => item.parentItemId === itemId)
+  }, [items])
+
+  const createVariant = useCallback(async (parentItemId: string, variantName?: string): Promise<string> => {
+    const parentItem = items.find(i => i.id === parentItemId)
+    if (!parentItem) {
+      throw new Error('Parent item not found')
+    }
+
+    // Deep clone the parent item
+    const newVariant: Item = {
+      ...JSON.parse(JSON.stringify(parentItem)),
+      id: `item-${Date.now()}`,
+      parentItemId: parentItemId,
+      variantName: variantName || '',
+      name: `${parentItem.name} - Variant`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    // Optimistically update local state
+    setItems(prev => [newVariant, ...prev])
+
+    // Insert into Supabase
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('items')
+      .insert(itemToRow(newVariant))
+
+    if (error) {
+      console.error('[ItemLibrary] Failed to create variant in Supabase:', error)
+    }
+
+    return newVariant.id
+  }, [items])
+
+  const linkAsVariant = useCallback((itemId: string, parentItemId: string, variantName?: string) => {
+    const item = items.find(i => i.id === itemId)
+    if (!item) return
+
+    // Use the item's current name as variantName if not provided
+    const name = variantName || item.name
+
+    updateItem(itemId, {
+      parentItemId: parentItemId,
+      variantName: name,
+    })
+  }, [items, updateItem])
+
+  const unlinkVariant = useCallback((itemId: string) => {
+    updateItem(itemId, {
+      parentItemId: undefined,
+      variantName: undefined,
+    })
+  }, [updateItem])
+
   return (
     <ItemLibraryContext.Provider
       value={{
@@ -337,7 +423,14 @@ export function ItemLibraryProvider({ children }: { children: ReactNode }) {
         getItem,
         getItemsByCategory,
         searchItems,
-        getItemsByTags
+        getItemsByTags,
+        getVariants,
+        getParentItem,
+        getRootItems,
+        hasVariants,
+        createVariant,
+        linkAsVariant,
+        unlinkVariant,
       }}
     >
       {children}

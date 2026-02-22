@@ -82,6 +82,8 @@ export interface ItemRow {
     z: number
   } | null
   product_url: string | null
+  parent_item_id: string | null
+  variant_name: string | null
   is_custom: boolean
   created_at: string
   updated_at: string

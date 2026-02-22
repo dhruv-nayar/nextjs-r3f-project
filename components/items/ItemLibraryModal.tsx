@@ -5,7 +5,7 @@ import { useItemLibrary } from '@/lib/item-library-context'
 import { useHome } from '@/lib/home-context'
 import { useRoom } from '@/lib/room-context'
 import { useInteractionMode } from '@/lib/interaction-mode-context'
-import { ItemCategory } from '@/types/room'
+import { ItemCategory, Item } from '@/types/room'
 import { ItemThumbnail } from './ItemThumbnail'
 import { CustomItemCreator } from './CustomItemCreator'
 
@@ -15,7 +15,7 @@ interface ItemLibraryModalProps {
 }
 
 export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
-  const { items } = useItemLibrary()
+  const { items, getRootItems, getVariants, hasVariants } = useItemLibrary()
   const { addInstanceToRoom } = useHome()
   const { currentRoom } = useRoom()
   const { startPlacing } = useInteractionMode()
@@ -23,11 +23,15 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
   const [showCustomCreator, setShowCustomCreator] = useState(false)
+  const [variantPickerItem, setVariantPickerItem] = useState<Item | null>(null)
 
   if (!isOpen) return null
 
+  // Get only root items (not variants) for the main grid
+  const rootItems = getRootItems()
+
   // Filter items based on search and category
-  const filteredItems = items.filter(item => {
+  const filteredItems = rootItems.filter(item => {
     const matchesSearch = searchQuery === '' ||
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -58,7 +62,23 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
     // Start placement mode - ghost will follow cursor
     // User clicks in 3D scene to confirm position
     startPlacing(itemId)
+    setVariantPickerItem(null)
     onClose()
+  }
+
+  const handleItemClick = (item: Item) => {
+    if (!currentRoom) {
+      alert('No room selected')
+      return
+    }
+
+    // If item has variants, show variant picker
+    if (hasVariants(item.id)) {
+      setVariantPickerItem(item)
+    } else {
+      // No variants, place directly
+      handlePlaceItem(item.id)
+    }
   }
 
   return (
@@ -134,38 +154,48 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => handlePlaceItem(item.id)}
-                  className="bg-black/40 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500 hover:bg-black/60 transition-all group text-left"
-                >
-                  {/* Thumbnail */}
-                  <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
-                    <ItemThumbnail category={item.category} name={item.name} thumbnailPath={item.thumbnailPath} />
+              {filteredItems.map(item => {
+                const variantCount = getVariants(item.id).length
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleItemClick(item)}
+                    className="bg-black/40 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500 hover:bg-black/60 transition-all group text-left"
+                  >
+                    {/* Thumbnail */}
+                    <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
+                      <ItemThumbnail category={item.category} name={item.name} thumbnailPath={item.thumbnailPath} />
 
-                    {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-blue-600/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="text-white font-semibold text-sm px-4 py-2 bg-blue-600 rounded-lg">
-                        Place Item
+                      {/* Variant Badge */}
+                      {variantCount > 0 && (
+                        <div className="absolute top-2 right-2 px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded-full">
+                          +{variantCount} variant{variantCount > 1 ? 's' : ''}
+                        </div>
+                      )}
+
+                      {/* Hover Overlay */}
+                      <div className="absolute inset-0 bg-blue-600/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="text-white font-semibold text-sm px-4 py-2 bg-blue-600 rounded-lg">
+                          {variantCount > 0 ? 'Select Variant' : 'Place Item'}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Item Info */}
-                  <div className="p-3">
-                    <h3 className="text-white font-semibold text-sm truncate">
-                      {item.name}
-                    </h3>
-                    <p className="text-white/60 text-xs capitalize">
-                      {item.category}
-                    </p>
-                    <p className="text-white/50 text-xs mt-1">
-                      {item.dimensions.width.toFixed(1)}' × {item.dimensions.height.toFixed(1)}' × {item.dimensions.depth.toFixed(1)}'
-                    </p>
-                  </div>
-                </button>
-              ))}
+                    {/* Item Info */}
+                    <div className="p-3">
+                      <h3 className="text-white font-semibold text-sm truncate">
+                        {item.name}
+                      </h3>
+                      <p className="text-white/60 text-xs capitalize">
+                        {item.category}
+                      </p>
+                      <p className="text-white/50 text-xs mt-1">
+                        {item.dimensions.width.toFixed(1)}' × {item.dimensions.height.toFixed(1)}' × {item.dimensions.depth.toFixed(1)}'
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -183,6 +213,61 @@ export function ItemLibraryModal({ isOpen, onClose }: ItemLibraryModalProps) {
         isOpen={showCustomCreator}
         onClose={() => setShowCustomCreator(false)}
       />
+
+      {/* Variant Picker Modal */}
+      {variantPickerItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-gray-900/95 border border-white/20 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Select Variant</h3>
+                <p className="text-white/50 text-sm">Choose which version of {variantPickerItem.name} to place</p>
+              </div>
+              <button
+                onClick={() => setVariantPickerItem(null)}
+                className="text-white/60 hover:text-white text-2xl leading-none p-2"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Original item */}
+                <button
+                  onClick={() => handlePlaceItem(variantPickerItem.id)}
+                  className="bg-black/40 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500 hover:bg-black/60 transition-all group text-left"
+                >
+                  <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
+                    <ItemThumbnail category={variantPickerItem.category} name={variantPickerItem.name} thumbnailPath={variantPickerItem.thumbnailPath} />
+                    <div className="absolute top-2 left-2 px-2 py-1 bg-white/20 text-white text-xs rounded-full">
+                      Original
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <h4 className="text-white text-sm font-medium truncate">{variantPickerItem.name}</h4>
+                  </div>
+                </button>
+
+                {/* Variants */}
+                {getVariants(variantPickerItem.id).map(variant => (
+                  <button
+                    key={variant.id}
+                    onClick={() => handlePlaceItem(variant.id)}
+                    className="bg-black/40 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500 hover:bg-black/60 transition-all group text-left"
+                  >
+                    <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
+                      <ItemThumbnail category={variant.category} name={variant.name} thumbnailPath={variant.thumbnailPath} />
+                    </div>
+                    <div className="p-2">
+                      <h4 className="text-white text-sm font-medium truncate">{variant.variantName || variant.name}</h4>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

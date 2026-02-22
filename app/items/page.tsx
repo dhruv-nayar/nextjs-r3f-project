@@ -24,7 +24,7 @@ import Image from 'next/image'
 
 export default function ItemsPage() {
   const router = useRouter()
-  const { items, addItem, deleteItem, updateItem } = useItemLibrary()
+  const { items, addItem, deleteItem, updateItem, getVariants } = useItemLibrary()
   const { canUseShelfCreator, canUseCustomCreator } = usePermissions()
   const { isMobile } = useMobile()
   const [searchQuery, setSearchQuery] = useState('')
@@ -325,6 +325,7 @@ export default function ItemsPage() {
                     onDelete={() => setShowDeleteConfirm(item.id)}
                     onRename={(newName) => handleRenameItem(item.id, newName)}
                     canDelete={item.isCustom}
+                    variantCount={getVariants(item.id).length}
                   />
                 ))}
 

@@ -1,11 +1,11 @@
 'use client'
 
-import { Suspense, useRef, useEffect, useMemo } from 'react'
+import { Suspense, useRef, useEffect, useMemo, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { useGLTF, PerspectiveCamera, Environment, OrbitControls, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { MaterialOverride } from '@/types/room'
-import { applyMaterialOverrides } from '@/lib/material-utils'
+import { applyMaterialOverrides, getTexturePathsFromOverrides } from '@/lib/material-utils'
 import { DimensionLines } from './DimensionLines'
 
 interface ItemPreviewProps {
@@ -43,6 +43,57 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
   // Serialize for stable dependency tracking
   const overridesKey = materialOverrides ? JSON.stringify(materialOverrides) : 'none'
 
+  // Extract texture paths that need to be loaded
+  const texturePaths = useMemo(() => {
+    const paths = getTexturePathsFromOverrides(materialOverrides || [])
+    console.log('[ItemPreview] Texture paths to load:', paths, 'from overrides:', materialOverrides)
+    return paths
+  }, [materialOverrides])
+
+  // Load textures asynchronously and track in state
+  const [textureMap, setTextureMap] = useState<Map<string, THREE.Texture>>(() => new Map())
+
+  useEffect(() => {
+    if (texturePaths.length === 0) {
+      setTextureMap(new Map())
+      return
+    }
+
+    const loader = new THREE.TextureLoader()
+    const newMap = new Map<string, THREE.Texture>()
+    let loadedCount = 0
+
+    texturePaths.forEach(path => {
+      console.log('[ItemPreview] Loading texture:', path)
+      loader.load(
+        path,
+        (texture) => {
+          console.log('[ItemPreview] Texture loaded successfully:', path, texture)
+          newMap.set(path, texture)
+          loadedCount++
+          if (loadedCount === texturePaths.length) {
+            console.log('[ItemPreview] All textures loaded, updating textureMap')
+            setTextureMap(new Map(newMap))
+            invalidate()
+          }
+        },
+        undefined,
+        (error) => {
+          console.error('[ItemPreview] Failed to load texture:', path, error)
+          loadedCount++
+          if (loadedCount === texturePaths.length) {
+            setTextureMap(new Map(newMap))
+          }
+        }
+      )
+    })
+
+    // Cleanup: dispose textures on unmount
+    return () => {
+      newMap.forEach(texture => texture.dispose())
+    }
+  }, [texturePaths, invalidate])
+
   // Calculate transforms based on original scene geometry
   // Note: Dimensions are NOT used for scaling - only rotation affects the model
   const sceneTransform = useMemo(() => {
@@ -73,13 +124,14 @@ function ModelPreview({ modelPath, materialOverrides, defaultRotation, dimension
     // Center the model at origin
     freshClone.position.copy(sceneTransform.centering)
 
-    // Apply material overrides
+    // Apply material overrides (with texture support)
     if (materialOverrides && materialOverrides.length > 0) {
-      applyMaterialOverrides(freshClone, materialOverrides)
+      console.log('[ItemPreview] Applying material overrides:', materialOverrides, 'with textureMap size:', textureMap.size)
+      applyMaterialOverrides(freshClone, materialOverrides, textureMap)
     }
 
     return freshClone
-  }, [scene, sceneTransform, overridesKey])
+  }, [scene, sceneTransform, overridesKey, textureMap])
 
   // Apply uniform scale to tilt group
   useEffect(() => {
