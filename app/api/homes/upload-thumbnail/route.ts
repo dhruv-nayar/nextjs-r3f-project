@@ -1,4 +1,4 @@
-import { put, del, list } from '@vercel/blob'
+import { put } from '@vercel/blob'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -30,27 +30,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Delete old thumbnails for this home
-    try {
-      const { blobs } = await list({
-        prefix: `homes/${homeId}/thumbnail-`,
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      })
-
-      // Delete old thumbnails
-      for (const blob of blobs) {
-        await del(blob.url, { token: process.env.BLOB_READ_WRITE_TOKEN })
-      }
-    } catch (e) {
-      // Ignore errors when deleting old thumbnails
-      console.log('Could not delete old thumbnails:', e)
-    }
-
-    // Upload to Vercel Blob
-    const filename = `thumbnail-${homeId}-${Date.now()}.png`
+    // Use a fixed filename and overwrite - no need to list/delete old thumbnails
+    // This saves 1 list operation + N delete operations per upload
+    const filename = `thumbnail.png`
     const blob = await put(`homes/${homeId}/${filename}`, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      addRandomSuffix: false,  // Use exact filename
     })
 
     // Return thumbnail URL

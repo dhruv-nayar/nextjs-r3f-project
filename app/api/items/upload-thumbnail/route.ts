@@ -30,11 +30,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Upload to Vercel Blob
-    const filename = `thumbnail-${itemId}-${Date.now()}.png`
+    // Use a fixed filename and overwrite - prevents accumulation of old thumbnails
+    const filename = `thumbnail.png`
     const blob = await put(`items/${itemId}/${filename}`, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      addRandomSuffix: false,  // Use exact filename for overwrite
     })
 
     // Return thumbnail URL
