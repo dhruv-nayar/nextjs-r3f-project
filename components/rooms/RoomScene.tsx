@@ -28,7 +28,7 @@ import { usePermissions } from '@/lib/hooks/use-permissions'
 export function RoomScene() {
   const controlsRef = useRef<CameraControlsImpl>(null)
   const { setControls } = useControls()
-  const { currentRoom, rooms, deleteInstance } = useRoom()
+  const { currentRoom, rooms, deleteInstance, copyInstance, pasteInstance } = useRoom()
   const { currentHome } = useHome()
   const { clearSelection, selection } = useSelection()
   const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
@@ -130,6 +130,28 @@ export function RoomScene() {
         return
       }
 
+      // Copy: Cmd/Ctrl + C
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        const instanceId = selectedFurnitureId ||
+          (selection && 'instanceId' in selection ? selection.instanceId : null)
+        if (instanceId) {
+          e.preventDefault()
+          copyInstance(instanceId)
+        }
+        return
+      }
+
+      // Paste: Cmd/Ctrl + V (only if can modify)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && canMoveObjects) {
+        e.preventDefault()
+        const newInstanceId = pasteInstance()
+        if (newInstanceId) {
+          // Select the newly pasted instance
+          setSelectedFurnitureId(newInstanceId)
+        }
+        return
+      }
+
       if (e.code === 'Space' && !e.repeat && mode === 'idle') {
         e.preventDefault() // Prevent page scroll
         setSpaceHeld(true)
@@ -154,7 +176,7 @@ export function RoomScene() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture, isMobile, canMoveObjects])
+  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture, isMobile, canMoveObjects, copyInstance, pasteInstance, selectedFurnitureId, selection, setSelectedFurnitureId])
 
   // Update cursor when in camera mode and dragging
   useEffect(() => {

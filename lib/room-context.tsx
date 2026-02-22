@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useRef, useEffect } from 'react'
-import { Room, RoomConfig } from '@/types/room'
+import { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from 'react'
+import { Room, RoomConfig, ItemInstance } from '@/types/room'
 import { SCALE } from './constants'
 import { useHome } from './home-context'
 
@@ -21,6 +21,10 @@ interface RoomContextType {
   canRedo: boolean
   undo: () => void
   redo: () => void
+  // Copy/paste
+  clipboardInstance: ItemInstance | null
+  copyInstance: (instanceId: string) => void
+  pasteInstance: () => string | null // Returns new instance ID or null
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined)
@@ -297,6 +301,66 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const canUndo = historyIndex > 0
   const canRedo = historyIndex < history.length - 1
 
+  // Clipboard for copy/paste
+  const [clipboardInstance, setClipboardInstance] = useState<ItemInstance | null>(null)
+
+  // Copy an instance to clipboard
+  const copyInstance = useCallback((instanceId: string) => {
+    // Find the instance across all rooms
+    for (const room of rooms) {
+      const instance = room.instances?.find(i => i.id === instanceId)
+      if (instance) {
+        // Deep clone the instance
+        setClipboardInstance(JSON.parse(JSON.stringify(instance)))
+        console.log('[RoomContext] Copied instance:', instanceId)
+        return
+      }
+    }
+    console.warn('[RoomContext] Instance not found for copy:', instanceId)
+  }, [rooms])
+
+  // Paste clipboard instance into current room with offset
+  const pasteInstance = useCallback((): string | null => {
+    if (!clipboardInstance || !currentRoomId) {
+      console.warn('[RoomContext] Cannot paste: no clipboard or no current room')
+      return null
+    }
+
+    const newInstanceId = `instance-${Date.now()}`
+    const newInstance: ItemInstance = {
+      ...clipboardInstance,
+      id: newInstanceId,
+      roomId: currentRoomId,
+      // Offset position by 1 foot in X and Z
+      position: {
+        x: clipboardInstance.position.x + 1,
+        y: clipboardInstance.position.y,
+        z: clipboardInstance.position.z + 1
+      },
+      // Clear wall placement and parent surface (paste to floor)
+      wallPlacement: undefined,
+      parentSurfaceId: undefined,
+      parentSurfaceType: undefined,
+      placedAt: new Date().toISOString()
+    }
+
+    // Add to current room
+    setRoomsState(prev => {
+      const newState = prev.map(room => {
+        if (room.id !== currentRoomId) return room
+        return {
+          ...room,
+          instances: [...(room.instances || []), newInstance]
+        }
+      })
+      queueMicrotask(() => recordHistory(newState))
+      return newState
+    })
+
+    console.log('[RoomContext] Pasted instance:', newInstanceId)
+    return newInstanceId
+  }, [clipboardInstance, currentRoomId])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -339,7 +403,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         canUndo,
         canRedo,
         undo,
-        redo
+        redo,
+        clipboardInstance,
+        copyInstance,
+        pasteInstance
       }}
     >
       {children}
