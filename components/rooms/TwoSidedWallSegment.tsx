@@ -27,12 +27,15 @@ interface TwoSidedWallSegmentProps {
 /**
  * Create wall geometry with door holes
  * Reuses the same approach as PolygonRoom but with explicit dimensions
+ *
+ * @param mirrorX - If true, mirror door positions for Side B (which is rotated 180°)
  */
 function createWallGeometryWithDoors(
   wallLength: number,
   wallHeight: number,
   doors: WallSegmentDoor[],
-  segmentLength: number
+  segmentLength: number,
+  mirrorX: boolean = false
 ): THREE.ShapeGeometry {
   const shape = new THREE.Shape()
 
@@ -48,7 +51,14 @@ function createWallGeometryWithDoors(
     // Convert door position from segment-relative to geometry-relative
     // Door position is in feet from segment start
     // Geometry is centered, so we need to offset by -wallLength/2
-    const doorCenterX = (door.position + door.width / 2) - (segmentLength / 2)
+    let doorCenterX = (door.position + door.width / 2) - (segmentLength / 2)
+
+    // Mirror X position for Side B (which is rotated 180° around Y)
+    // This ensures the door appears at the same world position on both sides
+    if (mirrorX) {
+      doorCenterX = -doorCenterX
+    }
+
     const doorLeft = doorCenterX - door.width / 2
     const doorRight = doorCenterX + door.width / 2
     const doorBottom = -wallHeight / 2
@@ -176,13 +186,25 @@ export function TwoSidedWallSegment({
     }
   }, [roomId, segment.id, sideADirection, sideBDirection, registerWall, unregisterWall])
 
-  // Create geometry with door holes (shared between both sides)
-  const geometry = useMemo(() => {
+  // Create geometry with door holes - separate instances for each side
+  // Side B needs mirrored door positions because it's rotated 180° around Y
+  const geometryA = useMemo(() => {
     return createWallGeometryWithDoors(
       length,
       segment.height,
       segment.doors,
-      length
+      length,
+      false // Side A: no mirroring
+    )
+  }, [length, segment.height, segment.doors])
+
+  const geometryB = useMemo(() => {
+    return createWallGeometryWithDoors(
+      length,
+      segment.height,
+      segment.doors,
+      length,
+      true // Side B: mirror X positions to match Side A in world space
     )
   }, [length, segment.height, segment.doors])
 
@@ -299,7 +321,7 @@ export function TwoSidedWallSegment({
         receiveShadow
         castShadow
       >
-        <primitive object={geometry} attach="geometry" />
+        <primitive object={geometryA} attach="geometry" />
         <meshStandardMaterial
           key={`sideA-${segment.sideA.style.color}`}
           color={sideAColor}
@@ -320,7 +342,7 @@ export function TwoSidedWallSegment({
         receiveShadow
         castShadow
       >
-        <primitive object={geometry} attach="geometry" />
+        <primitive object={geometryB} attach="geometry" />
         <meshStandardMaterial
           key={`sideB-${segment.sideB.style.color}`}
           color={sideBColor}
@@ -333,7 +355,7 @@ export function TwoSidedWallSegment({
       {/* Selection/hover outline for Side A */}
       {(isSelected && selectedSide === 'A') || hoveredSide === 'A' ? (
         <mesh position={sideAOffset}>
-          <primitive object={geometry} attach="geometry" />
+          <primitive object={geometryA} attach="geometry" />
           <meshBasicMaterial
             color={isSelected && selectedSide === 'A' ? '#ff8c00' : '#00bfff'}
             wireframe
@@ -347,7 +369,7 @@ export function TwoSidedWallSegment({
       {/* Selection/hover outline for Side B */}
       {(isSelected && selectedSide === 'B') || hoveredSide === 'B' ? (
         <mesh position={sideBOffset} rotation={[0, Math.PI, 0]}>
-          <primitive object={geometry} attach="geometry" />
+          <primitive object={geometryB} attach="geometry" />
           <meshBasicMaterial
             color={isSelected && selectedSide === 'B' ? '#ff8c00' : '#00bfff'}
             wireframe

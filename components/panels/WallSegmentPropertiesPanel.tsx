@@ -17,6 +17,7 @@ export function WallSegmentPropertiesPanel() {
     clearWallSelection,
     updateWallStyle,
     addDoor,
+    updateDoor,
     removeDoor,
     getSegmentLength,
     doorPlacementMode,
@@ -68,6 +69,9 @@ export function WallSegmentPropertiesPanel() {
           }}
           onAddDoor={(position, width, height) => {
             return addDoor(selectedSegmentId, position, width, height)
+          }}
+          onUpdateDoor={(doorId, updates) => {
+            return updateDoor(selectedSegmentId, doorId, updates)
           }}
           onRemoveDoor={(doorId) => {
             removeDoor(selectedSegmentId, doorId)

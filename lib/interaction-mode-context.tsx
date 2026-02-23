@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react'
 import { Vector3 } from '@/types/room'
 
 export type InteractionMode =
@@ -92,19 +92,33 @@ export function InteractionModeProvider({ children }: { children: ReactNode }) {
   const isCameraActive = mode === 'camera'
   const isPlacing = mode === 'placing'
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<InteractionModeContextType>(() => ({
+    mode,
+    setMode,
+    placementState,
+    startPlacing,
+    updatePlacementPosition,
+    confirmPlacement,
+    cancelPlacement,
+    isDraggingObject,
+    isCameraActive,
+    isPlacing,
+  }), [
+    mode,
+    setMode,
+    placementState,
+    startPlacing,
+    updatePlacementPosition,
+    confirmPlacement,
+    cancelPlacement,
+    isDraggingObject,
+    isCameraActive,
+    isPlacing,
+  ])
+
   return (
-    <InteractionModeContext.Provider value={{
-      mode,
-      setMode,
-      placementState,
-      startPlacing,
-      updatePlacementPosition,
-      confirmPlacement,
-      cancelPlacement,
-      isDraggingObject,
-      isCameraActive,
-      isPlacing,
-    }}>
+    <InteractionModeContext.Provider value={value}>
       {children}
     </InteractionModeContext.Provider>
   )

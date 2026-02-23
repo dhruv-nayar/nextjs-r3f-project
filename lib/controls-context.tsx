@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useMemo, ReactNode } from 'react'
 import type CameraControlsImpl from 'camera-controls'
 
 const ControlsContext = createContext<{
@@ -14,8 +14,11 @@ const ControlsContext = createContext<{
 export function ControlsProvider({ children }: { children: ReactNode }) {
   const [controls, setControls] = useState<CameraControlsImpl | null>(null)
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({ controls, setControls }), [controls])
+
   return (
-    <ControlsContext.Provider value={{ controls, setControls }}>
+    <ControlsContext.Provider value={value}>
       {children}
     </ControlsContext.Provider>
   )

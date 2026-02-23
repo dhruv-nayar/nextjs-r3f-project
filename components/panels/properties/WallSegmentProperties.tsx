@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { WallSegment, WallSegmentDoor } from '@/types/wall-segment'
 import type { FloorplanRoomV3 } from '@/types/floorplan-v2'
 import { PropertySection, MeasurementInput } from '../shared'
@@ -12,6 +12,7 @@ interface WallSegmentPropertiesProps {
   wallLength: number
   onStyleChange: (updates: { color?: string }) => void
   onAddDoor: (position: number, width?: number, height?: number) => boolean
+  onUpdateDoor: (doorId: string, updates: { position?: number; width?: number; height?: number }) => boolean
   onRemoveDoor: (doorId: string) => void
   doorPlacementMode: boolean
   onSetDoorPlacementMode: (mode: boolean) => void
@@ -129,59 +130,160 @@ function ColorPicker({
 }
 
 /**
- * Door list item component
+ * Door list item component with editable position and width
  */
 function DoorListItem({
   door,
   index,
+  wallLength,
+  onUpdate,
   onRemove,
 }: {
   door: WallSegmentDoor
   index: number
+  wallLength: number
+  onUpdate: (updates: { position?: number; width?: number }) => boolean
   onRemove: () => void
 }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [editPosition, setEditPosition] = useState(door.position)
+  const [editWidth, setEditWidth] = useState(door.width)
+  const [error, setError] = useState<string | null>(null)
+
+  // Reset edit values when door changes
+  useEffect(() => {
+    setEditPosition(door.position)
+    setEditWidth(door.width)
+  }, [door.position, door.width])
+
+  const handlePositionChange = (value: number) => {
+    setEditPosition(value)
+    setError(null)
+  }
+
+  const handleWidthChange = (value: number) => {
+    setEditWidth(value)
+    setError(null)
+  }
+
+  const handleApply = () => {
+    const success = onUpdate({ position: editPosition, width: editWidth })
+    if (!success) {
+      setError('Invalid position or width')
+    } else {
+      setError(null)
+    }
+  }
+
+  // Check if values have changed
+  const hasChanges = editPosition !== door.position || editWidth !== door.width
+
   return (
-    <div className="flex items-center justify-between py-2 px-2 bg-white/5 rounded">
-      <div className="flex items-center gap-2">
-        <svg
-          className="w-4 h-4 text-white/50"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15"
-          />
-        </svg>
-        <div>
-          <span className="text-white text-sm">Door {index + 1}</span>
-          <span className="text-white/40 text-xs ml-2">
-            {door.width}ft x {door.height}ft
-          </span>
-        </div>
-      </div>
-      <button
-        onClick={onRemove}
-        className="text-red-400/60 hover:text-red-400 transition-colors p-1"
-        title="Remove door"
+    <div className="bg-white/5 rounded overflow-hidden">
+      {/* Header - click to expand */}
+      <div
+        className="flex items-center justify-between py-2 px-2 cursor-pointer hover:bg-white/5"
+        onClick={() => setIsExpanded(!isExpanded)}
       >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
+        <div className="flex items-center gap-2">
+          <svg
+            className={`w-3 h-3 text-white/50 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          <svg
+            className="w-4 h-4 text-white/50"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15"
+            />
+          </svg>
+          <div>
+            <span className="text-white text-sm">Door {index + 1}</span>
+            <span className="text-white/40 text-xs ml-2">
+              {door.width}ft × {door.height}ft @ {door.position.toFixed(1)}ft
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="text-red-400/60 hover:text-red-400 transition-colors p-1"
+          title="Remove door"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-          />
-        </svg>
-      </button>
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+            />
+          </svg>
+        </button>
+      </div>
+
+      {/* Expanded edit panel */}
+      {isExpanded && (
+        <div className="px-2 pb-2 space-y-2 border-t border-white/10 pt-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-white/50 text-xs">Position (ft)</label>
+              <input
+                type="number"
+                value={editPosition}
+                onChange={(e) => handlePositionChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                min={0}
+                max={wallLength}
+                step={0.25}
+              />
+            </div>
+            <div>
+              <label className="text-white/50 text-xs">Width (ft)</label>
+              <input
+                type="number"
+                value={editWidth}
+                onChange={(e) => handleWidthChange(Math.max(0.5, Math.min(wallLength, parseFloat(e.target.value) || 3)))}
+                className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                min={0.5}
+                max={wallLength}
+                step={0.5}
+              />
+            </div>
+          </div>
+          {error && (
+            <p className="text-red-400 text-xs">{error}</p>
+          )}
+          {hasChanges && (
+            <button
+              onClick={handleApply}
+              className="w-full py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-xs rounded transition-colors"
+            >
+              Apply Changes
+            </button>
+          )}
+          <p className="text-white/30 text-xs">
+            Wall length: {wallLength.toFixed(1)}ft
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -203,6 +305,7 @@ export function WallSegmentProperties({
   wallLength,
   onStyleChange,
   onAddDoor,
+  onUpdateDoor,
   onRemoveDoor,
   doorPlacementMode,
   onSetDoorPlacementMode,
@@ -215,10 +318,9 @@ export function WallSegmentProperties({
   const [doorWidth, setDoorWidth] = useState(3)
   const [doorHeight, setDoorHeight] = useState(7)
 
-  // Calculate if we can add a door (wall must be long enough)
-  const MIN_EDGE_DISTANCE = 0.5
-  const minWallLength = doorWidth + 2 * MIN_EDGE_DISTANCE
-  const canAddDoor = wallLength >= minWallLength
+  // Calculate if we can add a door (wall must be at least 1ft for minimum door)
+  const MIN_DOOR_WIDTH = 1
+  const canAddDoor = wallLength >= MIN_DOOR_WIDTH
 
   return (
     <div>
@@ -293,6 +395,8 @@ export function WallSegmentProperties({
                 key={door.id}
                 door={door}
                 index={index}
+                wallLength={wallLength}
+                onUpdate={(updates) => onUpdateDoor(door.id, updates)}
                 onRemove={() => onRemoveDoor(door.id)}
               />
             ))}
@@ -318,10 +422,10 @@ export function WallSegmentProperties({
                 <input
                   type="number"
                   value={doorWidth}
-                  onChange={(e) => setDoorWidth(Math.max(1, parseFloat(e.target.value) || 3))}
+                  onChange={(e) => setDoorWidth(Math.max(1, Math.min(wallLength, parseFloat(e.target.value) || 3)))}
                   className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm"
                   min={1}
-                  max={10}
+                  max={wallLength}
                   step={0.5}
                 />
               </div>
@@ -381,7 +485,7 @@ export function WallSegmentProperties({
               </>
             ) : (
               <p className="text-white/40 text-xs">
-                Wall is too short for a door. Minimum length: {minWallLength.toFixed(1)}ft
+                Wall is too short for a door. Minimum length: {MIN_DOOR_WIDTH}ft
               </p>
             )}
           </div>

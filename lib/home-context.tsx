@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Home, Room, ItemInstance, Vector3 } from '@/types/room'
 import { FloorplanData } from '@/types/floorplan'
 import { FloorplanDataV2, FloorplanDataV3 } from '@/types/floorplan-v2'
@@ -780,37 +780,65 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     saveToStorage(STORAGE_KEYS.HOMES, homes)
   }, [homes])
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<HomeContextType>(() => ({
+    homes,
+    currentHomeId,
+    currentHome,
+    isLoading,
+    createHome,
+    copyHome,
+    deleteHome,
+    switchHome,
+    updateHome,
+    renameHome,
+    updateHomeThumbnail,
+    addInstanceToRoom,
+    updateInstance,
+    deleteInstance,
+    deleteAllInstancesOfItem,
+    getInstancesForItem,
+    setFloorplanData,
+    getFloorplanData,
+    buildRoomsFromFloorplan,
+    setFloorplanDataV2,
+    getFloorplanDataV2,
+    buildRoomsFromFloorplanV2,
+    syncRoomChangesToFloorplanV2,
+    setFloorplanDataV3,
+    getFloorplanDataV3,
+    flushHomesToStorage
+  }), [
+    homes,
+    currentHomeId,
+    currentHome,
+    isLoading,
+    createHome,
+    copyHome,
+    deleteHome,
+    switchHome,
+    updateHome,
+    renameHome,
+    updateHomeThumbnail,
+    addInstanceToRoom,
+    updateInstance,
+    deleteInstance,
+    deleteAllInstancesOfItem,
+    getInstancesForItem,
+    setFloorplanData,
+    getFloorplanData,
+    buildRoomsFromFloorplan,
+    setFloorplanDataV2,
+    getFloorplanDataV2,
+    buildRoomsFromFloorplanV2,
+    syncRoomChangesToFloorplanV2,
+    setFloorplanDataV3,
+    getFloorplanDataV3,
+    flushHomesToStorage
+  ])
+
   return (
-    <HomeContext.Provider
-      value={{
-        homes,
-        currentHomeId,
-        currentHome,
-        isLoading,
-        createHome,
-        copyHome,
-        deleteHome,
-        switchHome,
-        updateHome,
-        renameHome,
-        updateHomeThumbnail,
-        addInstanceToRoom,
-        updateInstance,
-        deleteInstance,
-        deleteAllInstancesOfItem,
-        getInstancesForItem,
-        setFloorplanData,
-        getFloorplanData,
-        buildRoomsFromFloorplan,
-        setFloorplanDataV2,
-        getFloorplanDataV2,
-        buildRoomsFromFloorplanV2,
-        syncRoomChangesToFloorplanV2,
-        setFloorplanDataV3,
-        getFloorplanDataV3,
-        flushHomesToStorage
-      }}
-    >
+    <HomeContext.Provider value={value}>
       {children}
     </HomeContext.Provider>
   )

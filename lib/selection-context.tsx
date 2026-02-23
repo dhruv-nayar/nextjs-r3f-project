@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, ReactNode } from 'react'
 import {
   Selection,
   WallSide,
@@ -124,7 +124,8 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     return null
   }, [selection])
 
-  const value: SelectionContextType = {
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<SelectionContextType>(() => ({
     selection,
     setSelection,
     clearSelection,
@@ -139,7 +140,22 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     getSelectedRoomId,
     hoveredItem,
     setHoveredItem,
-  }
+  }), [
+    selection,
+    setSelection,
+    clearSelection,
+    selectRoom,
+    selectWall,
+    selectFloor,
+    selectFurniture,
+    isRoomSelectedFn,
+    isWallSelectedFn,
+    isFloorSelectedFn,
+    isFurnitureSelectedFn,
+    getSelectedRoomId,
+    hoveredItem,
+    setHoveredItem,
+  ])
 
   return <SelectionContext.Provider value={value}>{children}</SelectionContext.Provider>
 }

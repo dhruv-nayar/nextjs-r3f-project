@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react'
 import { useHome } from './home-context'
 
 // Multi-drag state for coordinating movement of multiple items
@@ -157,21 +157,37 @@ export function FurnitureSelectionProvider({ children }: { children: ReactNode }
     }
   }, [])
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<FurnitureSelectionContextType>(() => ({
+    selectedInstanceIds,
+    selectInstance,
+    toggleInstanceSelection,
+    clearInstanceSelection,
+    isInstanceSelected,
+    multiDragState,
+    startMultiDrag,
+    updateMultiDragDelta,
+    endMultiDrag,
+    getMultiDragPosition,
+    selectedFurnitureId,
+    setSelectedFurnitureId
+  }), [
+    selectedInstanceIds,
+    selectInstance,
+    toggleInstanceSelection,
+    clearInstanceSelection,
+    isInstanceSelected,
+    multiDragState,
+    startMultiDrag,
+    updateMultiDragDelta,
+    endMultiDrag,
+    getMultiDragPosition,
+    selectedFurnitureId,
+    setSelectedFurnitureId
+  ])
+
   return (
-    <FurnitureSelectionContext.Provider value={{
-      selectedInstanceIds,
-      selectInstance,
-      toggleInstanceSelection,
-      clearInstanceSelection,
-      isInstanceSelected,
-      multiDragState,
-      startMultiDrag,
-      updateMultiDragDelta,
-      endMultiDrag,
-      getMultiDragPosition,
-      selectedFurnitureId,
-      setSelectedFurnitureId
-    }}>
+    <FurnitureSelectionContext.Provider value={value}>
       {children}
     </FurnitureSelectionContext.Provider>
   )

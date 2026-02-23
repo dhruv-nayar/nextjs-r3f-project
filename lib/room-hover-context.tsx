@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useMemo, ReactNode } from 'react'
 
 interface RoomHoverContextType {
   hoveredRoomId: string | null
@@ -12,8 +12,11 @@ const RoomHoverContext = createContext<RoomHoverContextType | undefined>(undefin
 export function RoomHoverProvider({ children }: { children: ReactNode }) {
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null)
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({ hoveredRoomId, setHoveredRoomId }), [hoveredRoomId])
+
   return (
-    <RoomHoverContext.Provider value={{ hoveredRoomId, setHoveredRoomId }}>
+    <RoomHoverContext.Provider value={value}>
       {children}
     </RoomHoverContext.Provider>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useMemo, ReactNode } from 'react'
 
 interface FurnitureHoverContextType {
   hoveredFurnitureId: string | null
@@ -12,8 +12,11 @@ const FurnitureHoverContext = createContext<FurnitureHoverContextType | undefine
 export function FurnitureHoverProvider({ children }: { children: ReactNode }) {
   const [hoveredFurnitureId, setHoveredFurnitureId] = useState<string | null>(null)
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({ hoveredFurnitureId, setHoveredFurnitureId }), [hoveredFurnitureId])
+
   return (
-    <FurnitureHoverContext.Provider value={{ hoveredFurnitureId, setHoveredFurnitureId }}>
+    <FurnitureHoverContext.Provider value={value}>
       {children}
     </FurnitureHoverContext.Provider>
   )

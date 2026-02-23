@@ -26,6 +26,7 @@ import {
   canPlaceDoor,
   addDoorToSegment,
   removeDoorFromSegment,
+  updateDoorInSegment,
   findValidDoorPosition,
   DEFAULT_DOOR_WIDTH,
   DEFAULT_DOOR_HEIGHT,
@@ -53,8 +54,10 @@ interface WallSegmentsContextType {
 
   // Door actions
   addDoor: (segmentId: string, position: number, width?: number, height?: number) => boolean
+  updateDoor: (segmentId: string, doorId: string, updates: { position?: number; width?: number; height?: number }) => boolean
   removeDoor: (segmentId: string, doorId: string) => void
   canAddDoor: (segmentId: string, position: number, width?: number, height?: number) => { valid: boolean; message: string | null }
+  canUpdateDoor: (segmentId: string, doorId: string, updates: { position?: number; width?: number; height?: number }) => { valid: boolean; message: string | null }
   findValidDoorPosition: (segmentId: string, requestedPosition: number, width?: number, height?: number) => number | null
 
   // Helpers
@@ -76,6 +79,9 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
   // Track the V2 data to detect when it changes (new floorplan)
   const prevV2DataRef = useRef<string | null>(null)
 
+  // Track what we last synced to home context to prevent infinite loops
+  const lastSyncedV3Ref = useRef<FloorplanDataV3 | null>(null)
+
   // Reset ALL state when switching to a different home/project
   useEffect(() => {
     const currentHomeId = currentHome?.id || null
@@ -88,6 +94,7 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
       setSelectedSide(null)
       setDoorPlacementModeInternal(false)
       prevV2DataRef.current = null // Also reset V2 tracking
+      lastSyncedV3Ref.current = null // Reset sync tracking
     }
 
     prevHomeIdRef.current = currentHomeId
@@ -121,6 +128,8 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (currentHome?.floorplanDataV3 && !localV3Data) {
       console.log('[WallSegmentsContext] Loading V3 data from home context')
+      // Track that this data came from home context so we don't re-sync it
+      lastSyncedV3Ref.current = currentHome.floorplanDataV3
       setLocalV3Data(currentHome.floorplanDataV3)
     }
   }, [currentHome?.floorplanDataV3, currentHome?.id])
@@ -128,7 +137,12 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
   // Sync local V3 data changes to home context (for persistence/auto-save)
   useEffect(() => {
     if (localV3Data && currentHome?.id) {
+      // Only sync if data has actually changed (prevent infinite loops)
+      if (lastSyncedV3Ref.current === localV3Data) {
+        return
+      }
       console.log('[WallSegmentsContext] Syncing V3 data to home context for auto-save')
+      lastSyncedV3Ref.current = localV3Data
       setFloorplanDataV3(currentHome.id, localV3Data)
     }
   }, [localV3Data, currentHome?.id, setFloorplanDataV3])
@@ -375,6 +389,74 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
     [floorplanV3]
   )
 
+  // Check if a door update is valid
+  const canUpdateDoorCb = useCallback(
+    (segmentId: string, doorId: string, updates: { position?: number; width?: number; height?: number }): { valid: boolean; message: string | null } => {
+      if (!floorplanV3) return { valid: false, message: 'No floorplan data' }
+
+      const segment = floorplanV3.wallSegments.find(s => s.id === segmentId)
+      if (!segment) return { valid: false, message: 'Segment not found' }
+
+      const door = segment.doors.find(d => d.id === doorId)
+      if (!door) return { valid: false, message: 'Door not found' }
+
+      const length = getSegmentLength(segment, floorplanV3.vertices)
+      const newPosition = updates.position ?? door.position
+      const newWidth = updates.width ?? door.width
+      const newHeight = updates.height ?? door.height
+
+      // Use canPlaceDoor with excludeDoorId to allow updating this door's position
+      const result = canPlaceDoor(segment, length, newPosition, newWidth, newHeight, doorId)
+
+      return { valid: result.valid, message: result.message }
+    },
+    [floorplanV3]
+  )
+
+  // Update a door's properties
+  const updateDoorCb = useCallback(
+    (segmentId: string, doorId: string, updates: { position?: number; width?: number; height?: number }): boolean => {
+      console.log('[WallSegmentsContext] updateDoor called:', segmentId, doorId, updates)
+
+      // Validate first
+      const validation = canUpdateDoorCb(segmentId, doorId, updates)
+      if (!validation.valid) {
+        console.warn('[WallSegmentsContext] Invalid door update:', validation.message)
+        return false
+      }
+
+      setLocalV3Data(prevData => {
+        const currentData = prevData || floorplanV3
+        if (!currentData) {
+          console.warn('[WallSegmentsContext] No floorplan data for updateDoor')
+          return prevData
+        }
+
+        const segmentIndex = currentData.wallSegments.findIndex(s => s.id === segmentId)
+        if (segmentIndex === -1) {
+          console.warn('[WallSegmentsContext] Segment not found:', segmentId)
+          return prevData
+        }
+
+        const segment = currentData.wallSegments[segmentIndex]
+        const updatedSegment = updateDoorInSegment(segment, doorId, updates)
+
+        const updatedSegments = [...currentData.wallSegments]
+        updatedSegments[segmentIndex] = updatedSegment
+
+        console.log('[WallSegmentsContext] Door updated successfully')
+        return {
+          ...currentData,
+          wallSegments: updatedSegments,
+          updatedAt: new Date().toISOString(),
+        }
+      })
+
+      return true
+    },
+    [floorplanV3, canUpdateDoorCb]
+  )
+
   const value: WallSegmentsContextType = {
     floorplanV3,
     useV3Rendering,
@@ -386,8 +468,10 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
     clearWallSelection,
     updateWallStyle,
     addDoor: addDoorCb,
+    updateDoor: updateDoorCb,
     removeDoor: removeDoorCb,
     canAddDoor: canAddDoorCb,
+    canUpdateDoor: canUpdateDoorCb,
     findValidDoorPosition: findValidDoorPositionCb,
     getRoomName,
     getSegmentLength: getSegmentLengthCb,

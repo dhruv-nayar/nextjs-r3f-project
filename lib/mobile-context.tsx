@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -40,8 +40,11 @@ export function MobileProvider({ children }: { children: ReactNode }) {
   // During SSR or before hydration, assume desktop
   const isMobile = hasMounted ? screenWidth <= MOBILE_BREAKPOINT : false
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({ isMobile, screenWidth }), [isMobile, screenWidth])
+
   return (
-    <MobileContext.Provider value={{ isMobile, screenWidth }}>
+    <MobileContext.Provider value={value}>
       {children}
     </MobileContext.Provider>
   )

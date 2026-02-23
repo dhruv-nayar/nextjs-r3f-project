@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react'
 
 interface ResizeModeContextType {
   isResizeMode: boolean
@@ -15,21 +15,24 @@ export function ResizeModeProvider({ children }: { children: ReactNode }) {
   const [isResizeMode, setIsResizeMode] = useState(false)
   const [activeAxis, setActiveAxis] = useState<'x' | 'y' | 'z' | null>(null)
 
-  const setResizeMode = (enabled: boolean) => {
+  const setResizeMode = useCallback((enabled: boolean) => {
     setIsResizeMode(enabled)
     // Clear active axis when exiting resize mode
     if (!enabled) {
       setActiveAxis(null)
     }
-  }
+  }, [])
+
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<ResizeModeContextType>(() => ({
+    isResizeMode,
+    setResizeMode,
+    activeAxis,
+    setActiveAxis,
+  }), [isResizeMode, setResizeMode, activeAxis])
 
   return (
-    <ResizeModeContext.Provider value={{
-      isResizeMode,
-      setResizeMode,
-      activeAxis,
-      setActiveAxis,
-    }}>
+    <ResizeModeContext.Provider value={value}>
       {children}
     </ResizeModeContext.Provider>
   )

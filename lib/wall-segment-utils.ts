@@ -613,19 +613,22 @@ export function getSegmentLength(
  * Validate if a door can be placed at a specific position on a wall segment
  *
  * Validation rules:
- * 1. Wall must be long enough: length >= doorWidth + 2 * MIN_EDGE_DISTANCE
- * 2. Door position must be at least MIN_EDGE_DISTANCE from wall start
- * 3. Door end must be at least MIN_EDGE_DISTANCE from wall end
+ * 1. Door width cannot exceed wall length
+ * 2. For full-width doors (width == wallLength): position must be 0
+ * 3. For partial-width doors: respect MIN_EDGE_DISTANCE from corners
  * 4. Door must not overlap with existing doors (including MIN_DOOR_SPACING)
  * 5. Door height must be less than wall height
  * 6. Door dimensions must be positive
+ *
+ * @param excludeDoorId - Optional door ID to exclude from overlap check (for updates)
  */
 export function canPlaceDoor(
   segment: WallSegment,
   wallLength: number,
   doorPosition: number,
   doorWidth: number = DEFAULT_DOOR_WIDTH,
-  doorHeight: number = DEFAULT_DOOR_HEIGHT
+  doorHeight: number = DEFAULT_DOOR_HEIGHT,
+  excludeDoorId?: string
 ): DoorValidationResult {
   // Validate door dimensions
   if (doorWidth <= 0 || doorHeight <= 0) {
@@ -645,40 +648,68 @@ export function canPlaceDoor(
     }
   }
 
-  // Check if wall is long enough
-  const minWallLength = doorWidth + 2 * MIN_EDGE_DISTANCE
-  if (wallLength < minWallLength) {
+  // Check if door width exceeds wall length
+  if (doorWidth > wallLength) {
     return {
       valid: false,
       error: 'wall_too_short',
-      message: `Wall is too short (${wallLength.toFixed(1)}ft). Minimum ${minWallLength.toFixed(1)}ft needed for a ${doorWidth}ft door.`,
+      message: `Door width (${doorWidth}ft) exceeds wall length (${wallLength.toFixed(1)}ft).`,
     }
   }
 
-  // Check if door is too close to wall start
-  if (doorPosition < MIN_EDGE_DISTANCE) {
-    return {
-      valid: false,
-      error: 'too_close_to_start',
-      message: `Door is too close to wall corner. Minimum ${MIN_EDGE_DISTANCE}ft from edge required.`,
-      suggestedPosition: MIN_EDGE_DISTANCE,
+  // Full-width door: allow if position is 0 and width equals wall length
+  const isFullWidthDoor = Math.abs(doorWidth - wallLength) < 0.01
+
+  if (isFullWidthDoor) {
+    // Full-width door must be at position 0
+    if (Math.abs(doorPosition) > 0.01) {
+      return {
+        valid: false,
+        error: 'too_close_to_start',
+        message: 'Full-width door must be positioned at 0.',
+        suggestedPosition: 0,
+      }
+    }
+  } else {
+    // Partial-width door: respect edge distances
+    // Check if wall is long enough for door + edge distances
+    const minWallLength = doorWidth + 2 * MIN_EDGE_DISTANCE
+    if (wallLength < minWallLength) {
+      return {
+        valid: false,
+        error: 'wall_too_short',
+        message: `Wall is too short (${wallLength.toFixed(1)}ft). Minimum ${minWallLength.toFixed(1)}ft needed for a ${doorWidth}ft door with edge margins.`,
+      }
+    }
+
+    // Check if door is too close to wall start
+    if (doorPosition < MIN_EDGE_DISTANCE) {
+      return {
+        valid: false,
+        error: 'too_close_to_start',
+        message: `Door is too close to wall corner. Minimum ${MIN_EDGE_DISTANCE}ft from edge required.`,
+        suggestedPosition: MIN_EDGE_DISTANCE,
+      }
+    }
+
+    // Check if door end is too close to wall end
+    const doorEnd = doorPosition + doorWidth
+    const maxPosition = wallLength - MIN_EDGE_DISTANCE
+    if (doorEnd > maxPosition) {
+      return {
+        valid: false,
+        error: 'too_close_to_end',
+        message: `Door extends too close to wall corner. Minimum ${MIN_EDGE_DISTANCE}ft from edge required.`,
+        suggestedPosition: wallLength - doorWidth - MIN_EDGE_DISTANCE,
+      }
     }
   }
 
-  // Check if door end is too close to wall end
-  const doorEnd = doorPosition + doorWidth
-  const maxPosition = wallLength - MIN_EDGE_DISTANCE
-  if (doorEnd > maxPosition) {
-    return {
-      valid: false,
-      error: 'too_close_to_end',
-      message: `Door extends too close to wall corner. Minimum ${MIN_EDGE_DISTANCE}ft from edge required.`,
-      suggestedPosition: wallLength - doorWidth - MIN_EDGE_DISTANCE,
-    }
-  }
-
-  // Check for overlap with existing doors
+  // Check for overlap with existing doors (excluding the door being updated)
   for (const existingDoor of segment.doors) {
+    // Skip the door being updated
+    if (excludeDoorId && existingDoor.id === excludeDoorId) continue
+
     const existingStart = existingDoor.position - MIN_DOOR_SPACING
     const existingEnd = existingDoor.position + existingDoor.width + MIN_DOOR_SPACING
 
