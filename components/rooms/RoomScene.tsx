@@ -31,7 +31,7 @@ export function RoomScene() {
   const { currentRoom, rooms, deleteInstance, copyInstance, pasteInstance } = useRoom()
   const { currentHome } = useHome()
   const { clearSelection, selection } = useSelection()
-  const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
+  const { selectedInstanceIds, selectedFurnitureId, setSelectedFurnitureId, clearInstanceSelection } = useFurnitureSelection()
   const { mode, setMode, isDraggingObject, isPlacing, placementState } = useInteractionMode()
   const [spaceHeld, setSpaceHeld] = useState(false)
   const { isMobile } = useMobile()
@@ -80,22 +80,32 @@ export function RoomScene() {
   // Combined clear function that clears all selection systems
   const clearAllSelections = useCallback(() => {
     clearSelection()
-    setSelectedFurnitureId(null)
+    clearInstanceSelection()
     clearWallSelection()
-  }, [clearSelection, setSelectedFurnitureId, clearWallSelection])
+  }, [clearSelection, clearInstanceSelection, clearWallSelection])
 
   // Wrapper for wall segment selection that also clears other selections
   const handleWallSegmentSelect = useCallback((segmentId: string, side: 'A' | 'B') => {
     // Clear general selection so PropertiesPanel hides
     clearSelection()
-    setSelectedFurnitureId(null)
+    // Clear furniture multi-select
+    clearInstanceSelection()
     // Then select the wall segment
     selectWallSide(segmentId, side)
-  }, [clearSelection, setSelectedFurnitureId, selectWallSide])
+  }, [clearSelection, clearInstanceSelection, selectWallSide])
 
-  // Delete selected furniture
+  // Delete selected furniture (supports multi-select)
   const deleteSelectedFurniture = useCallback(() => {
-    // Check both selection systems for selected furniture
+    // Delete all items in multi-select
+    if (selectedInstanceIds.length > 0) {
+      selectedInstanceIds.forEach(instanceId => {
+        deleteInstance(instanceId)
+      })
+      clearAllSelections()
+      return
+    }
+
+    // Fallback: check old selection context
     const instanceId = selectedFurnitureId ||
       (selection && 'instanceId' in selection ? selection.instanceId : null)
 
@@ -103,7 +113,7 @@ export function RoomScene() {
       deleteInstance(instanceId)
       clearAllSelections()
     }
-  }, [selectedFurnitureId, selection, deleteInstance, clearAllSelections])
+  }, [selectedInstanceIds, selectedFurnitureId, selection, deleteInstance, clearAllSelections])
 
   // Space key handler for Figma-style camera pan + Escape to deselect + Delete to remove
   // Skip on mobile (no keyboard, touch controls handle camera)
@@ -130,9 +140,10 @@ export function RoomScene() {
         return
       }
 
-      // Copy: Cmd/Ctrl + C
+      // Copy: Cmd/Ctrl + C (copies first selected item for now)
       if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-        const instanceId = selectedFurnitureId ||
+        // Use first item from multi-select, or fallback to old selection
+        const instanceId = selectedInstanceIds[0] || selectedFurnitureId ||
           (selection && 'instanceId' in selection ? selection.instanceId : null)
         if (instanceId) {
           e.preventDefault()
@@ -176,7 +187,7 @@ export function RoomScene() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture, isMobile, canMoveObjects, copyInstance, pasteInstance, selectedFurnitureId, selection, setSelectedFurnitureId])
+  }, [mode, setMode, clearAllSelections, deleteSelectedFurniture, isMobile, canMoveObjects, copyInstance, pasteInstance, selectedInstanceIds, selectedFurnitureId, selection, setSelectedFurnitureId])
 
   // Update cursor when in camera mode and dragging
   useEffect(() => {

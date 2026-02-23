@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
       addRandomSuffix: false,  // Use exact filename
+      allowOverwrite: true,    // Allow overwriting existing thumbnail
     })
 
     // Return thumbnail URL

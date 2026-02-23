@@ -368,8 +368,19 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   const groupRef = useRef<THREE.Group>(null)
   const { hoveredFurnitureId, setHoveredFurnitureId } = useFurnitureHover()
   // Use both old and new selection context during migration
-  const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
-  const { selectFurniture, isFurnitureSelected, hoveredItem, setHoveredItem } = useSelection()
+  const {
+    selectedInstanceIds,
+    selectInstance,
+    toggleInstanceSelection,
+    isInstanceSelected,
+    clearInstanceSelection,
+    multiDragState,
+    startMultiDrag,
+    updateMultiDragDelta,
+    endMultiDrag,
+    getMultiDragPosition
+  } = useFurnitureSelection()
+  const { selectFurniture, isFurnitureSelected, hoveredItem, setHoveredItem, clearSelection } = useSelection()
   const { updateInstance, currentRoom } = useRoom()
   const { updateItem } = useItemLibrary()
   const { isResizeMode, setResizeMode } = useResizeMode()
@@ -378,8 +389,8 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
   // Check both old hover context and new selection context hover
   const isHovered = hoveredFurnitureId === instance.id ||
     (hoveredItem?.type === 'furniture' && hoveredItem.instanceId === instance.id)
-  // Check both old and new selection systems
-  const isSelected = selectedFurnitureId === instance.id || isFurnitureSelected(instance.id)
+  // Check multi-select state
+  const isSelected = isInstanceSelected(instance.id) || isFurnitureSelected(instance.id)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisuallyDragging, setIsVisuallyDragging] = useState(false)
   const dragStartPosRef = useRef<THREE.Vector3 | null>(null)
@@ -521,8 +532,20 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     if (!isDragging) return
 
     const handleGlobalPointerUp = () => {
-      // Commit final position to state if we were dragging
-      if (dragPositionRef.current) {
+      // Check if this is the anchor of a multi-drag
+      if (multiDragState && multiDragState.anchorId === instance.id) {
+        // End multi-drag and get final positions for all items
+        const finalPositions = endMultiDrag()
+        if (finalPositions) {
+          // Update all items' positions
+          finalPositions.forEach((pos, instanceId) => {
+            updateInstance(instanceId, {
+              position: { x: pos.x, y: 0, z: pos.z }
+            })
+          })
+        }
+      } else if (dragPositionRef.current) {
+        // Single item drag - commit final position
         updateInstance(instance.id, {
           position: {
             ...instance.position,
@@ -531,6 +554,7 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
           }
         })
       }
+
       setIsDragging(false)
       setIsVisuallyDragging(false)
       dragStartPosRef.current = null
@@ -543,7 +567,25 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     // Use window to catch pointerup anywhere
     window.addEventListener('pointerup', handleGlobalPointerUp)
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
-  }, [isDragging, setMode, instance.id, instance.position, updateInstance])
+  }, [isDragging, setMode, instance.id, instance.position, updateInstance, multiDragState, endMultiDrag])
+
+  // Follow multi-drag delta for non-anchor selected items
+  // This runs every frame to smoothly update position during multi-drag
+  useFrame(() => {
+    if (!groupRef.current) return
+    if (!multiDragState) return
+    // Skip if this is the anchor (it handles its own movement)
+    if (multiDragState.anchorId === instance.id) return
+    // Skip if this item is not part of the multi-drag
+    if (!multiDragState.startPositions.has(instance.id)) return
+
+    // Get the calculated position from multi-drag state
+    const newPos = getMultiDragPosition(instance.id)
+    if (newPos) {
+      groupRef.current.position.x = newPos.x
+      groupRef.current.position.z = newPos.z
+    }
+  })
 
   // Handle dimension change from resize handles
   const handleDimensionChange = (dimension: 'width' | 'height' | 'depth', newValue: number) => {
@@ -570,8 +612,28 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     // Don't start drag in resize mode or if camera mode is active
     if (isResizeMode || mode === 'camera') return
 
-    // Select the item
-    setSelectedFurnitureId(instance.id)
+    // Clear wall/floor selection when selecting furniture
+    clearSelection()
+
+    // Handle multi-select with modifier keys
+    const isShiftHeld = e.nativeEvent.shiftKey
+    const isMetaOrCtrlHeld = e.nativeEvent.metaKey || e.nativeEvent.ctrlKey
+
+    if (isMetaOrCtrlHeld) {
+      // Cmd/Ctrl+Click: Toggle selection
+      toggleInstanceSelection(instance.id)
+      // Don't start drag when toggling
+      return
+    } else if (isShiftHeld) {
+      // Shift+Click: Add to selection
+      selectInstance(instance.id, true)
+    } else if (!isInstanceSelected(instance.id)) {
+      // Regular click on unselected item: Select only this item
+      selectInstance(instance.id, false)
+    }
+    // If already selected and no modifier, keep current selection (allows multi-drag)
+
+    // Also update the old selection context for compatibility
     selectFurniture(instance.id, instance.roomId)
 
     // Calculate where the click intersects the drag plane (Y=0)
@@ -592,6 +654,25 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
     dragStartPosRef.current = clickOnPlane.clone()
     setMode('dragging')
     document.body.style.cursor = 'grab'
+
+    // If multiple items are selected, start multi-drag coordination
+    // Need to determine selected items AFTER potential selection change above
+    // Use a microtask to ensure state is updated
+    queueMicrotask(() => {
+      // Get current selection (may have just changed)
+      const currentSelection = isInstanceSelected(instance.id) ? selectedInstanceIds : [instance.id]
+
+      if (currentSelection.length > 1 && currentRoom?.instances) {
+        // Collect starting positions of all selected items
+        const startPositions = new Map<string, { x: number; z: number }>()
+        currentRoom.instances.forEach(inst => {
+          if (currentSelection.includes(inst.id)) {
+            startPositions.set(inst.id, { x: inst.position.x, z: inst.position.z })
+          }
+        })
+        startMultiDrag(instance.id, startPositions)
+      }
+    })
   }
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
@@ -651,6 +732,14 @@ function ItemInstanceModel({ instance, item }: ItemInstanceProps) {
       if (groupRef.current) {
         groupRef.current.position.x = newX
         groupRef.current.position.z = newZ
+      }
+
+      // Update multi-drag delta for other selected items
+      if (multiDragState && multiDragState.anchorId === instance.id) {
+        const startPos = multiDragState.startPositions.get(instance.id)
+        if (startPos) {
+          updateMultiDragDelta(newX - startPos.x, newZ - startPos.z)
+        }
       }
     }
   }
@@ -761,8 +850,19 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
   const groupRef = useRef<THREE.Group>(null)
   const meshRef = useRef<THREE.Mesh>(null)
   const { hoveredFurnitureId, setHoveredFurnitureId } = useFurnitureHover()
-  const { selectedFurnitureId, setSelectedFurnitureId } = useFurnitureSelection()
-  const { selectFurniture, isFurnitureSelected, hoveredItem, setHoveredItem } = useSelection()
+  const {
+    selectedInstanceIds,
+    selectInstance,
+    toggleInstanceSelection,
+    isInstanceSelected,
+    clearInstanceSelection,
+    multiDragState,
+    startMultiDrag,
+    updateMultiDragDelta,
+    endMultiDrag,
+    getMultiDragPosition
+  } = useFurnitureSelection()
+  const { selectFurniture, isFurnitureSelected, hoveredItem, setHoveredItem, clearSelection } = useSelection()
   const { updateInstance, currentRoom } = useRoom()
   const { updateItem } = useItemLibrary()
   const { isResizeMode, setResizeMode } = useResizeMode()
@@ -771,7 +871,8 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
   // Check both old hover context and new selection context hover
   const isHovered = hoveredFurnitureId === instance.id ||
     (hoveredItem?.type === 'furniture' && hoveredItem.instanceId === instance.id)
-  const isSelected = selectedFurnitureId === instance.id || isFurnitureSelected(instance.id)
+  // Check multi-select state
+  const isSelected = isInstanceSelected(instance.id) || isFurnitureSelected(instance.id)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisuallyDragging, setIsVisuallyDragging] = useState(false)
   const dragStartPosRef = useRef<THREE.Vector3 | null>(null)
@@ -862,8 +963,20 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     if (!isDragging) return
 
     const handleGlobalPointerUp = () => {
-      // Commit final position to state if we were dragging
-      if (dragPositionRef.current) {
+      // Check if this is the anchor of a multi-drag
+      if (multiDragState && multiDragState.anchorId === instance.id) {
+        // End multi-drag and get final positions for all items
+        const finalPositions = endMultiDrag()
+        if (finalPositions) {
+          // Update all items' positions
+          finalPositions.forEach((pos, instanceId) => {
+            updateInstance(instanceId, {
+              position: { x: pos.x, y: 0, z: pos.z }
+            })
+          })
+        }
+      } else if (dragPositionRef.current) {
+        // Single item drag - commit final position
         updateInstance(instance.id, {
           position: {
             ...instance.position,
@@ -872,6 +985,7 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
           }
         })
       }
+
       setIsDragging(false)
       setIsVisuallyDragging(false)
       dragStartPosRef.current = null
@@ -884,7 +998,25 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     // Use window to catch pointerup anywhere
     window.addEventListener('pointerup', handleGlobalPointerUp)
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
-  }, [isDragging, setMode, instance.id, instance.position, updateInstance])
+  }, [isDragging, setMode, instance.id, instance.position, updateInstance, multiDragState, endMultiDrag])
+
+  // Follow multi-drag delta for non-anchor selected items
+  // This runs every frame to smoothly update position during multi-drag
+  useFrame(() => {
+    if (!groupRef.current) return
+    if (!multiDragState) return
+    // Skip if this is the anchor (it handles its own movement)
+    if (multiDragState.anchorId === instance.id) return
+    // Skip if this item is not part of the multi-drag
+    if (!multiDragState.startPositions.has(instance.id)) return
+
+    // Get the calculated position from multi-drag state
+    const newPos = getMultiDragPosition(instance.id)
+    if (newPos) {
+      groupRef.current.position.x = newPos.x
+      groupRef.current.position.z = newPos.z
+    }
+  })
 
   // Handle dimension change from resize handles
   const handleDimensionChange = (dimension: 'width' | 'height' | 'depth', newValue: number) => {
@@ -909,7 +1041,28 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
 
     if (isResizeMode || mode === 'camera') return
 
-    setSelectedFurnitureId(instance.id)
+    // Clear wall/floor selection when selecting furniture
+    clearSelection()
+
+    // Handle multi-select with modifier keys
+    const isShiftHeld = e.nativeEvent.shiftKey
+    const isMetaOrCtrlHeld = e.nativeEvent.metaKey || e.nativeEvent.ctrlKey
+
+    if (isMetaOrCtrlHeld) {
+      // Cmd/Ctrl+Click: Toggle selection
+      toggleInstanceSelection(instance.id)
+      // Don't start drag when toggling
+      return
+    } else if (isShiftHeld) {
+      // Shift+Click: Add to selection
+      selectInstance(instance.id, true)
+    } else if (!isInstanceSelected(instance.id)) {
+      // Regular click on unselected item: Select only this item
+      selectInstance(instance.id, false)
+    }
+    // If already selected and no modifier, keep current selection (allows multi-drag)
+
+    // Also update the old selection context for compatibility
     selectFurniture(instance.id, instance.roomId)
 
     // Calculate where the click intersects the drag plane (Y=0)
@@ -929,6 +1082,21 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
     dragStartPosRef.current = clickOnPlane.clone()
     setMode('dragging')
     document.body.style.cursor = 'grab'
+
+    // If multiple items are selected, start multi-drag coordination
+    queueMicrotask(() => {
+      const currentSelection = isInstanceSelected(instance.id) ? selectedInstanceIds : [instance.id]
+
+      if (currentSelection.length > 1 && currentRoom?.instances) {
+        const startPositions = new Map<string, { x: number; z: number }>()
+        currentRoom.instances.forEach(inst => {
+          if (currentSelection.includes(inst.id)) {
+            startPositions.set(inst.id, { x: inst.position.x, z: inst.position.z })
+          }
+        })
+        startMultiDrag(instance.id, startPositions)
+      }
+    })
   }
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
@@ -987,6 +1155,14 @@ function ParametricShapeInstanceModel({ instance, item }: ItemInstanceProps) {
       if (groupRef.current) {
         groupRef.current.position.x = newX
         groupRef.current.position.z = newZ
+      }
+
+      // Update multi-drag delta for other selected items
+      if (multiDragState && multiDragState.anchorId === instance.id) {
+        const startPos = multiDragState.startPositions.get(instance.id)
+        if (startPos) {
+          updateMultiDragDelta(newX - startPos.x, newZ - startPos.z)
+        }
       }
     }
   }
