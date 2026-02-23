@@ -82,19 +82,29 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
   // Track what we last synced to home context to prevent infinite loops
   const lastSyncedV3Ref = useRef<FloorplanDataV3 | null>(null)
 
+  // Track which home the localV3Data belongs to (prevents syncing to wrong home on switch)
+  const dataHomeIdRef = useRef<string | null>(null)
+
+  // Flag to track if we're in the middle of a home switch (sync should be blocked)
+  const isSwitchingHomesRef = useRef(false)
+
   // Reset ALL state when switching to a different home/project
   useEffect(() => {
     const currentHomeId = currentHome?.id || null
 
     if (prevHomeIdRef.current !== null && prevHomeIdRef.current !== currentHomeId) {
       // Home changed - reset ALL state to prevent data leaking between projects
-      console.log('[WallSegmentsContext] Home changed, resetting all state')
+      console.log('[WallSegmentsContext] Home changed, resetting all state. Old:', prevHomeIdRef.current, 'New:', currentHomeId)
+      // CRITICAL: Set switching flag BEFORE any state changes
+      // This blocks the sync effect from saving old data to new home
+      isSwitchingHomesRef.current = true
       setLocalV3Data(null)
       setSelectedSegmentId(null)
       setSelectedSide(null)
       setDoorPlacementModeInternal(false)
       prevV2DataRef.current = null // Also reset V2 tracking
       lastSyncedV3Ref.current = null // Reset sync tracking
+      dataHomeIdRef.current = null // Clear data ownership
     }
 
     prevHomeIdRef.current = currentHomeId
@@ -127,16 +137,43 @@ export function WallSegmentsProvider({ children }: { children: ReactNode }) {
   // Load V3 data from home context on mount/home change
   useEffect(() => {
     if (currentHome?.floorplanDataV3 && !localV3Data) {
-      console.log('[WallSegmentsContext] Loading V3 data from home context')
+      console.log('[WallSegmentsContext] Loading V3 data from home context for home:', currentHome.id)
       // Track that this data came from home context so we don't re-sync it
       lastSyncedV3Ref.current = currentHome.floorplanDataV3
+      // Track which home this data belongs to
+      dataHomeIdRef.current = currentHome.id
+      // Clear switching flag - we've loaded the new home's data
+      isSwitchingHomesRef.current = false
       setLocalV3Data(currentHome.floorplanDataV3)
+    } else if (currentHome && !currentHome.floorplanDataV3 && !localV3Data && isSwitchingHomesRef.current) {
+      // New home has no V3 data (only V2) - clear switching flag
+      // Data will be migrated from V2 when first mutation happens
+      console.log('[WallSegmentsContext] New home has no V3 data, clearing switch flag for home:', currentHome.id)
+      dataHomeIdRef.current = currentHome.id
+      isSwitchingHomesRef.current = false
     }
-  }, [currentHome?.floorplanDataV3, currentHome?.id])
+  }, [currentHome?.floorplanDataV3, currentHome?.id, localV3Data, currentHome])
 
   // Sync local V3 data changes to home context (for persistence/auto-save)
   useEffect(() => {
     if (localV3Data && currentHome?.id) {
+      // CRITICAL: Block sync while switching homes
+      if (isSwitchingHomesRef.current) {
+        console.log('[WallSegmentsContext] Skipping sync - home switch in progress')
+        return
+      }
+      // CRITICAL: If dataHomeIdRef is null, ownership was cleared (home switch in progress)
+      // Do NOT sync - the data belongs to the old home, not the current one
+      if (dataHomeIdRef.current === null) {
+        console.log('[WallSegmentsContext] Skipping sync - data ownership cleared')
+        return
+      }
+      // CRITICAL: Only sync if data belongs to the current home
+      // This prevents syncing old home's data to new home when switching projects
+      if (dataHomeIdRef.current !== currentHome.id) {
+        console.log('[WallSegmentsContext] Skipping sync - data belongs to different home:', dataHomeIdRef.current, 'current:', currentHome.id)
+        return
+      }
       // Only sync if data has actually changed (prevent infinite loops)
       if (lastSyncedV3Ref.current === localV3Data) {
         return
